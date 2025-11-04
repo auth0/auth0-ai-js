@@ -68,6 +68,20 @@ curl --request PATCH \
 }'
 ```
 
+<details>
+
+<summary>How to get a Management API Token from the Dashboard</summary>
+
+To create a token exchange profile, you need a Management API access token with the appropriate scopes.
+
+The quickest way to get a token for testing is from the Auth0 Dashboard:
+* Navigate to Applications > APIs in your Auth0 Dashboard
+* Select Auth0 Management API
+* Click on the API Explorer tab
+* Copy the displayed token
+
+</details>
+
 ### Setup the workspace `.env` file
 
 Copy the `.env.example` file to `.env` and fill in the values for the following variables, using the settings obtained from the prerequisites:
