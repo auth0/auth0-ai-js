@@ -77,12 +77,13 @@ You will need the following prerequisites to run this app:
    - When a call to Token Vault fails due to the user not having a connected account (or lacking some permissions), this demo triggers a Connect Account flow for this user. This flow leverages Auth0's [My Account API](https://auth0.com/docs/manage-users/my-account-api), and as such, your application will need to have access to it in order to enable this flow.
    - In order to grant access, use the [Application Access to APIs](https://auth0.com/docs/get-started/applications/application-access-to-apis-client-grants) feature, by creating a client grant for user flows.
    - In your Auth0 Dashboard, go to APIs, and open the Settings for "Auth0 My Account API".
+   - On the Settings tab, make sure to enable the "Allow Skipping User Consent" toggle.
    - On the Applications tab, authorize your application, ensuring that the `create:me:connected_accounts` permission at least is selected.
 
 5. Define a Multi-Resource Refresh Token policy for your SPA Application
    - After your SPA Application has been granted access to the My Account API, you will also need to leverage the [Multi-Resource Refresh Token](https://auth0.com/docs/secure/tokens/refresh-tokens/multi-resource-refresh-token) feature, where the refresh token delivered to your SPA will allow it to obtain an access token to call My Account API.
    - This will require defining a new [refresh token policy](https://auth0.com/docs/secure/tokens/refresh-tokens/multi-resource-refresh-token/configure-and-implement-multi-resource-refresh-token) for your SPA Application where the `audience` is `https://<your auth0 domain>/me/` and the `scope` should include at least the `"create:me:connected_accounts"` scope.
-   - The configuration page explains how to achieve this using various tools, but here is an example showing how to do it with `curl`:
+   - The documentation page explains how to achieve this using various tools, but here is an example showing how to do it with `curl`:
 
 ```shell
 curl --request PATCH \
@@ -109,7 +110,11 @@ curl --request PATCH \
   }
 }'
 ```
-
+Where:
+- `{yourDomain}` is your Auth0 domain (e.g., `dev-abc123.us.auth0.com`).
+- `{yourClientId}` is the Client ID of your SPA application.
+- `{yourMgmtApiAccessToken}` is a Management API access token with the `update:clients` scope.
+- 
 <details>
 
 <summary>How to get a Management API Token from the Dashboard</summary>

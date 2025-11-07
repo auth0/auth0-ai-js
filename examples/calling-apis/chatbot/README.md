@@ -32,6 +32,7 @@ When a call to Token Vault fails due to the user not having a connected account 
 n order to grant access, use the [Application Access to APIs](https://auth0.com/docs/get-started/applications/application-access-to-apis-client-grants) feature, by creating a client grant for user flows.
 
 - In your Auth0 Dashboard, go to APIs, and open the Settings for "Auth0 My Account API".
+- On the Settings tab, make sure to enable the "Allow Skipping User Consent" toggle.
 - On the Applications tab, authorize your web application, ensuring that the `create:me:connected_accounts` permission at least is selected.
 
 ### Pre-requisite: Define a Multi-Resource Refresh Token policy for your web application
@@ -40,7 +41,7 @@ After your web application has been granted access to the My Account API, you wi
 
 This will require defining a new [refresh token policy](https://auth0.com/docs/secure/tokens/refresh-tokens/multi-resource-refresh-token/configure-and-implement-multi-resource-refresh-token) for your web application where the `audience` is `https://<your auth0 domain>/me/` and the `scope` should include at least the `"create:me:connected_accounts"` scope.
 
-The configuration page explains how to achieve this using various tools, but here is an example showing how to do it with `curl`:
+The documentation page explains how to achieve this using various tools, but here is an example showing how to do it with `curl`:
 
 ```shell
 curl --request PATCH \
@@ -67,6 +68,10 @@ curl --request PATCH \
   }
 }'
 ```
+Where:
+- `{yourDomain}` is your Auth0 domain (e.g., `dev-abc123.us.auth0.com`).
+- `{yourClientId}` is the Client ID of your web application.
+- `{yourMgmtApiAccessToken}` is a Management API access token with the `update:clients` scope.
 
 <details>
 
