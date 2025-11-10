@@ -58,7 +58,8 @@ You will need the following prerequisites to run this app:
      - **Allowed Callback URLs**: `http://localhost:5173`
      - **Allowed Logout URLs**: `http://localhost:5173`
      - **Allowed Web Origins**: `http://localhost:5173`
-     - Make sure to Allow Refresh Token in Grant Types under Advanced Settings and that "Allow Refresh Token Rotation" is enabled
+     - Enable "Allow Refresh Token Rotation"
+     - Enable "Refresh Token" in Grant Types under Advanced Settings
 
 2. Create an Auth0 API that represents your Hono API back-end:
    - In your Auth0 Dashboard, go to APIs
