@@ -24,6 +24,7 @@ This is a [Next.js](https://nextjs.org) application that implements [Auth0 AI](h
     - Ensure that the `Token Vault` grant type is enabled under the Advanced Settings.
     - Note down the "Client ID" and "Client Secret" of this newly created Custom API Client.
   - Either **Google**, **Slack** or **GitHub** social connections enabled for the application.
+    - For Google, make sure to enable `Offline Access` from the Connection Permissions settings.
 
 ### Pre-requisite: Grant access to My Account API from your web application
 
