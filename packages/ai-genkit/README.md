@@ -73,7 +73,7 @@ const withGoogleAccess = auth0AI.withTokenVault({
   scopes: ["openid", "https://www.googleapis.com/auth/calendar.freebusy"],
   // Additional authorization params needed to connect an account (optional).
   authorizationParams: {
-    access_type: "offline"
+    ...
   },
 });
 ```
