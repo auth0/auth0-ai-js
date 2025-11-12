@@ -14,5 +14,5 @@ export const auth0 = new Auth0Client({
   },
 
   // Mounts /auth/connect endpoint
-  enableConnectAccountEndpoint: true
+  enableConnectAccountEndpoint: true,
 });
