@@ -99,33 +99,89 @@ Auth0's Token Vault enables the LangGraph API to exchange a SPA's access token f
 ### 1. Auth0 Configuration
 
 1. **Create an Auth0 Application** (Single Page Application):
-   - Go to your [Auth0 Dashboard](https://manage.auth0.com/)
-   - Create a new **Single Page Application**
-   - Configure the following settings:
-     - **Allowed Callback URLs**: `http://localhost:5173`
-     - **Allowed Logout URLs**: `http://localhost:5173`
-     - **Allowed Web Origins**: `http://localhost:5173`
-     - Enable "Allow Refresh Token" in Grant Types under Advanced Settings
+    - Go to your [Auth0 Dashboard](https://manage.auth0.com/)
+    - Create a new **Single Page Application**
+    - Configure the following settings:
+        - **Allowed Callback URLs**: `http://localhost:5173`
+        - **Allowed Logout URLs**: `http://localhost:5173`
+        - **Allowed Web Origins**: `http://localhost:5173`
+        - Enable "Allow Refresh Token Rotation"
+        - Enable "Refresh Token" in Grant Types under Advanced Settings
 
-2. **Create an Auth0 API**:
-   - In your Auth0 Dashboard, go to APIs
-   - Create a new API with an identifier (audience)
-   - Enable "Allow Offline Access" in Access Settings
-   - Note down the API identifier for your environment variables
+2. **Create an Auth0 API** (representing your LangGraph API):
+    - In your Auth0 Dashboard, go to APIs
+    - Create a new API with an identifier (audience)
+    - Enable "Allow Offline Access" in Access Settings
+    - Note down the API identifier for your environment variables
 
 3. **Create a Custom API Client** (for Token Vault Token Exchange):
-   - The Custom API Client allows your API server to perform token exchanges using **access tokens** instead of **refresh tokens**. This client enables Token Vault to exchange an access token for an external API access token (e.g., Google Calendar API).
-   - Setup steps:
-      - Go to the API you created in Step #2 and click the **Add Application** button in the right top corner.
-      - After that click the **Configure Application** button in the right top corner.
-      - Note down the <code>client id</code> and <code>client secret</code> for your environment variables.
+    - The Custom API Client allows your API server to perform token exchanges using **access tokens** instead of **refresh tokens**. This client enables Token Vault to exchange an access token for an external API access token (e.g., Google Calendar API).
+    - Setup steps:
+        - Go to the API you created in Step #2 and click the **Add Application** button in the right top corner and create the application
+        - In the application settings, ensure that the `Token Vault` grant type is enabled under the Advanced Settings
+        - Note down the <code>client id</code> and <code>client secret</code> for your environment variables
 
-4. **Configure a Social Connection for Google in Auth0**:
-   - Make sure to enable all `Calendar` scopes from the Permissions options
-   - Make sure to enable Token Vault for the Connection under the Advanced Settings
-   - Make sure to enable the connection for your SPA Application created in Step 1 and the Resource Server Client created in Step 3
-   - Test the connection in Auth0 "Try Connection" screen and make sure connection is working & configured correctly
-   - Enable Token Vault for the connection under Advanced Settings
+4. **Grant access to My Account API from your application**
+    - When a call to Token Vault fails due to the user not having a connected account (or lacking some permissions), this demo triggers a Connect Account flow for this user. This flow leverages Auth0's [My Account API](https://auth0.com/docs/manage-users/my-account-api), and as such, your application will need to have access to it in order to enable this flow.
+    - In order to grant access, use the [Application Access to APIs](https://auth0.com/docs/get-started/applications/application-access-to-apis-client-grants) feature, by creating a client grant for user flows.
+    - In your Auth0 Dashboard, go to APIs, and open the Settings for "Auth0 My Account API".
+    - On the Settings tab, make sure to enable the "Allow Skipping User Consent" toggle.
+    - On the Applications tab, authorize your SPA application, ensuring that the `create:me:connected_accounts` permission at least is selected.
+
+5. **Define a Multi-Resource Refresh Token policy for your SPA Application**
+    - After your SPA Application has been granted access to the My Account API, you will also need to leverage the [Multi-Resource Refresh Token](https://auth0.com/docs/secure/tokens/refresh-tokens/multi-resource-refresh-token) feature, where the refresh token delivered to your SPA will allow it to obtain an access token to call My Account API.
+    - This will require defining a new [refresh token policy](https://auth0.com/docs/secure/tokens/refresh-tokens/multi-resource-refresh-token/configure-and-implement-multi-resource-refresh-token) for your SPA Application where the `audience` is `https://<your auth0 domain>/me/` and the `scope` should include at least the `"create:me:connected_accounts"` scope.
+    - The documentation page explains how to achieve this using various tools, but here is an example showing how to do it with `curl`:
+
+```shell
+curl --request PATCH \
+  --url 'https://{yourDomain}/api/v2/clients/{yourClientId}' \
+  --header 'authorization: Bearer {yourMgmtApiAccessToken}' \
+  --header 'content-type: application/json' \
+  --data '{
+  "refresh_token": {
+    "expiration_type": "expiring",
+    "rotation_type": "rotating",
+    "token_lifetime": 31557600,
+    "idle_token_lifetime": 2592000,
+    "leeway": 0,
+    "infinite_token_lifetime": false,
+    "infinite_idle_token_lifetime": false,
+    "policies": [
+      {
+        "audience": "https://{yourDomain}/me/",
+        "scope": [
+          "create:me:connected_accounts"
+        ]
+      }
+    ]
+  }
+}'
+```
+Where:
+- `{yourDomain}` is your Auth0 domain (e.g., `dev-abc123.us.auth0.com`).
+- `{yourClientId}` is the Client ID of your SPA application.
+- `{yourMgmtApiAccessToken}` is a Management API access token with the `update:clients` scope.
+-
+<details>
+
+<summary>How to get a Management API Token from the Dashboard</summary>
+
+To create a token exchange profile, you need a Management API access token with the appropriate scopes.
+
+The quickest way to get a token for testing is from the Auth0 Dashboard:
+* Navigate to Applications > APIs in your Auth0 Dashboard
+* Select Auth0 Management API
+* Click on the API Explorer tab
+* Copy the displayed token
+
+</details>
+
+6. **Configure a Social Connection for Google in Auth0**:
+    - Make sure to enable the "Use for Connected Accounts with Token Vault" toggle
+    - Make sure to enable `Offline Access` and all `Calendar` scopes from the Permissions options
+    - On the Applications tab, make sure to enable the connection for your SPA Application created in Step 1 and the Custom API Client created in Step 3
+    - Test the connection in Auth0 "Try Connection" screen and make sure connection is working & configured correctly
 
 ### 2. Environment Variables
 
@@ -197,13 +253,13 @@ The LangGraph API uses a custom authentication handler that validates Auth0 JWT 
 auth.authenticate(async (request: Request) => {
   // Handles both Authorization header (local dev) and x-api-key header (LangGraph Platform)
   const token = xApiKeyHeader ?? authHeader;
-  
+
   // Verify JWT using Auth0 JWKS
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: `https://${AUTH0_DOMAIN}/`,
     audience: AUTH0_AUDIENCE,
   });
-  
+
   return {
     identity: payload.sub!,
     auth_type: "auth0",
@@ -228,7 +284,7 @@ const auth0AI = new Auth0AI({
 
 export const withGoogleCalendar = auth0AI.withTokenVault({
   connection: "google-oauth2",
-  scopes: ["https://www.googleapis.com/auth/calendar.freebusy"],
+  scopes: ["openid", "https://www.googleapis.com/auth/calendar.freebusy"],
   accessToken: async (_, config) => {
     return config.configurable?.langgraph_auth_user?._credentials?.accessToken;
   },
