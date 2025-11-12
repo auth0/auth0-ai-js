@@ -30,7 +30,7 @@ This is a [Next.js](https://nextjs.org) application that implements [Auth0 AI](h
 
 When a call to Token Vault fails due to the user not having a connected account (or lacking some permissions), this demo triggers a Connect Account flow for this user. This flow leverages Auth0's [My Account API](https://auth0.com/docs/manage-users/my-account-api), and as such, your application will need to have access to it in order to enable this flow.
 
-n order to grant access, use the [Application Access to APIs](https://auth0.com/docs/get-started/applications/application-access-to-apis-client-grants) feature, by creating a client grant for user flows.
+In order to grant access, use the [Application Access to APIs](https://auth0.com/docs/get-started/applications/application-access-to-apis-client-grants) feature, by creating a client grant for user flows.
 
 - In your Auth0 Dashboard, go to APIs, and open the Settings for "Auth0 My Account API".
 - On the Settings tab, make sure to enable the "Allow Skipping User Consent" toggle.
