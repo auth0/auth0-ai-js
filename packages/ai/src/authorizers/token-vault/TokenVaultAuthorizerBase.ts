@@ -135,7 +135,7 @@ export class TokenVaultAuthorizerBase<ToolExecuteArgs extends any[]> {
         {
           connection,
           scopes,
-          requiredScopes: [...currentScopes, ...scopes],
+          requiredScopes: [...currentScopes, ...missingScopes],
           authorizationParams,
         },
       );
