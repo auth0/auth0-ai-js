@@ -32,7 +32,7 @@
     "@auth0/ai-langchain": "*",
     "@auth0/ai-llamaindex": "*",
     "@auth0/ai-vercel": "*",
-    "@auth0/nextjs-auth0": "^4.2.1",
+    "@auth0/nextjs-auth0": "^4.12.1",
     "@langchain/community": "^0.3.53",
     "@langchain/core": "^0.3.72",
     "@langchain/langgraph": "^0.4.6",
