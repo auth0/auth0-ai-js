@@ -4,7 +4,7 @@ import { Auth0AI } from "@auth0/ai-langchain";
 const auth0AI = new Auth0AI({
   auth0: {
     domain: process.env.AUTH0_DOMAIN!,
-    clientId: process.env.RESOURCE_SERVER_CLIENT_ID!, // Resource server client ID for token exchange
+    clientId: process.env.AUTH0_CUSTOM_API_CLIENT_ID!, // Resource server client ID for token exchange
     clientSecret: process.env.RESOURCE_SERVER_CLIENT_SECRET!, // Resource server client secret
   },
 });
@@ -21,7 +21,11 @@ const withAccessTokenForConnection = (connection: string, scopes: string[]) =>
 
 export const withGoogleCalendar = withAccessTokenForConnection(
   "google-oauth2",
-  ["https://www.googleapis.com/auth/calendar.freebusy"]
+  [
+    "https://www.googleapis.com/auth/calendar.freebusy",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events",
+  ]
 );
 
 export const withGitHub = withAccessTokenForConnection("github", ["repo"]);

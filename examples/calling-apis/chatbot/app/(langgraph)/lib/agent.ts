@@ -1,10 +1,23 @@
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import { RunnableLike } from "@langchain/core/runnables";
-import { END, InMemoryStore, MemorySaver, MessagesAnnotation, START, StateGraph } from "@langchain/langgraph";
+import {
+  END,
+  InMemoryStore,
+  MemorySaver,
+  MessagesAnnotation,
+  START,
+  StateGraph,
+} from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from "@langchain/openai";
 
-import { calendarCommunityTool, checkUsersCalendar, gmailCommunityTool, listChannels, listRepositories } from "./tools";
+import {
+  checkUsersCalendar,
+  gmailCommunityTool,
+  listChannels,
+  listRepositories,
+  viewCalendarEvents,
+} from "./tools";
 
 const model = new ChatOpenAI({
   model: "gpt-4o",
@@ -12,7 +25,7 @@ const model = new ChatOpenAI({
   checkUsersCalendar,
   listChannels,
   listRepositories,
-  calendarCommunityTool,
+  viewCalendarEvents,
   gmailCommunityTool,
 ]);
 
@@ -81,8 +94,8 @@ const stateGraph = new StateGraph(MessagesAnnotation)
         listChannels,
         // A tool with token vault access
         listRepositories,
-        // A community tool with token vault access
-        calendarCommunityTool,
+        // A google calendar events tool with token vault access
+        viewCalendarEvents,
         // A community tool with token vault access
         gmailCommunityTool,
       ],
