@@ -13,7 +13,7 @@
     "@ai-sdk/react": "^2.0.0",
     "@auth0/ai": "*",
     "@auth0/ai-vercel": "*",
-    "@auth0/auth0-spa-js": "file:../../auth0-auth0-spa-js-2.8.0.tgz",
+    "@auth0/auth0-spa-js": "^2.9.0",
     "@radix-ui/react-slot": "^1.2.3",
     "@tailwindcss/vite": "^4.1.10",
     "ai": "^5.0.0",
