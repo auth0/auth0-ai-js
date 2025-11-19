@@ -69,7 +69,7 @@ export class TokenVaultAuthorizerBase<ToolExecuteArgs extends any[]> {
       );
     }
 
-    // Validate resource server client credentials when using access tokens for token exchange w/ Token Vault
+    // Validate Custom API Client credentials when using access tokens for token exchange w/ Token Vault
     if (
       hasAccessToken &&
       hasSubjectTokenType &&

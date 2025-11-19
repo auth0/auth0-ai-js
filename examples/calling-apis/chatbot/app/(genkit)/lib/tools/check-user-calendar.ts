@@ -1,4 +1,4 @@
-import { addHours, formatISO } from "date-fns";
+import { addDays, formatISO } from "date-fns";
 import { GaxiosError } from "gaxios";
 import { google } from "googleapis";
 import { z } from "zod/v3";
@@ -40,7 +40,7 @@ export const checkUsersCalendar = ai.defineTool(
           auth,
           requestBody: {
             timeMin: formatISO(date),
-            timeMax: addHours(date, 1).toISOString(),
+            timeMax: addDays(date, 1).toISOString(),
             timeZone: "UTC",
             items: [{ id: "primary" }],
           },

@@ -36,7 +36,7 @@ export const listRepositories = () =>
       },
       {
         name: "listRepositories",
-        description: "List respositories for the current user on GitHub",
+        description: "List repositories for the current user on GitHub",
         parameters: z.object({}),
       }
     )

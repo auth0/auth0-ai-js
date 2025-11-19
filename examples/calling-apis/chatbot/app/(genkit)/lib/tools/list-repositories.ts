@@ -9,7 +9,7 @@ import { TokenVaultError } from "@auth0/ai/interrupts";
 export const listRepositories = ai.defineTool(
   ...withGitHub(
     {
-      description: "List respositories for the current user on GitHub",
+      description: "List repositories for the current user on GitHub",
       inputSchema: z.object({}),
       name: "listRepositories",
     },

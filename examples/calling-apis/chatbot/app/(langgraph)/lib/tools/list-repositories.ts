@@ -39,7 +39,7 @@ export const listRepositories = withGitHub(
     },
     {
       name: "list_github_repositories",
-      description: "List respositories for the current user on GitHub",
+      description: "List repositories for the current user on GitHub",
       schema: z.object({}),
     }
   )

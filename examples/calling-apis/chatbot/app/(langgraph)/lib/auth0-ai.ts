@@ -4,8 +4,8 @@ import { Auth0AI } from "@auth0/ai-langchain";
 const auth0AI = new Auth0AI({
   auth0: {
     domain: process.env.AUTH0_DOMAIN!,
-    clientId: process.env.RESOURCE_SERVER_CLIENT_ID!, // Resource server client ID for token exchange
-    clientSecret: process.env.RESOURCE_SERVER_CLIENT_SECRET!, // Resource server client secret
+    clientId: process.env.AUTH0_CUSTOM_API_CLIENT_ID!, // Custom API Client ID for token exchange
+    clientSecret: process.env.AUTH0_CUSTOM_API_CLIENT_SECRET!, // Custom API Client secret
   },
 });
 

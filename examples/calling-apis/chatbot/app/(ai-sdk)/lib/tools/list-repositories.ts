@@ -8,7 +8,7 @@ import { TokenVaultError } from "@auth0/ai/interrupts";
 
 export const listRepositories = withGitHub(
   tool({
-    description: "List respositories for the current user on GitHub",
+    description: "List repositories for the current user on GitHub",
     inputSchema: z.object({}),
     execute: async () => {
       // Get the access token from Auth0 AI
