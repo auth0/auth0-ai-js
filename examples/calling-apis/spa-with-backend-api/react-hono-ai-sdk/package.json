@@ -36,8 +36,8 @@
     "turbo"
   ],
   "devDependencies": {
-    "@types/node": "^22.15.31",
-    "turbo": "^2.5.5"
+    "@types/node": "^20.19.24",
+    "turbo": "^2.6.0"
   },
   "peerDependencies": {
     "typescript": "^5.7.3"
