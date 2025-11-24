@@ -30,7 +30,7 @@
     "enquirer": "^2.4.1",
     "express": "^4.21.2",
     "jwt-decode": "^4.0.0",
-    "nanoid": "^5.1.0",
+    "nanoid": "^5.1.6",
     "node-cron": "^3.0.3",
     "node-persist": "^4.0.4",
     "open": "^10.1.0",

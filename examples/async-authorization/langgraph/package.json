@@ -31,7 +31,7 @@
     "dotenv": "^16.4.7",
     "enquirer": "^2.4.1",
     "express": "^4.21.2",
-    "nanoid": "^5.1.0",
+    "nanoid": "^5.1.6",
     "node-cron": "^3.0.3",
     "node-persist": "^4.0.4",
     "zod": "^3.25.76"
