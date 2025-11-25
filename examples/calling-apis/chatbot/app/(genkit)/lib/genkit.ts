@@ -11,7 +11,7 @@ export const ai = genkit({
 
 /**
  * example implementation from genkit
- * https://firebase.google.com/docs/genkit/chat?hl=es-419
+ * https://genkit.dev/docs/chat/
  */
 export class JsonSessionStore<S = any> implements SessionStore<S> {
   constructor(private readonly baseDir: string) {

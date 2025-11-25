@@ -108,7 +108,7 @@ To learn more about the Auth0 AI and the other AI SDKs utilized on these example
 
 - [Auth0 AI](https://auth0.ai)
 - [AI SDK](https://sdk.vercel.ai/)
-- [Genkit](https://firebase.google.com/docs/genkit)
+- [Genkit](https://genkit.dev/docs/integrations/auth0/)
 - [LlamaIndex](https://ts.llamaindex.ai/)
 - [LangGraph](https://langchain-ai.github.io/langgraph/)
 - [Next.js](https://nextjs.org)
