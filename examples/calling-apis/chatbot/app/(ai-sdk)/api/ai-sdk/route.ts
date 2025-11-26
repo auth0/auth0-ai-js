@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         const result = streamText({
           model: openai("gpt-4o-mini"),
           system:
-            "You are a friendly assistant! Keep your responses concise and helpful.",
+            `You are a friendly assistant! Keep your responses concise and helpful. Today is ${new Date().toISOString()}.`,
           messages: convertToModelMessages(messages),
           tools,
 
