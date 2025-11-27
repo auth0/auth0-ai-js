@@ -1,5 +1,3 @@
-"use client";
-
 import "./markdown-styles.css";
 
 import ReactMarkdown, { Components }  from "react-markdown";
@@ -7,11 +5,10 @@ import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import { FC, memo, useState } from "react";
-import { CheckIcon, CopyIcon } from "lucide-react";
-import { SyntaxHighlighter } from "@/components/thread/syntax-highlighter";
-
-import { TooltipIconButton } from "@/components/thread/tooltip-icon-button";
-import { cn } from "@/lib/utils";
+import { Check, Copy } from "lucide-react";
+import { SyntaxHighlighter } from "./SyntaxHighlighter";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 
 import "katex/dist/katex.min.css";
 
@@ -48,11 +45,19 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-t-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">
-      <span className="lowercase [&>span]:text-xs">{language}</span>
-      <TooltipIconButton tooltip="Copy" onClick={onCopy}>
-        {!isCopied && <CopyIcon />}
-        {isCopied && <CheckIcon />}
-      </TooltipIconButton>
+      <span className="lowercase text-xs">{language}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onCopy}
+        className="h-6 w-6 p-0 hover:bg-zinc-800"
+      >
+        {isCopied ? (
+          <Check className="h-3 w-3" />
+        ) : (
+          <Copy className="h-3 w-3" />
+        )}
+      </Button>
     </div>
   );
 };
