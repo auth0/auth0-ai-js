@@ -2,7 +2,7 @@
 
 import "./markdown-styles.css";
 
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { Components }  from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
@@ -57,7 +57,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   );
 };
 
-const defaultComponents: any = {
+const defaultComponents: Components = {
   h1: ({ className, ...props }: { className?: string }) => (
     <h1
       className={cn(
@@ -202,7 +202,7 @@ const defaultComponents: any = {
     ...props
   }: {
     className?: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
   }) => {
     const match = /language-(\w+)/.exec(className || "");
 
