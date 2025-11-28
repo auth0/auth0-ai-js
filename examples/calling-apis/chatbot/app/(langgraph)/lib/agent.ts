@@ -62,7 +62,7 @@ const callLLM = async (
           },
           {
             type: "text",
-            text: `Today is ${new Date().toISOString()}.`,
+            text: `The current date and time is ${new Date().toISOString()}.`,
           },
         ],
       });

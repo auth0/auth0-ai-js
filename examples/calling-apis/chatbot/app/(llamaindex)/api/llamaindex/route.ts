@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     execute: withInterruptions(
       async ({ writer }) => {
         const agent = new ReActAgent({
-          systemPrompt: `You are an AI assistant. Today is ${new Date().toISOString()}.`,
+          systemPrompt: `You are an AI assistant. The current date and time is ${new Date().toISOString()}.`,
           tools: [checkUsersCalendar(), listChannels(), listRepositories()],
           verbose: true,
         });
