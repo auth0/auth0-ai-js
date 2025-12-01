@@ -62,12 +62,12 @@ export const withAsyncAuthorization = auth0AI.withAsyncAuthorization({
 
 ## CloudflareKVStore
 
-This module provides `CloudflareKVStore`. An implementation of auth0-ai `Store` interface that uses Cloudflare Workers KV to store and retrieve data.
+This module provides `CloudflareKVStore`. An implementation of auth0-ai `Store` interface that uses Cloudflare Workers KV to store and retrieve data. The `kv` option should be a reference to your [Cloudflare KV namespace](https://developers.cloudflare.com/kv/get-started/#5-access-your-kv-namespace-from-your-worker) or a compatible store.
 
 ```js
 import { CloudflareKVStore } from '@auth0/ai-cloudflare';
 const kvStore = new CloudflareKVStore({
-  namespace: env.Auth0AINamespace, // The KV namespace to use
+  kv: env.Auth0AINamespace, // The KV namespace to use
 });
 ```
 
