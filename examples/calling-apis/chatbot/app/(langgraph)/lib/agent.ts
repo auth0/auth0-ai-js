@@ -1,10 +1,23 @@
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import { RunnableLike } from "@langchain/core/runnables";
-import { END, InMemoryStore, MemorySaver, MessagesAnnotation, START, StateGraph } from "@langchain/langgraph";
+import {
+  END,
+  InMemoryStore,
+  MemorySaver,
+  MessagesAnnotation,
+  START,
+  StateGraph,
+} from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { ChatOpenAI } from "@langchain/openai";
 
-import { calendarCommunityTool, checkUsersCalendar, gmailCommunityTool, listChannels, listRepositories } from "./tools";
+import {
+  calendarCommunityTool,
+  checkUsersCalendar,
+  gmailCommunityTool,
+  listChannels,
+  listRepositories,
+} from "./tools";
 
 const model = new ChatOpenAI({
   model: "gpt-4o",
@@ -20,7 +33,7 @@ const model = new ChatOpenAI({
 // The auth handler returns user data that can be accessed via config.configurable.auth
 const callLLM = async (
   state: typeof MessagesAnnotation.State,
-  config?: any
+  config?: any,
 ) => {
   // Ensure messages array exists
   if (!state.messages) {
@@ -35,20 +48,29 @@ const callLLM = async (
 
     // Add user context to the system message if not already present
     const hasSystemMessage = state.messages.some(
-      (msg) => msg._getType() === "system"
+      (msg) => msg._getType() === "system",
     );
     if (!hasSystemMessage) {
       const userContext = `You are authenticated as ${authenticatedUser.sub} via Auth0.`;
 
       // Add a system message with user context
-      const systemMessage = new SystemMessage(
-        `${userContext} The user has the following scopes: ${authenticatedUser.scope || "none"}.`
-      );
+      const systemMessage = new SystemMessage({
+        content: [
+          {
+            type: "text",
+            text: `${userContext} The user has the following scopes: ${authenticatedUser.scope || "none"}.`,
+          },
+          {
+            type: "text",
+            text: `The current date and time is ${new Date().toISOString()}.`,
+          },
+        ],
+      });
       state.messages.unshift(systemMessage);
     }
   } else {
     console.log(
-      "❌ No authenticated user found in config.configurable.langgraph_auth_user"
+      "❌ No authenticated user found in config.configurable.langgraph_auth_user",
     );
   }
 
@@ -90,8 +112,8 @@ const stateGraph = new StateGraph(MessagesAnnotation)
         // Error handler should be disabled in order to
         // trigger interruptions from within tools.
         handleToolErrors: false,
-      }
-    )
+      },
+    ),
   )
   .addEdge(START, "callLLM")
   .addConditionalEdges("callLLM", routeAfterLLM, [END, "tools"])

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     execute: withInterruptions(
       async ({ writer }) => {
         const agent = new ReActAgent({
-          systemPrompt: "You are an AI assistant",
+          systemPrompt: `You are an AI assistant. The current date and time is ${new Date().toISOString()}.`,
           tools: [checkUsersCalendar(), listChannels(), listRepositories()],
           verbose: true,
         });
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       return "Oops, an error occured!";
     }),
   });
-    return createUIMessageStreamResponse({ stream }); 
+    return createUIMessageStreamResponse({ stream });
 }
 
 
