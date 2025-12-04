@@ -59,7 +59,7 @@
   "peerDependencies": {
     "@ai-sdk/react": "^2.0.0",
     "ai": "^5.0.0",
-    "react": "^19.0.0"
+    "react": "^19.2.1"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",
