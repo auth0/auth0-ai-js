@@ -15,7 +15,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@auth0/ai-llamaindex": "*",
-    "@llamaindex/openai": "^0.4.18",
+    "@llamaindex/openai": "^0.4.22",
     "@openfga/sdk": "^0.8.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",

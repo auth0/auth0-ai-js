@@ -83,7 +83,7 @@
     "auth0": "^4.30.0",
     "jose": "^5.9.6",
     "openid-client": "^6.1.7",
-    "stable-hash": "^0.0.5",
+    "stable-hash": "^0.0.6",
     "tempbox": "^1.1.1",
     "zod": "^3.25.76"
   },
