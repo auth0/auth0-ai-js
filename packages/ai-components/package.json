@@ -21,7 +21,7 @@
     "@types/node": "^22.10.6",
     "@types/react": "^19.0.10",
     "clsx": "^2.1.1",
-    "react": "^19.0.0",
+    "react": "^19.2.1",
     "react-device-detect": "^2.2.3",
     "tailwind-merge": "^3.0.2",
     "typescript": "^5.7.3"
