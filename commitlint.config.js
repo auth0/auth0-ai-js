@@ -1,6 +1,9 @@
+const { RuleConfigSeverity } = require("@commitlint/types");
+
 module.exports = {
   extends: ["@commitlint/config-conventional"],
   rules: {
+    "body-max-line-length": [RuleConfigSeverity.Error, "always", 500],
     "type-enum": [
       2,
       "always",
