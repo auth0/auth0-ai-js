@@ -22,7 +22,7 @@
     "semantic-release": "^24.2.3",
     "semantic-release-monorepo": "^8.0.2",
     "semantic-release-unsquash": "^0.2.0",
-    "terminal-link": "^3.0.0"
+    "terminal-link": "^5.0.0"
   },
   "packageManager": "npm@9.8.0",
   "workspaces": [
