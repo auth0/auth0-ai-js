@@ -40,12 +40,12 @@
     "@openfga/sdk": "^0.8.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.6",
+    "@types/node": "^20.19.25",
     "@eslint/compat": "^1.2.7",
-    "eslint": "^9.22.0",
+    "eslint": "^9.39.1",
     "globals": "^15.11.0",
-    "typedoc": "^0.27.6",
-    "typescript": "^5.7.3",
+    "typedoc": "^0.28.15",
+    "typescript": "^5.9.3",
     "vitest": "^3.0.9"
   },
   "publishConfig": {
