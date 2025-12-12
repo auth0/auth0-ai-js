@@ -27,10 +27,10 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: npm
+          cache-dependency-path: ./package.json
 
-      - name: Install Dependencies
-        id: npm-ci
-        run: npm ci
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
 
       - name: Validate Commits Messages
         if: github.event_name == 'pull_request'

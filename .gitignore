@@ -49,3 +49,4 @@ bun.lock
 
 # LangGraph API
 .langgraph_api
+package-lock.json
