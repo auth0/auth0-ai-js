@@ -12,7 +12,7 @@
     "@ai-sdk/openai": "^2.0.0",
     "@auth0/ai": "*",
     "@auth0/ai-vercel": "*",
-    "@hono/node-server": "^1.13.7",
+    "@hono/node-server": "^1.19.7",
     "ai": "^5.0.0",
     "dotenv": "^16.4.5",
     "googleapis": "^153.0.0",

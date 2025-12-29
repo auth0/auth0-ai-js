@@ -53,7 +53,7 @@
     "@ai-sdk/react": "^2.0.0",
     "@auth0/ai": "*",
     "ai": "^5.0.0",
-    "stable-hash": "^0.0.5",
+    "stable-hash": "^0.0.6",
     "zod-to-json-schema": "^3.24.5"
   },
   "peerDependencies": {
