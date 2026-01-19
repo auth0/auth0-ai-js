@@ -43,7 +43,7 @@ export async function POST(request: Request) {
           model: openai("gpt-4o-mini"),
           system:
             `You are a friendly assistant! Keep your responses concise and helpful. The current date and time is ${new Date().toISOString()}.`,
-          messages: convertToModelMessages(messages),
+          messages: await convertToModelMessages(messages),
           tools,
 
           onFinish: (output) => {

@@ -42,7 +42,7 @@
     "@auth0/ai-vercel": "*"
   },
   "peerDependencies": {
-    "agents": "^0.1.0"
+    "agents": ">=0.1.0 <0.4.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",

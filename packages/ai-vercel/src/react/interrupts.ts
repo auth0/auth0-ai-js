@@ -5,7 +5,18 @@ import { useChat } from "@ai-sdk/react";
 import { InterruptionPrefix } from "#interrupts";
 
 type UseChatReturnType = ReturnType<typeof useChat>;
-export type UseChatWithInterruptionsReturnType = UseChatReturnType & {
+
+/**
+ * General interface for chat hooks compatible with useInterruptions.
+ * Supports AI SDK's useChat, Cloudflare's useAgentChat, and custom implementations.
+ * Types are extracted from AI SDK's useChat for type safety and compatibility.
+ */
+export type GeneralChatReturnType = {
+  messages: UseChatReturnType['messages'];
+  addToolResult: UseChatReturnType['addToolResult'];
+  regenerate: UseChatReturnType['regenerate'];
+};
+export type UseChatWithInterruptionsReturnType = GeneralChatReturnType & {
   toolInterrupt: Auth0InterruptionUI | null;
 };
 
@@ -33,9 +44,15 @@ export type Auth0InterruptionUI = {
   [key: string]: any;
 };
 
-export function useInterruptions(
-  useChatCreator: (errorHandler: ErrorHandler) => UseChatReturnType
-): UseChatWithInterruptionsReturnType {
+/**
+ * Adds Auth0 interruption handling to any chat hook.
+ * Works with AI SDK v6's useChat and Cloudflare Agents' useAgentChat.
+ */
+export function useInterruptions<T extends GeneralChatReturnType>(
+  useChatCreator: (errorHandler: ErrorHandler) => T
+): T & {
+  toolInterrupt: Auth0InterruptionUI | null;
+} {
   const [toolInterrupt, setToolInterrupt] =
     useState<Auth0InterruptionUI | null>(null);
 
@@ -109,5 +126,7 @@ export function useInterruptions(
     toolInterrupt,
     addToolResult,
     regenerate,
-  } as UseChatWithInterruptionsReturnType;
+  } as T & {
+    toolInterrupt: Auth0InterruptionUI | null;
+  };
 }

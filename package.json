@@ -31,7 +31,7 @@
   ],
   "dependencies": {
     "@openfga/sdk": "^0.8.0",
-    "agents": "^0.1.0",
+    "agents": "^0.3.0",
     "vite": "^6.2.3"
   },
   "optionalDependencies": {
