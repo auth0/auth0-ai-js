@@ -9,14 +9,14 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.22",
     "@auth0/ai": "*",
     "@auth0/ai-vercel": "*",
     "@hono/node-server": "^1.13.7",
-    "ai": "^6.0.0",
+    "ai": "^6.0.61",
     "dotenv": "^16.4.5",
     "googleapis": "^153.0.0",
-    "hono": "^4.7.11",
+    "hono": "^4.11.7",
     "jose": "^5.2.0",
     "@auth0/auth0-ai-js-examples-react-hono-ai-sdk-shared": "*",
     "zod": "^3.25.76"

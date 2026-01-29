@@ -49,7 +49,7 @@
     "@llamaindex/openai": "^0.4.18",
     "html-to-text": "^9.0.5",
     "llamaindex": "^0.11.28",
-    "lodash": "^4.17.21",
+    "lodash": "^4.17.23",
     "magic-bytes.js": "^1.10.0"
   },
   "peerDependencies": {
