@@ -51,7 +51,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@auth0/ai": "*",
-    "stable-hash": "^0.0.5",
+    "stable-hash": "^0.0.6",
     "zod-to-json-schema": "^3.24.5"
   },
   "peerDependencies": {
@@ -62,7 +62,7 @@
   "devDependencies": {
     "@eslint/compat": "^1.2.7",
     "@types/node": "^22.10.6",
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.13",
     "eslint": "^9.22.0",
     "typedoc": "^0.27.6",
     "typescript": "^5.7.3",
