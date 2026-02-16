@@ -14,10 +14,10 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.29",
     "@auth0/ai": "*",
     "@auth0/ai-vercel": "*",
-    "ai": "^6.0.0",
+    "ai": "^6.0.86",
     "dotenv": "^16.4.7",
     "enquirer": "^2.4.1",
     "jwt-decode": "^4.0.0",
