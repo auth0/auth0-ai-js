@@ -2,7 +2,7 @@
   "name": "@auth0/auth0-ai-js-examples-authorization-for-rag-langgraph-agentic",
   "private": true,
   "version": "0.0.0",
-  "description": "Demonstrates the usage of the Okta FGA with LangChain to query documents with permission checks.",
+  "description": "Demonstrates the usage of the Auth0 FGA/OpenFGA with LangChain to query documents with permission checks.",
   "x-type": "module",
   "main": "index.js",
   "author": {
@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@auth0/ai-langchain": "*",
+    "@langchain/openai": "^0.3.17",
+    "@openfga/syntax-transformer": "^0.2.0",
     "@langchain/core": "^0.3.72",
     "@langchain/langgraph": "^0.4.6",
     "@langchain/langgraph-sdk": "^0.0.109",

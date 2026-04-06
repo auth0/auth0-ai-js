@@ -1,12 +1,12 @@
 # Auth0 AI for the [AI SDK](https://sdk.vercel.ai/)
 
-`@auth0/ai-vercel` is an SDK for building secure AI-powered applications using [Auth0](https://www.auth0.ai/), [Okta FGA](https://docs.fga.dev/), and [AI SDK](https://sdk.vercel.ai/).
+`@auth0/ai-vercel` is an SDK for building secure AI-powered applications using [Auth0](https://www.auth0.ai/), [Auth0 FGA](https://docs.fga.dev)/[OpenFGA](https://openfga.dev), and [AI SDK](https://sdk.vercel.ai/).
 
 ## Features
 
-- **Authorization for RAG**: Securely filter documents using Okta FGA as a [retriever](https://js.langchain.com/docs/concepts/retrievers/) for RAG applications. This smart retriever performs efficient batch access control checks, ensuring users only see documents they have permission to access.
+- **Authorization for RAG**: Securely filter documents using Auth0 FGA/OpenFGA as a [retriever](https://js.langchain.com/docs/concepts/retrievers/) for RAG applications. This smart retriever performs efficient batch access control checks, ensuring users only see documents they have permission to access.
 
-- **Tool Authorization with FGA**: Protect AI tool execution with fine-grained authorization policies through Okta FGA integration, controlling which users can invoke specific tools based on custom authorization rules.
+- **Tool Authorization with FGA**: Protect AI tool execution with fine-grained authorization policies through Auth0 FGA/OpenFGA integration, controlling which users can invoke specific tools based on custom authorization rules.
 
 - **Client Initiated Backchannel Authentication (CIBA)**: Implement secure, out-of-band user authorization for sensitive AI operations using the [CIBA standard](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html), enabling user confirmation without disrupting the main interaction flow.
 

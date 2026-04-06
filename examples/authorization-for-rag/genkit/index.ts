@@ -1,5 +1,5 @@
 /**
- * GenKit Example: Rerankers with Okta FGA (Fine-Grained Authorization)
+ * GenKit Example: Rerankers with Auth0 FGA/OpenFGA (Fine-Grained Authorization)
  *
  *
  */
@@ -12,11 +12,11 @@ import { FGAReranker } from "@auth0/ai-genkit";
 import { documentsRetriever, executeQuery, initializeGenkit } from "./helpers";
 
 /**
- * Demonstrates the usage of the Okta FGA (Fine-Grained Authorization)
+ * Demonstrates the usage of the Auth0 FGA/OpenFGA (Fine-Grained Authorization)
  * with a vector store index to query documents with permission checks.
  *
  * The FGAReranker checks if the user has the "viewer" relation to the document
- * based on predefined tuples in Okta FGA.
+ * based on predefined tuples in Auth0 FGA/OpenFGA.
  *
  * Example:
  * - A tuple {user: "user:*", relation: "viewer", object: "doc:public-doc"} allows all users to view "public-doc".
@@ -26,7 +26,7 @@ import { documentsRetriever, executeQuery, initializeGenkit } from "./helpers";
  */
 async function main() {
   console.log(
-    "\n..:: GenKit Example: Reranker with Okta FGA (Fine-Grained Authorization)\n\n"
+    "\n..:: GenKit Example: Reranker with Auth0 FGA/OpenFGA (Fine-Grained Authorization)\n\n"
   );
 
   // initialize a GenKit instance
@@ -72,7 +72,7 @@ async function main() {
   console.log(await demoFlow("Show me forecast for ZEKO?"));
 
   /**
-   * If we add the following tuple to the Okta FGA:
+   * If we add the following tuple to the Auth0 FGA/OpenFGA:
    *
    *    { user: "user:user1", relation: "viewer", object: "doc:private-doc" }
    *

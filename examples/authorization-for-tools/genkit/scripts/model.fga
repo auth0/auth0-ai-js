@@ -1,0 +1,26 @@
+model
+  schema 1.1
+
+type user
+
+type trading_tool
+  relations
+    define assigned_user: [user]
+    define can_call: assigned_user
+
+type asset
+  relations
+    define _restricted_employee: [company#employee with is_trading_window_closed]
+    define can_buy: [user, user:*] but not restricted
+    define restricted: _restricted_employee
+
+type company
+  relations
+    define employee: [user]
+
+
+condition is_trading_window_closed(current_time: timestamp, from: timestamp, to: timestamp) {
+  current_time > from && current_time < to
+}
+
+
