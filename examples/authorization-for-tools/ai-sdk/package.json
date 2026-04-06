@@ -17,6 +17,7 @@
     "@ai-sdk/openai": "^1.1.9",
     "@auth0/ai-vercel": "*",
     "@openfga/sdk": "^0.8.0",
+    "@openfga/syntax-transformer": "^0.2.0",
     "ai": "^4.1.54",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",

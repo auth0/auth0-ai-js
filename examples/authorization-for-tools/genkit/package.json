@@ -16,6 +16,7 @@
   "dependencies": {
     "@auth0/ai-genkit": "*",
     "@openfga/sdk": "^0.8.0",
+    "@openfga/syntax-transformer": "^0.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "enquirer": "^2.4.1",

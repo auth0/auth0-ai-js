@@ -1,14 +1,14 @@
 # Auth0 AI for LangChain
 
-`@auth0/ai-langchain` is an SDK for building secure AI-powered applications using [Auth0](https://www.auth0.ai/), [Okta FGA](https://docs.fga.dev/) and [LangChain](https://js.langchain.com).
+`@auth0/ai-langchain` is an SDK for building secure AI-powered applications using [Auth0](https://www.auth0.ai/), [Auth0 FGA](https://docs.fga.dev)/[OpenFGA](https://openfga.dev) and [LangChain](https://js.langchain.com).
 
 **Note**: This SDK currently focuses on LangGraph.
 
 ## Features
 
-- **Authorization for RAG**: Securely filter documents using Okta FGA as a [retriever](https://js.langchain.com/docs/concepts/retrievers/) for RAG applications. This smart retriever performs efficient batch access control checks, ensuring users only see documents they have permission to access.
+- **Authorization for RAG**: Securely filter documents using Auth0 FGA/OpenFGA as a [retriever](https://js.langchain.com/docs/concepts/retrievers/) for RAG applications. This smart retriever performs efficient batch access control checks, ensuring users only see documents they have permission to access.
 
-- **Tool Authorization with FGA**: Protect AI tool execution with fine-grained authorization policies through Okta FGA integration, controlling which users can invoke specific tools based on custom authorization rules.
+- **Tool Authorization with FGA**: Protect AI tool execution with fine-grained authorization policies through Auth0 FGA/OpenFGA integration, controlling which users can invoke specific tools based on custom authorization rules.
 
 - **Client Initiated Backchannel Authentication (CIBA)**: Implement secure, out-of-band user authorization for sensitive AI operations using the [CIBA standard](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html), enabling user confirmation without disrupting the main interaction flow.
 
@@ -346,7 +346,7 @@ Note: the parameters given to the `buildQuery` function are the same provided to
 
 ## RAG with FGA
 
-Auth0AI can leverage OpenFGA to authorize RAG applications. The `FGARetriever` can be used to filter documents based on access control checks defined in Okta FGA. This retriever performs batch checks on retrieved documents, returning only the ones that pass the specified access criteria.
+Auth0AI can leverage OpenFGA to authorize RAG applications. The `FGARetriever` can be used to filter documents based on access control checks defined in Auth0 FGA/OpenFGA. This retriever performs batch checks on retrieved documents, returning only the ones that pass the specified access criteria.
 
 Example [RAG Application](../../examples/authorization-for-rag/langchain/).
 

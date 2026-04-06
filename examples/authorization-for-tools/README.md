@@ -1,6 +1,6 @@
-## Authorization for Tools with Okta FGA
+## Authorization for Tools with Auth0 FGA/OpenFGA
 
-Authorization for Tools ensures that users can only execute actions they are permitted to perform or access resources they are authorized to view. These examples demonstrate how to integrate **Okta FGA** with **LangChain**, **LlamaIndex**, **Genkit** and others to enforce authorization checks during AI Tool executions.
+Authorization for Tools ensures that users can only execute actions they are permitted to perform or access resources they are authorized to view. These examples demonstrate how to integrate **Auth0 FGA/OpenFGA** with **LangChain**, **LlamaIndex**, **Genkit** and others to enforce authorization checks during AI Tool executions.
 
 ### How It Works
 
@@ -10,7 +10,7 @@ Authorization for Tools ensures that users can only execute actions they are per
 
 ### Examples
 
-Explore the following examples demonstrating the integration of **Okta FGA** with **LangChain**, **LlamaIndex**, and **Genkit**:
+Explore the following examples demonstrating the integration of **Auth0 FGA/OpenFGA** with **LangChain**, **LlamaIndex**, and **Genkit**:
 
 - **LangChain with FGA Tool protection:**  
    An implementation showcasing how integrate `@auth0/ai` with LangChain to enforce authorization checks during tool execution.  
