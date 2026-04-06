@@ -7,13 +7,14 @@
   "module": "./dist/esm/index.js",
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs",
-    "build:esm": "tsc --outDir ./dist/esm",
-    "build:cjs": "tsc --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
+    "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
+    "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
     "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
     "clean": "rm -rf dist",
     "lint": "eslint \"./**/*.ts*\"",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
+    "test:debug": "vitest --inspect-brk --no-file-parallelism run",
     "semantic-release": "npx --no semantic-release"
   },
   "author": {
@@ -45,20 +46,20 @@
       "import": "./dist/esm/authorizers/index.js",
       "require": "./dist/cjs/authorizers/index.js"
     },
-    "./FederatedConnections": {
-      "types": "./dist/esm/authorizers/federated-connections/index.d.ts",
-      "import": "./dist/esm/authorizers/federated-connections/index.js",
-      "require": "./dist/cjs/authorizers/federated-connections/index.js"
+    "./TokenVault": {
+      "types": "./dist/esm/authorizers/token-vault/index.d.ts",
+      "import": "./dist/esm/authorizers/token-vault/index.js",
+      "require": "./dist/cjs/authorizers/token-vault/index.js"
     },
     "./Device": {
       "types": "./dist/esm/authorizers/device-authorizer/index.d.ts",
       "import": "./dist/esm/authorizers/device-authorizer/index.js",
       "require": "./dist/cjs/authorizers/device-authorizer/index.js"
     },
-    "./CIBA": {
-      "types": "./dist/esm/authorizers/ciba/index.d.ts",
-      "import": "./dist/esm/authorizers/ciba/index.js",
-      "require": "./dist/cjs/authorizers/ciba/index.js"
+    "./AsyncAuthorization": {
+      "types": "./dist/esm/authorizers/async-authorization/index.d.ts",
+      "import": "./dist/esm/authorizers/async-authorization/index.js",
+      "require": "./dist/cjs/authorizers/async-authorization/index.js"
     },
     "./FGA": {
       "types": "./dist/esm/authorizers/fga/index.d.ts",
@@ -79,12 +80,12 @@
   },
   "dependencies": {
     "@openfga/sdk": "^0.8.0",
-    "auth0": "^4.18.0",
+    "auth0": "^4.30.0",
     "jose": "^5.9.6",
     "openid-client": "^6.1.7",
     "stable-hash": "^0.0.5",
     "tempbox": "^1.1.1",
-    "zod": "^3.24.2"
+    "zod": "^3.25.76"
   },
   "publishConfig": {
     "access": "public"

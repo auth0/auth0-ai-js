@@ -8,8 +8,8 @@
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs",
     "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
-    "build:esm": "tsc --outDir ./dist/esm",
-    "build:cjs": "tsc --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
+    "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
+    "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "semantic-release": "npx --no semantic-release",

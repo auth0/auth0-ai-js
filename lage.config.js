@@ -4,6 +4,6 @@ module.exports = {
     "build:watch": [],
     clean: ["^clean"],
     test: ["^test"],
-    lint: []
-  }
+    lint: [],
+  },
 };

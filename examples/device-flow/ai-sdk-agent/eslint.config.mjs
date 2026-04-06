@@ -9,11 +9,22 @@ const gitIgnore = path.resolve(import.meta.dirname, ".gitignore");
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   includeIgnoreFile(gitIgnore),
-  { files: ["src/*.{js,mjs,cjs,ts}"] },
-  { languageOptions: { globals: globals.browser } },
+  { ignores: ["eslint.config.mjs"] },
+  {
+    files: ["src/*.{js,mjs,cjs,ts}"],
+    languageOptions: { globals: globals.browser },
+  },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ["src/**/*.ts"],
+
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+        project: "./tsconfig.json",
+      },
+    },
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
     },

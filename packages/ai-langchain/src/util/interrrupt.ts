@@ -6,10 +6,7 @@ import type { Interrupt, Thread } from "@langchain/langgraph-sdk";
 export const toGraphInterrupt = (interrupt: Auth0Interrupt): GraphInterrupt => {
   return new GraphInterrupt([
     {
-      value: interrupt,
-      when: "during",
-      resumable: true,
-      ns: [`auth0AI:${interrupt.name}:${interrupt.code}`],
+      value: interrupt
     },
   ]);
 };

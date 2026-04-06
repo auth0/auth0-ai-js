@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { FunctionTool } from "llamaindex";
-import z from "zod";
+import { z } from "zod/v3";
 
 import { Auth0AI } from "@auth0/ai-llamaindex";
 

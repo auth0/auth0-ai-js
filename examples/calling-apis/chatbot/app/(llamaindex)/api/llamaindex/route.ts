@@ -1,10 +1,11 @@
 import {
-  createDataStreamResponse,
-  LlamaIndexAdapter,
-  Message,
-  ToolExecutionError,
+  createUIMessageStream,
+  UIMessage,
+  AISDKError,
+  createUIMessageStreamResponse,
 } from "ai";
-import { ChatMessage, OpenAIAgent } from "llamaindex";
+import { toUIMessageStream } from "@ai-sdk/llamaindex";
+import { ReActAgent, Settings } from "llamaindex";
 
 import {
   checkUsersCalendar,
@@ -14,33 +15,38 @@ import {
 import { setAIContext } from "@auth0/ai-llamaindex";
 import { withInterruptions } from "@auth0/ai-llamaindex/interrupts";
 import { errorSerializer } from "@auth0/ai-vercel/interrupts";
+import { openai } from "@llamaindex/openai";
+
+// Configure OpenAI LLM
+Settings.llm = openai({
+  model: "gpt-4o-mini",
+});
 
 export async function POST(request: Request) {
-  const { id, messages }: { id: string; messages: Message[] } =
+  const { id, messages }: { id: string; messages: UIMessage[] } =
     await request.json();
 
   setAIContext({ threadID: id });
 
-  return createDataStreamResponse({
+  const stream = createUIMessageStream({
+    originalMessages: messages,
     execute: withInterruptions(
-      async (dataStream) => {
-        const agent = new OpenAIAgent({
-          systemPrompt: "You are an AI assistant",
+      async ({ writer }) => {
+        const agent = new ReActAgent({
+          systemPrompt: `You are an AI assistant. The current date and time is ${new Date().toISOString()}.`,
           tools: [checkUsersCalendar(), listChannels(), listRepositories()],
-          chatHistory: messages as ChatMessage[],
           verbose: true,
         });
-
         const stream = await agent.chat({
-          message: messages[messages.length - 1].content,
+          message: (messages[messages.length - 1].parts[0] as any)?.text,
           stream: true,
         });
 
-        LlamaIndexAdapter.mergeIntoDataStream(stream as any, { dataStream });
+        writer.merge(toUIMessageStream(stream as any));
       },
       {
-        messages,
-        errorType: ToolExecutionError,
+        messages: messages as any,
+        errorType: AISDKError
       }
     ),
     onError: errorSerializer((err) => {
@@ -48,4 +54,7 @@ export async function POST(request: Request) {
       return "Oops, an error occured!";
     }),
   });
+    return createUIMessageStreamResponse({ stream });
 }
+
+

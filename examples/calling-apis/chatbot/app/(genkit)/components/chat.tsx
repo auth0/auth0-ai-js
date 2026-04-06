@@ -2,8 +2,8 @@
 import { useQueryState } from "nuqs";
 import { FormEventHandler, useEffect, useRef, useState } from "react";
 
-import { EnsureAPIAccessPopup } from "@/components/auth0-ai/FederatedConnections/popup";
-import { FederatedConnectionInterrupt } from "@auth0/ai/interrupts";
+import { TokenVaultConsentPopup } from "@/components/auth0-ai/TokenVault/popup";
+import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
 
 const useFocus = () => {
   const htmlElRef = useRef<HTMLInputElement>(null);
@@ -117,13 +117,13 @@ export default function Chat() {
             {message.content[0].text || ""}
             {!isLoading &&
             message.content[0].metadata?.interrupt &&
-            FederatedConnectionInterrupt.isInterrupt(
+            TokenVaultInterrupt.isInterrupt(
               message.content[0].metadata?.interrupt
             )
               ? (() => {
                   const interrupt: any = message.content[0].metadata?.interrupt;
                   return (
-                    <EnsureAPIAccessPopup
+                    <TokenVaultConsentPopup
                       onFinish={() =>
                         submit({ interruptedToolRequest: message.content[0] })
                       }

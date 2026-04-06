@@ -1,21 +1,21 @@
 import { Octokit, RequestError } from "octokit";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { withGitHub } from "@/app/(genkit)/lib/auth0-ai";
 import { ai } from "@/app/(genkit)/lib/genkit";
-import { getCredentialsForConnection } from "@auth0/ai-genkit";
-import { FederatedConnectionError } from "@auth0/ai/interrupts";
+import { getCredentialsFromTokenVault } from "@auth0/ai-genkit";
+import { TokenVaultError } from "@auth0/ai/interrupts";
 
 export const listRepositories = ai.defineTool(
   ...withGitHub(
     {
-      description: "List respositories for the current user on GitHub",
+      description: "List repositories for the current user on GitHub",
       inputSchema: z.object({}),
       name: "listRepositories",
     },
     async () => {
       // Get the access token from Auth0 AI
-      const credentials = getCredentialsForConnection();
+      const credentials = getCredentialsFromTokenVault();
 
       // GitHub SDK
       try {
@@ -29,8 +29,8 @@ export const listRepositories = ai.defineTool(
       } catch (error) {
         if (error instanceof RequestError) {
           if (error.status === 401) {
-            throw new FederatedConnectionError(
-              `Authorization required to access the Federated Connection`
+            throw new TokenVaultError(
+              `Authorization required to access the Token Vault`
             );
           }
         }

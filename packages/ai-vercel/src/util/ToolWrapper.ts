@@ -1,5 +1,5 @@
 import { Tool } from "ai";
-import { Schema, z } from "zod";
+import { Schema, z } from "zod/v3";
 
 type Parameters = z.ZodTypeAny | Schema<any>;
 

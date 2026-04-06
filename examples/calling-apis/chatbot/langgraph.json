@@ -3,6 +3,9 @@
   "graphs": {
     "agent": "./app/(langgraph)/lib/agent.ts:graph"
   },
+  "auth": {
+    "path": "./app/(langgraph)/lib/auth.ts:authHandler"
+  },
   "env": ".env.local",
   "dependencies": ["."]
 }

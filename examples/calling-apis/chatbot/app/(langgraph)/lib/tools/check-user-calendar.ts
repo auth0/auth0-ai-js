@@ -1,10 +1,10 @@
-import { addHours, formatISO } from "date-fns";
+import { addDays, formatISO } from "date-fns";
 import { GaxiosError } from "gaxios";
 import { google } from "googleapis";
-import { z } from "zod";
+import { z } from "zod/v3";
 
-import { getAccessTokenForConnection } from "@auth0/ai-langchain";
-import { FederatedConnectionError } from "@auth0/ai/interrupts";
+import { getAccessTokenFromTokenVault } from "@auth0/ai-langchain";
+import { TokenVaultError } from "@auth0/ai/interrupts";
 import { tool } from "@langchain/core/tools";
 
 import { withGoogleCalendar } from "../auth0-ai";
@@ -14,7 +14,7 @@ export const checkUsersCalendar = withGoogleCalendar(
     async ({ date }) => {
       // Google SDK
       try {
-        const accessToken = getAccessTokenForConnection();
+        const accessToken = getAccessTokenFromTokenVault();
 
         const calendar = google.calendar("v3");
         const auth = new google.auth.OAuth2();
@@ -27,7 +27,7 @@ export const checkUsersCalendar = withGoogleCalendar(
           auth,
           requestBody: {
             timeMin: formatISO(date),
-            timeMax: addHours(date, 1).toISOString(),
+            timeMax: addDays(date, 1).toISOString(),
             timeZone: "UTC",
             items: [{ id: "primary" }],
           },
@@ -38,8 +38,8 @@ export const checkUsersCalendar = withGoogleCalendar(
         };
       } catch (err) {
         if (err instanceof GaxiosError && err.status === 401) {
-          throw new FederatedConnectionError(
-            `Authorization required to access the Federated Connection`
+          throw new TokenVaultError(
+            `Authorization required to access the Token Vault`
           );
         }
         throw err;

@@ -24,32 +24,32 @@ a person or organization. Common use cases include:
 
 ## Packages
 
-- [`@auth0/ai`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai) -
+- [`@auth0/ai`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai) -
   Base abstractions for authentication and authorization in AI applications.
 
-- [`@auth0/ai-genkit`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai-genkit) -
+- [`@auth0/ai-genkit`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-genkit) -
   Integration with [Genkit](https://firebase.google.com/docs/genkit) framework.
 
-- [`@auth0/ai-llamaindex`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai-llamaindex) -
+- [`@auth0/ai-llamaindex`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-llamaindex) -
   Integration with [LlamaIndex.TS](https://ts.llamaindex.ai/) framework.
 
-- [`@auth0/ai-langchain`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai-langchain) -
+- [`@auth0/ai-langchain`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-langchain) -
   Integration with [LangchainJS](https://js.langchain.com/docs/introduction/) framework.
 
-- [`@auth0/ai-vercel`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai-vercel) -
+- [`@auth0/ai-vercel`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-vercel) -
   Integration with [AI SDK](https://sdk.vercel.ai/) framework.
 
-- [`@auth0/ai-redis`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai-redis) - 
+- [`@auth0/ai-redis`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-redis) - 
  A secure [Redis](https://redis.com/)-based data store implementation for Credentials and Authorization requests.
 
-- [`@auth0/ai-components`](https://github.com/auth0-lab/auth0-ai-js/tree/main/packages/ai-components) -
+- [`@auth0/ai-components`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-components) -
   A library of React components to help integrate `@auth0/ai` with a UI.
 
 ## Running examples
 
 ## Prepare the workspace
 
-1. Install depedencies for the workspace
+1. Install dependencies for the workspace
 
    ```sh
    npm install
@@ -65,7 +65,7 @@ a person or organization. Common use cases include:
 
 ### Examples list
 
-- [**Async User Confirmation**](./examples/async-user-confirmation/README.md)
+- [**Async User Confirmation**](./examples/async-authorization/README.md)
 - [**Authorization for RAG**](./examples/authorization-for-rag/README.md)
 - [**Authorization for Tools**](./examples/authorization-for-tools/README.md)
 
@@ -80,7 +80,7 @@ We appreciate feedback and contribution to this repo! Before you get started, pl
 
 ### Raise an issue
 
-To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0-lab/auth0-ai-js/issues).
+To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0/auth0-ai-js/issues).
 
 ### Vulnerability Reporting
 

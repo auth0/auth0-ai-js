@@ -8,8 +8,8 @@
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs",
     "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
-    "build:esm": "tsc --outDir ./dist/esm",
-    "build:cjs": "tsc --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
+    "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
+    "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "semantic-release": "npx --no semantic-release",
@@ -42,11 +42,11 @@
     "langchain": "^0.3.11"
   },
   "peerDependencies": {
-    "@langchain/core": "^0.3.19",
-    "@langchain/langgraph": "^0.2.55",
-    "@langchain/langgraph-sdk": "^0.0.57",
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.4",
+    "@langchain/langgraph-sdk": "^0.0.109",
     "@openfga/sdk": "0.8.0",
-    "zod": "^3.24.2"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",

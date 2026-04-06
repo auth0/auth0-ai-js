@@ -7,7 +7,7 @@ import { ToolContext } from "../util/ToolContext";
 import { ToolLike, ToolWrapper } from "../util/ToolWrapper";
 
 /**
- * Authorizer for federated connections.
+ * Authorizer for token vaults.
  */
 export class DeviceAuthorizer extends DeviceAuthorizerBase<[any, any]> {
   protected override handleAuthorizationInterrupts(

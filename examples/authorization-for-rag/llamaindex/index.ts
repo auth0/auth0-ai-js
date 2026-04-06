@@ -5,7 +5,8 @@
  */
 import "dotenv/config";
 
-import { VectorStoreIndex } from "llamaindex";
+import { Settings, VectorStoreIndex } from "llamaindex";
+import { OpenAIEmbedding, openai } from "@llamaindex/openai";
 import { FGARetriever } from "@auth0/ai-llamaindex";
 
 import { readDocuments } from "./helpers/read-documents";
@@ -30,6 +31,13 @@ import { readDocuments } from "./helpers/read-documents";
  *
  * The output of the query depends on the user's permissions to view the documents.
  */
+
+Settings.llm = openai({
+  model: "gpt-4o-mini",
+});
+
+Settings.embedModel = new OpenAIEmbedding({ model: "text-embedding-3-small" });
+
 async function main() {
   console.log(
     "\n..:: LlamaIndex Example: Retrievers with Auth0 FGA/OpenFGA (Fine-Grained Authorization)\n\n"

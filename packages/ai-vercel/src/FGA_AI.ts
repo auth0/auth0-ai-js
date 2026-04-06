@@ -1,12 +1,13 @@
 import { Tool } from "ai";
 
-import { FGAAuthorizerBase } from "@auth0/ai/FGA";
+import { FGAAuthorizerBase, FGAAuthorizerOptions } from "@auth0/ai/FGA";
 
 import { FGAAuthorizer } from "./FGA";
+import { ToolExecutionOptions } from "./util/ToolContext";
 
 type FGAAuthorizerParams = ConstructorParameters<typeof FGAAuthorizerBase>[0];
 type ToolWrapper = ReturnType<FGAAuthorizer["authorizer"]>;
-type FGAParams = ConstructorParameters<typeof FGAAuthorizer>[1];
+type FGAParams = FGAAuthorizerOptions<[any, ToolExecutionOptions]>;
 
 /**
  * A class for integrating Fine-Grained Authorization with AI tools.

@@ -4,10 +4,10 @@ import { GenkitBeta } from "genkit/beta";
 
 import { MemoryStore, Store, SubStore } from "@auth0/ai/stores";
 
-import { CIBAAuthorizer } from "./CIBA";
+import { AsyncAuthorizer } from "./AsyncAuthorization";
 import { DeviceAuthorizer } from "./Device/DeviceAuthorizer";
-import { FederatedConnectionAuthorizer } from "./FederatedConnections";
 import { FGA_AI } from "./FGA_AI";
+import { TokenVaultAuthorizer } from "./TokenVault";
 
 import type { ToolWrapper, ToolDefinition } from "./lib";
 
@@ -17,7 +17,7 @@ type Auth0ClientParams = Pick<
 >;
 
 export type CIBAParams = Omit<
-  ConstructorParameters<typeof CIBAAuthorizer>[2],
+  ConstructorParameters<typeof AsyncAuthorizer>[2],
   "store"
 >;
 
@@ -26,8 +26,8 @@ export type DeviceParams = Omit<
   "store"
 >;
 
-export type FederatedConnectionParams = Omit<
-  ConstructorParameters<typeof FederatedConnectionAuthorizer>[2],
+export type TokenVaultParams = Omit<
+  ConstructorParameters<typeof TokenVaultAuthorizer>[2],
   "store"
 >;
 
@@ -56,7 +56,7 @@ export class Auth0AI {
    * @param params - The parameters for the CIBA authorization control.
    * @returns A tool authorizer.
    */
-  withAsyncUserConfirmation(params: CIBAParams): ToolWrapper;
+  withAsyncAuthorization(params: CIBAParams): ToolWrapper;
 
   /**
    *
@@ -66,7 +66,7 @@ export class Auth0AI {
    * @param tool - The tool to protect.
    * @returns The protected tool.
    */
-  withAsyncUserConfirmation<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
+  withAsyncAuthorization<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
     params: CIBAParams,
     toolConfig?: ToolDefinition<I, O>[0],
     toolFn?: ToolDefinition<I, O>[1]
@@ -80,13 +80,13 @@ export class Auth0AI {
    * @param tool - The tool function to protect.
    * @returns
    */
-  withAsyncUserConfirmation<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
+  withAsyncAuthorization<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
     params: CIBAParams,
     toolConfig?: ToolDefinition<I, O>[0],
     toolFn?: ToolDefinition<I, O>[1]
   ) {
     const cibaStore = this.store.createSubStore("AUTH0_AI_CIBA");
-    const authorizer = new CIBAAuthorizer(this.genkit, this.config, {
+    const authorizer = new AsyncAuthorizer(this.genkit, this.config, {
       store: cibaStore,
       ...params,
     });
@@ -145,33 +145,33 @@ export class Auth0AI {
   }
 
   /**
-   * Builds a Federated Connection authorizer for a tool.
+   * Builds a Token Vault authorizer for a tool.
    *
-   * @param params - The Federated Connections authorizer options.
+   * @param params - The Token Vault authorizer options.
    * @returns The authorizer.
    */
-  withTokenForConnection(params: FederatedConnectionParams): ToolWrapper;
+  withTokenVault(params: TokenVaultParams): ToolWrapper;
 
   /**
-   * Protects a tool with the Federated Connection authorizer.
+   * Protects a tool with the Token Vault authorizer.
    *
-   * @param params - The Federated Connections authorizer options.
+   * @param params - The Token Vault authorizer options.
    * @param tool - The tool to protect.
    * @returns The protected tool.
    */
-  withTokenForConnection<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
-    params: FederatedConnectionParams,
+  withTokenVault<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
+    params: TokenVaultParams,
     toolConfig?: ToolDefinition<I, O>[0],
     toolFn?: ToolDefinition<I, O>[1]
   ): ToolDefinition<I, O>;
 
-  withTokenForConnection<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
-    params: FederatedConnectionParams,
+  withTokenVault<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
+    params: TokenVaultParams,
     toolConfig?: ToolDefinition<I, O>[0],
     toolFn?: ToolDefinition<I, O>[1]
   ) {
-    const store = this.store.createSubStore("AUTH0_AI_FEDERATED_CONNECTION");
-    const fc = new FederatedConnectionAuthorizer(this.genkit, this.config, {
+    const store = this.store.createSubStore("AUTH0_AI_TOKEN_VAULT");
+    const fc = new TokenVaultAuthorizer(this.genkit, this.config, {
       store,
       ...params,
     });

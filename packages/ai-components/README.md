@@ -3,12 +3,12 @@
 > [!WARNING]
 > `@auth0/ai-components` is currently **under heavy development**. We strictly follow [Semantic Versioning (SemVer)](https://semver.org/), meaning all **breaking changes will only occur in major versions**. However, please note that during this early phase, **major versions may be released frequently** as the API evolves. We recommend locking versions when using this in production.
 
-This library helps to setup the React components for auth0-ai.
+This library helps to set up the React components for auth0-ai.
 
 ## Run
 
 ```
-npx @auth0/ai-components add FederatedConnections
+npx @auth0/ai-components add TokenVault
 ```
 
 This will create a folder called `components/auth0-ai` with the desired components.
@@ -24,7 +24,7 @@ We appreciate feedback and contribution to this repo! Before you get started, pl
 
 ### Raise an issue
 
-To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0-lab/auth0-ai-js/issues).
+To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0/auth0-ai-js/issues).
 
 ### Vulnerability Reporting
 

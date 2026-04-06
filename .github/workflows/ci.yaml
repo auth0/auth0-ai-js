@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -36,13 +36,19 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npx --no-install commitlint --verbose --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }}
 
-      - name: Lint
-        id: npm-lint
-        run: npm run lint
+      - name: Clean build artifacts
+        run: npm run clean
+
+      - name: Rebuild workspace links
+        run: npm install --workspaces
 
       - name: Test build
         id: npm-build
-        run: npm run build
+        run: npm run build -- --no-cache
+
+      - name: Lint
+        id: npm-lint
+        run: npm run lint -- --no-cache
 
       - name: Test
         id: npm-test

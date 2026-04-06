@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { Document, DocumentInterface } from "@langchain/core/documents";
 import { BaseRetriever } from "@langchain/core/retrievers";

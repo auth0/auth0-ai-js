@@ -7,7 +7,7 @@
 - An OpenAI account and API key. You can create one [here](https://platform.openai.com).
   - [Use this page for instructions on how to find your OpenAI API key](https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key)
 - An **[Auth0](https://auth0.com)** account and the following settings and resources configured:
-  - An additional application for CIBA with the following settings:
+  - An additional application for Async Authorization with the following settings:
     - **Application Type**: `Web Application`
     - **Grant Type**: `CIBA` (or `urn:openid:params:grant-type:ciba`)
   - An API with the following settings:
@@ -68,7 +68,7 @@ The command `npm run dev` runs several process in parallel. Here is an explanati
 - **LangGraph**: The server responsible for executing and managing LangGraph-based graphs.
 - **Scheduler**: A demo scheduler that replicates the behavior of [LangGraph Cron Jobs](https://langchain-ai.github.io/langgraph/cloud/how-tos/cron_jobs/).
 - **API**: A demo API with endpoints that require specific authorization levels.
-- **GraphResumer**: A service that attempts to resume threads interrupted during CIBA flows on the LangGraph server.
+- **GraphResumer**: A service that attempts to resume threads interrupted during Async Authorization flows on the LangGraph server.
 
 ### Diagram
 

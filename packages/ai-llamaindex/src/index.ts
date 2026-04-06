@@ -5,11 +5,11 @@
 export * from "./FGA/fga-retriever";
 export { Auth0AI } from "./Auth0AI";
 
-export { getCIBACredentials } from "./CIBA";
+export { getAsyncAuthorizationCredentials } from "./AsyncAuthorization";
 export { getDeviceAuthorizerCredentials } from "./Device";
 export {
-  getCredentialsForConnection,
-  getAccessTokenForConnection,
-} from "./FederatedConnections";
+  getCredentialsFromTokenVault,
+  getAccessTokenFromTokenVault,
+} from "./TokenVault";
 
 export { setAIContext } from "./lib/index";

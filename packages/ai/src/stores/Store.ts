@@ -4,7 +4,7 @@
  * Auth0AI uses this store in different stages:
  *
  * 1. to store the authorization request when an AI agent is interrupted  (CIBA, Device Flow)
- * 2. user credentials associated to threads to avoid re-authentication (CIBA, Device Flow, Federated Connection)
+ * 2. user credentials associated to threads to avoid re-authentication (CIBA, Device Flow, Token Vault)
  *
  */
 

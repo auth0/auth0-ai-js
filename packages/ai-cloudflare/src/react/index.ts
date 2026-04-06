@@ -1,5 +1,5 @@
 import { useAgentChat } from "agents/ai-react";
-import { Message } from "ai";
+import { UIMessage } from "ai";
 
 import { Auth0InterruptionUI, useInterruptions } from "@auth0/ai-vercel/react";
 
@@ -7,6 +7,7 @@ export const useAgentChatInterruptions = <State>(
   options: Parameters<typeof useAgentChat<State>>[0]
 ): ReturnType<typeof useInterruptions> & ReturnType<typeof useAgentChat> => {
   const { agent } = options;
+
   const result = useInterruptions((handler) => {
     const onError =
       options.onError ?? ((error) => console.error("Chat error:", error));
@@ -14,29 +15,29 @@ export const useAgentChatInterruptions = <State>(
       ...options,
       onError: handler(onError),
     });
+
     return {
       setMessages: setMessages as (
-        messages: Message[] | ((messages: Message[]) => Message[])
+        messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])
       ) => void,
       ...rest,
     };
   }) as ReturnType<typeof useInterruptions> & ReturnType<typeof useAgentChat>;
-  const { toolInterrupt, ...rest } = result;
+
+  const { toolInterrupt } = result;
   let ti: Auth0InterruptionUI | null = null;
 
   if (toolInterrupt) {
     ti = {
       ...toolInterrupt,
       resume: () => {
-        //forces a socket reconnect so that
-        //new token are sent to the agent
+        // Force a socket reconnect so that new tokens are sent to the agent before resuming
         agent.addEventListener(
           "open",
           () => {
-            //TODO: this doesn't work if executed immediately, why?
             setTimeout(() => {
               toolInterrupt.resume();
-            }, 100);
+            }, 500);
           },
           { once: true }
         );
@@ -45,5 +46,11 @@ export const useAgentChatInterruptions = <State>(
     };
   }
 
-  return { toolInterrupt: ti, ...rest };
+  // Return the wrapped chat result (which includes the useAgentChat helpers)
+  // and our interrupted resume wrapper. This ensures the interruption
+  // handler that set toolInterrupt is the same instance that logs errors.
+  return {
+    ...(result as any),
+    toolInterrupt: ti,
+  } as ReturnType<typeof useInterruptions> & ReturnType<typeof useAgentChat>;
 };

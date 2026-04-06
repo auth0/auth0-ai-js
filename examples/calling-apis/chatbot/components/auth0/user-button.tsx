@@ -1,3 +1,5 @@
+"use client";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,7 +55,7 @@ function getAvatarFallback(user: KeyValueMap) {
 export default function UserButton({
   user,
   children,
-  logoutUrl = "/api/auth/logout",
+  logoutUrl = "/auth/logout",
 }: {
   user: KeyValueMap;
   children?: React.ReactNode;
@@ -63,6 +65,10 @@ export default function UserButton({
   const name = user.name;
   const email = user.email;
   const resolvedLogoutUrl = logoutUrl;
+
+  const handleLogout = () => {
+    window.location.href = resolvedLogoutUrl;
+  };
 
   return (
     <DropdownMenu>
@@ -98,11 +104,11 @@ export default function UserButton({
           </>
         )}
 
-        <DropdownMenuItem>
-          <a href={resolvedLogoutUrl} className="flex gap-2 items-center">
+        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+          <div className="flex gap-2 items-center">
             <LogOut />
             Log out
-          </a>
+          </div>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

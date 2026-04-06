@@ -5,7 +5,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "npm run clean && tsc --project ./tsconfig.build.json",
+    "build:watch": "tsc --project ./tsconfig.build.json --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
     "start": "npx tsx src/index.ts",
+    "start:built": "node dist/index.js",
     "fga:init": "npx tsx ./scripts/fga-init.ts"
   },
   "author": {
@@ -14,13 +19,17 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@ai-sdk/openai": "^1.1.9",
+    "@ai-sdk/openai": "^3.0.0",
     "@auth0/ai-vercel": "*",
     "@openfga/sdk": "^0.8.0",
     "@openfga/syntax-transformer": "^0.2.0",
-    "ai": "^4.1.54",
+    "ai": "^6.0.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "enquirer": "^2.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.8.3"
   }
 }

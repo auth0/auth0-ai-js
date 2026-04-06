@@ -1,0 +1,47 @@
+{
+  "name": "@auth0/auth0-ai-js-examples-async-authorization-langchain",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx @langchain/langgraph-cli up",
+    "chatbot": "npx tsx ./src/chatbot/index.ts",
+    "dev": "run-p -n -l langgraph api scheduler resumer",
+    "langgraph": "npx @langchain/langgraph-cli dev --port 54367 --no-browser",
+    "api": "npm --prefix ../sample-api install ../sample-api && npx tsx watch ../sample-api/app.ts",
+    "scheduler": "npx tsx watch src/services/scheduler.ts",
+    "resumer": "npx tsx watch src/services/resumer.ts"
+  },
+  "author": {
+    "name": "Auth0 Inc.",
+    "url": "https://auth0.com"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@auth0/ai-langchain": "*",
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.6",
+    "@langchain/langgraph-checkpoint": "^0.1.0",
+    "@langchain/langgraph-cli": "^0.0.60",
+    "@langchain/langgraph-sdk": "^0.0.109",
+    "@langchain/openai": "^0.3.14",
+    "@openfga/sdk": "0.8.0",
+    "body-parser": "^1.20.3",
+    "dotenv": "^16.4.7",
+    "enquirer": "^2.4.1",
+    "express": "^4.21.2",
+    "nanoid": "^5.1.0",
+    "node-cron": "^3.0.3",
+    "node-persist": "^4.0.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@auth0/auth0-ai-js-tools-login-helper": "file:../../../tools/login-helper",
+    "@types/body-parser": "^1.19.5",
+    "@types/node-cron": "^3.0.11",
+    "@types/node-persist": "^3.1.8",
+    "npm-run-all": "^4.1.5",
+    "terminal-link": "^3.0.0"
+  }
+}

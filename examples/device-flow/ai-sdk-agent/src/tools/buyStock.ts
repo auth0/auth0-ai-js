@@ -1,14 +1,14 @@
 import { tool } from "ai";
-import { z } from "zod";
+import { z } from "zod/v3";
 
-import { getCIBACredentials } from "@auth0/ai-vercel";
+import { getAsyncAuthorizationCredentials } from "@auth0/ai-vercel";
 
-import { withAsyncUserConfirmation } from "../auth0ai";
+import { withAsyncAuthorization } from "../auth0ai";
 
-export const buyStock = withAsyncUserConfirmation(
+export const buyStock = withAsyncAuthorization(
   tool({
     description: "Execute an stock purchase given stock ticker and quantity",
-    parameters: z.object({
+    inputSchema: z.object({
       tradeID: z
         .string()
         .uuid()
@@ -24,7 +24,7 @@ export const buyStock = withAsyncUserConfirmation(
         .describe("The quantity of shares to trade"),
     }),
     execute: async ({ userID, ticker, qty }, ctx): Promise<string> => {
-      const credentials = getCIBACredentials();
+      const credentials = getAsyncAuthorizationCredentials();
       console.log(
         `The token obtained with ciba is ${credentials?.accessToken}`
       );

@@ -8,6 +8,23 @@
       "command": "npm run dev",
       "cwd": "${workspaceFolder}/examples/calling-apis/chatbot",
       "sourceMaps": true
+    },
+    {
+      "name": "Debug LangGraph Dev Server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run langgraph:debug",
+      "cwd": "${workspaceFolder}/examples/calling-apis/chatbot"
+    },
+    {
+      "name": "Attach to LangGraph",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "sourceMaps": true,
+      "skipFiles": [
+        "<node_modules>/**"
+      ]
     }
   ]
 }

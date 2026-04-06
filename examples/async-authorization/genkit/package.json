@@ -1,0 +1,27 @@
+{
+  "name": "@auth0/auth0-ai-js-examples-async-authorization-genkit",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx tsx --no-deprecation src/index.ts --no-color ",
+    "start:api": "npm --prefix ../sample-api install ../sample-api && npx tsx ../sample-api/app.ts"
+  },
+  "author": {
+    "name": "Auth0 Inc.",
+    "url": "https://auth0.com"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@auth0/ai": "*",
+    "@auth0/ai-genkit": "*",
+    "dotenv": "^16.4.7",
+    "enquirer": "^2.4.1",
+    "genkit": "^1.5",
+    "genkitx-openai": "^0.20.2",
+    "jwt-decode": "^4.0.0",
+    "open": "^10.1.0",
+    "zod": "^3.25.76"
+  }
+}

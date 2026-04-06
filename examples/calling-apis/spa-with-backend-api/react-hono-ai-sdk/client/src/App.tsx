@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { hcWithType } from "server/dist/client";
+
+import { hcWithType } from "@auth0/auth0-ai-js-examples-react-hono-ai-sdk-server/dist/client";
 
 import { Avatar } from "./components/Avatar";
 import { Chat } from "./components/Chat";
@@ -86,7 +87,11 @@ function App() {
             alt="React logo"
           />
         </a>
-        <a href="https://sdk.vercel.ai" target="_blank" rel="noopener noreferrer">
+        <a
+          href="https://sdk.vercel.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <img
             src="https://sdk.vercel.ai/icons/vercel.svg"
             className="w-16 h-16 cursor-pointer"

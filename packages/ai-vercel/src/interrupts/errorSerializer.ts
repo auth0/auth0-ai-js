@@ -1,5 +1,3 @@
-import { ToolExecutionError } from "ai";
-
 import { Auth0Interrupt } from "@auth0/ai/interrupts";
 
 export type errorHandler = (error: unknown) => string;
@@ -18,7 +16,6 @@ export const InterruptionPrefix = "AUTH0_AI_INTERRUPTION:";
 export const errorSerializer = (errHandler?: errorHandler): errorHandler => {
   return (error: any) => {
     if (
-      !(error instanceof ToolExecutionError) ||
       !(error.cause instanceof Auth0Interrupt)
     ) {
       if (errHandler) {

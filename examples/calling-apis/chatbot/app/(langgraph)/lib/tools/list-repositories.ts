@@ -1,7 +1,7 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
-import { getCredentialsForConnection } from "@auth0/ai-langchain";
-import { FederatedConnectionError } from "@auth0/ai/interrupts";
+import { getCredentialsFromTokenVault } from "@auth0/ai-langchain";
+import { TokenVaultError } from "@auth0/ai/interrupts";
 import { tool } from "@langchain/core/tools";
 import { RequestError } from "@octokit/request-error";
 import { Octokit } from "@octokit/rest";
@@ -12,7 +12,7 @@ export const listRepositories = withGitHub(
   tool(
     async () => {
       // Get the access token from Auth0 AI
-      const credentials = getCredentialsForConnection();
+      const credentials = getCredentialsFromTokenVault();
 
       // GitHub SDK
       try {
@@ -28,8 +28,8 @@ export const listRepositories = withGitHub(
 
         if (error instanceof RequestError) {
           if (error.status === 401) {
-            throw new FederatedConnectionError(
-              `Authorization required to access the Federated Connection`
+            throw new TokenVaultError(
+              `Authorization required to access the Token Vault`
             );
           }
         }
@@ -39,7 +39,7 @@ export const listRepositories = withGitHub(
     },
     {
       name: "list_github_repositories",
-      description: "List respositories for the current user on GitHub",
+      description: "List repositories for the current user on GitHub",
       schema: z.object({}),
     }
   )

@@ -30,7 +30,6 @@ Replace `useAgentChat` with `useAgentChatInterruptions` in your code to get acce
     toolInterrupt,
   } = useAgentChatInterruptions({
     agent,
-    maxSteps: 5,
     id: threadID,
   });
 ```
@@ -39,7 +38,7 @@ Replace `useAgentChat` with `useAgentChatInterruptions` in your code to get acce
 
 This module provides the `AsyncUserConfirmationResumer` mixin that can extend `AIChatAgent` to handle user confirmations asynchronously. 
 
-This work with the `withAsyncUserConfirmation` authorizer and allow the agent to continue processing after the user has confirmed the action.
+This work with the `withAsyncAuthorization` authorizer and allow the agent to continue processing after the user has confirmed the action.
 
 ```js
 import { AsyncUserConfirmationResumer } from '@auth0/ai-cloudflare';
@@ -52,7 +51,7 @@ export class Chat extends AsyncUserConfirmationResumer(AIChatAgent) {
 Then when defining the authorizer:
 
 ```js
-export const withAsyncUserConfirmation = auth0AI.withAsyncUserConfirmation({
+export const withAsyncAuthorization = auth0AI.withAsyncAuthorization({
   // The authorizer configuration
   onAuthorizationInterrupt: async (interrupt, context) => {
     const { agent } = getCurrentAgent<Chat>();
@@ -63,12 +62,12 @@ export const withAsyncUserConfirmation = auth0AI.withAsyncUserConfirmation({
 
 ## CloudflareKVStore
 
-This module provides `CloudflareKVStore`. An implementation of auth0-ai `Store` interface that uses Cloudflare Workers KV to store and retrieve data.
+This module provides `CloudflareKVStore`. An implementation of auth0-ai `Store` interface that uses Cloudflare Workers KV to store and retrieve data. The `kv` option should be a reference to your [Cloudflare KV namespace](https://developers.cloudflare.com/kv/get-started/#5-access-your-kv-namespace-from-your-worker) or a compatible store.
 
 ```js
 import { CloudflareKVStore } from '@auth0/ai-cloudflare';
 const kvStore = new CloudflareKVStore({
-  namespace: env.Auth0AINamespace, // The KV namespace to use
+  kv: env.Auth0AINamespace, // The KV namespace to use
 });
 ```
 
@@ -84,7 +83,7 @@ We appreciate feedback and contribution to this repo! Before you get started, pl
 
 ### Raise an issue
 
-To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0-lab/auth0-ai-js/issues).
+To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0/auth0-ai-js/issues).
 
 ### Vulnerability Reporting
 

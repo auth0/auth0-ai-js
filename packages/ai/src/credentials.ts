@@ -1,3 +1,8 @@
+export interface AuthorizationDetails {
+  readonly type: string;
+  readonly [parameter: string]: unknown;
+}
+
 export type TokenResponse = {
   /** Bearer token for API authorization */
   access_token: string;
@@ -11,6 +16,8 @@ export type TokenResponse = {
   expires_in: number;
   /** Granted permissions space */
   scope: string;
+  /** Granted authorization details */
+  authorization_details?: AuthorizationDetails[];
 };
 
 /**
@@ -23,6 +30,7 @@ export type TokenResponse = {
  * @property {number} [expiresIn] - Optional time in seconds until the access token expires.
  * @property {string} accessToken - The access token string used for API requests.
  * @property {string} tokenType - The type of the token, typically "Bearer".
+ * @property {AuthorizationDetails[]} [authorizationDetails] - Optional array of authorization details granted for the token.
  */
 export interface TokenSet {
   scopes?: string[];
@@ -32,6 +40,8 @@ export interface TokenSet {
   expiresIn?: number;
   accessToken: string;
   tokenType: string;
+
+  authorizationDetails?: AuthorizationDetails[];
 }
 
 export const tokenSetFromTokenResponse = (tr: TokenResponse): TokenSet => {
@@ -42,5 +52,8 @@ export const tokenSetFromTokenResponse = (tr: TokenResponse): TokenSet => {
     refreshToken: tr.refresh_token,
     expiresIn: tr.expires_in,
     scopes: tr.scope ? tr.scope.split(" ") : undefined,
+    ...(tr.authorization_details
+      ? { authorizationDetails: tr.authorization_details }
+      : {}),
   };
 };

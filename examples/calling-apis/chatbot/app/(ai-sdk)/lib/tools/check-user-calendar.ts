@@ -1,23 +1,23 @@
 import { tool } from "ai";
-import { addHours, formatISO } from "date-fns";
+import { addDays, formatISO } from "date-fns";
 import { GaxiosError } from "gaxios";
 import { google } from "googleapis";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { withGoogleCalendar } from "@/app/(ai-sdk)/lib/auth0-ai";
-import { getAccessTokenForConnection } from "@auth0/ai-vercel";
-import { FederatedConnectionError } from "@auth0/ai/interrupts";
+import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
+import { TokenVaultError } from "@auth0/ai/interrupts";
 
 export const checkUsersCalendar = withGoogleCalendar(
   tool({
     description:
       "Check user availability on a given date time on their calendar",
-    parameters: z.object({
+    inputSchema: z.object({
       date: z.coerce.date(),
     }),
     execute: async ({ date }) => {
       // Get the access token from Auth0 AI
-      const accessToken = getAccessTokenForConnection();
+      const accessToken = getAccessTokenFromTokenVault();
 
       // Google SDK
       try {
@@ -32,7 +32,7 @@ export const checkUsersCalendar = withGoogleCalendar(
           auth,
           requestBody: {
             timeMin: formatISO(date),
-            timeMax: addHours(date, 1).toISOString(),
+            timeMax: addDays(date, 1).toISOString(),
             timeZone: "UTC",
             items: [{ id: "primary" }],
           },
@@ -44,8 +44,8 @@ export const checkUsersCalendar = withGoogleCalendar(
       } catch (error) {
         if (error instanceof GaxiosError) {
           if (error.status === 401) {
-            throw new FederatedConnectionError(
-              `Authorization required to access the Federated Connection`
+            throw new TokenVaultError(
+              `Authorization required to access the Token Vault`
             );
           }
         }

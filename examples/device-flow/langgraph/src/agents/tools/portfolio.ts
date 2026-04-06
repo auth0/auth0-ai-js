@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { getDeviceAuthorizerCredentials } from "@auth0/ai-langchain";
 import { tool } from "@langchain/core/tools";

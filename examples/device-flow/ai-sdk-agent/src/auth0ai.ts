@@ -5,7 +5,7 @@ const auth0AI = new Auth0AI({
   store: new RedisStore(),
 });
 
-export const withAsyncUserConfirmation = auth0AI.withAsyncUserConfirmation({
+export const withAsyncAuthorization = auth0AI.withAsyncAuthorization({
   userID: (params: { userID: string }) => params.userID,
   bindingMessage: "Confirm the purchase",
   scopes: ["openid", "stock:trade"],

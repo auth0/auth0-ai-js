@@ -1,48 +1,58 @@
 "use client";
 
-import { generateId } from "ai";
+import { DefaultChatTransport, generateId } from "ai";
+import { useState } from "react";
 
-import { EnsureAPIAccessPopup } from "@/components/auth0-ai/FederatedConnections/popup";
+import { TokenVaultConsentPopup } from "@/components/auth0-ai/TokenVault/popup";
 import { useChat } from "@ai-sdk/react";
 import { useInterruptions } from "@auth0/ai-vercel/react";
-import { FederatedConnectionInterrupt } from "@auth0/ai/interrupts";
+import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
 
 export default function Chat() {
-  const { messages, handleSubmit, input, setInput, toolInterrupt } =
+  const [input, setInput] = useState("");
+  const { messages, sendMessage, toolInterrupt } =
     useInterruptions((handler) =>
       useChat({
-        api: "/api/llamaindex",
+        transport: new DefaultChatTransport({ api: '/api/llamaindex' }),
         experimental_throttle: 100,
-        sendExtraMessageFields: true,
         generateId,
-        onError: handler((error) => console.error("Chat error:", error)),
+        onError: handler((error) => console.error("Chat error:", error))
       })
     );
 
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      sendMessage({ text: input });
+      setInput('');
+    };
+
   return (
     <div className="flex flex-col gap-4 w-full max-w-md py-12 sm:py-24 px-4 sm:px-0 mx-auto stretch">
-      {messages.map((message) => (
-        <div key={message.id} className="whitespace-pre-wrap">
-          {message.role === "user" ? "User: " : "AI: "}
-          {message.content}
-          {message.parts && message.parts.length > 0 && (
-            <div className="flex flex-col gap-4">
-              {toolInterrupt?.toolCall.id.includes(message.id) &&
-                FederatedConnectionInterrupt.isInterrupt(toolInterrupt) && (
-                  <EnsureAPIAccessPopup
+      {messages.map((message, index) => {
+        const answer = message.role === "user" ? (message.parts[0] as any)?.text : message.parts && message.parts.length > 0 && (message.parts[0] as any)?.text?.match(/[\n\r]Answer:(.*?)[\n\r]/);
+        const isInterrupt = TokenVaultInterrupt.isInterrupt(toolInterrupt);
+        return (
+          <div key={message.id} className="whitespace-pre-wrap">
+            {message.role === "user" ? "User: " : "AI: "}
+            {(isInterrupt && message.role === "assistant" && index === messages.length - 1) ? (
+              <div className="flex flex-col gap-4">
+              {TokenVaultInterrupt.isInterrupt(toolInterrupt) && (
+                  <TokenVaultConsentPopup
                     onFinish={toolInterrupt.resume}
                     interrupt={toolInterrupt}
                     connectWidget={{
-                      title: `Requested by: "${toolInterrupt.toolCall.name}"`,
+                      title: `Requested by: "${toolInterrupt.name}"`,
                       description: "Description...",
                       action: { label: "Check" },
                     }}
                   />
                 )}
             </div>
-          )}
+          ) : answer ? message.role === "user" ? answer?.trim() : answer[1]?.trim() : null}
+ 
         </div>
-      ))}
+        )
+      })}
 
       <form onSubmit={handleSubmit}>
         <input

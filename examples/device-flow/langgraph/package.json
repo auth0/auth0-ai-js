@@ -9,7 +9,7 @@
     "chatbot": "npx tsx ./src/chatbot/index.ts",
     "dev": "run-p -n -l langgraph api",
     "langgraph": "npx @langchain/langgraph-cli dev --port 54367 --no-browser",
-    "api": "npx tsx watch ../../async-user-confirmation/sample-api/app.ts"
+    "api": "npx tsx watch ../../async-authorization/sample-api/app.ts"
   },
   "author": {
     "name": "Auth0 Inc.",
@@ -17,12 +17,14 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@auth0/ai-langchain": "@auth0/ai-langchain:*",
-    "@langchain/core": "^0.3.19",
-    "@langchain/langgraph": "^0.2.46",
-    "@langchain/langgraph-cli": "^0.0.17",
-    "@langchain/langgraph-sdk": "^0.0.42",
+    "@auth0/ai-langchain": "*",
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.6",
+    "@langchain/langgraph-checkpoint": "^0.1.0",
+    "@langchain/langgraph-cli": "^0.0.60",
+    "@langchain/langgraph-sdk": "^0.0.109",
     "@langchain/openai": "^0.3.14",
+    "@openfga/sdk": "0.8.0",
     "body-parser": "^1.20.3",
     "dotenv": "^16.4.7",
     "enquirer": "^2.4.1",
@@ -32,10 +34,10 @@
     "node-cron": "^3.0.3",
     "node-persist": "^4.0.4",
     "open": "^10.1.0",
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@auth0/auth0-ai-js-tools-login-helper": "*",
+    "@auth0/auth0-ai-js-tools-login-helper": "file:../../../tools/login-helper",
     "@types/body-parser": "^1.19.5",
     "@types/node-cron": "^3.0.11",
     "@types/node-persist": "^3.1.8",

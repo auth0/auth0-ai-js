@@ -1,6 +1,6 @@
 # Redis Store for Auth0 AI
 
-`@auth0/ai-redis` is a secure Redis-based data store implementation for the [Auth0 AI SDK](https://github.com/auth0-lab/auth0-ai-js/).
+`@auth0/ai-redis` is a secure Redis-based data store implementation for the [Auth0 AI SDK](https://github.com/auth0/auth0-ai-js/).
 
 ## Install
 
@@ -73,7 +73,7 @@ We appreciate feedback and contributions to this repo! Before you get started, p
 
 ### Raise an issue
 
-To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0-lab/auth0-ai-js/issues).
+To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0/auth0-ai-js/issues).
 
 ### Vulnerability Reporting
 

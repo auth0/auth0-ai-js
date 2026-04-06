@@ -1,4 +1,4 @@
-import { CoreMessage, generateText, ToolExecutionError } from "ai";
+import { AISDKError, generateText, ModelMessage } from "ai";
 import { Job } from "bullmq";
 
 import { queue } from "@/src/queue";
@@ -8,13 +8,17 @@ import { getStockMetric } from "@/src/tools/getStockMetric";
 import { notifyUser } from "@/src/tools/notifyUser";
 import { openai } from "@ai-sdk/openai";
 import { setAIContext } from "@auth0/ai-vercel";
-import { appendToolCall, invokeTools } from "@auth0/ai-vercel/interrupts";
-import { Auth0Interrupt, AuthorizationPendingInterrupt, AuthorizationPollingInterrupt } from "@auth0/ai/interrupts";
+import { invokeTools } from "@auth0/ai-vercel/interrupts";
+import {
+  Auth0Interrupt,
+  AuthorizationPendingInterrupt,
+  AuthorizationPollingInterrupt,
+} from "@auth0/ai/interrupts";
 
 import { ConditionalTrade } from "../../ConditionalTrade";
 
 export type ConditionalTradeHandlerParams = ConditionalTrade & {
-  messages?: CoreMessage[];
+  messages?: ModelMessage[];
 };
 
 export const conditionalTrade = async (
@@ -48,7 +52,7 @@ export const conditionalTrade = async (
     await invokeTools({
       messages,
       tools,
-      onToolResult: async (message: CoreMessage) => {
+      onToolResult: async (message: ModelMessage) => {
         messages.push(message);
         await job.updateData({
           ...conditionalTrade,
@@ -59,11 +63,10 @@ export const conditionalTrade = async (
 
     console.log(`Calling the LLM`);
     const r = await generateText({
-      model: openai("gpt-4o", { parallelToolCalls: false }),
+      model: openai("gpt-4o"),
       system:
         "You are a fictional stock trader bot. Please execute the trades of the user.",
       messages,
-      maxSteps: 5,
       tools,
       onStepFinish: async (step) => {
         const newMessages = [...messages, ...step.response.messages];
@@ -72,7 +75,7 @@ export const conditionalTrade = async (
           messages: newMessages,
         });
         const conditionIsMet = step.toolResults.some(
-          (r) => r.toolName === "compareMetric" && r.result === true
+          (r) => r.toolName === "compareMetric" && r.output === true
         );
         if (conditionIsMet) {
           console.log("Condition met! Stopping the scheduler");
@@ -82,15 +85,13 @@ export const conditionalTrade = async (
     });
     console.log(`${r.text}`);
   } catch (err) {
-    if (
-      err instanceof ToolExecutionError &&
-      Auth0Interrupt.isInterrupt(err.cause)
-    ) {
-      console.log("Handling tool execution error");
-      const newMessages = appendToolCall(messages, err);
+    if (err instanceof AISDKError && Auth0Interrupt.isInterrupt(err.cause)) {
+      console.log("Handling tool execution interruption (no synthetic append)");
+      // In SDK v5 the originating tool-call message already exists from the model output;
+      // we persist current messages without modification.
       await job.updateData({
         ...conditionalTrade,
-        messages: newMessages,
+        messages,
       });
 
       const authorizationPendingInterAuthorizationPendingInterrupt =

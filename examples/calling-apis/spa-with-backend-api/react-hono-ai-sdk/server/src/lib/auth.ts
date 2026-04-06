@@ -4,14 +4,14 @@ import { Auth0AI } from "@auth0/ai-vercel";
 import type { Context } from "hono";
 
 import type { ToolWrapper } from "@auth0/ai-vercel";
-// Create an Auth0AI instance configured with enhanced resource server client support
-// NOTE: This demonstrates the enhanced API approach using resource server client credentials
+// Create an Auth0AI instance configured with enhanced Custom API Client support
+// NOTE: This demonstrates the enhanced API approach using client credentials
 const auth0AI = new Auth0AI({
   auth0: {
     domain: process.env.AUTH0_DOMAIN!,
-    // For token exchange with Token Vault, we only need the resource server credentials
-    clientId: process.env.RESOURCE_SERVER_CLIENT_ID!, // Resource server client ID for token exchange
-    clientSecret: process.env.RESOURCE_SERVER_CLIENT_SECRET!, // Resource server client secret
+    // For token exchange with Token Vault, we need the Custom API Client credentials
+    clientId: process.env.AUTH0_CUSTOM_API_CLIENT_ID!, // Custom API Client ID for token exchange
+    clientSecret: process.env.AUTH0_CUSTOM_API_CLIENT_SECRET!, // Custom API Client secret
   },
 });
 
@@ -24,11 +24,12 @@ export const createGoogleCalendarTool = (c: Context): ToolWrapper => {
     throw new Error("Access token not available in auth context");
   }
 
-  return auth0AI.withTokenForConnection({
+  return auth0AI.withTokenVault({
     accessToken: async () => accessToken,
     subjectTokenType: SUBJECT_TOKEN_TYPES.SUBJECT_TYPE_ACCESS_TOKEN,
     connection: process.env.GOOGLE_CONNECTION_NAME || "google-oauth2",
     scopes: [
+      "openid",
       "https://www.googleapis.com/auth/calendar.calendarlist.readonly", // Read-only access to calendar list
       "https://www.googleapis.com/auth/calendar.events.readonly", // Read-only access to events
     ],

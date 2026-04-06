@@ -3,8 +3,8 @@
 import { useQueryState } from "nuqs";
 import { FormEventHandler, useEffect, useRef, useState } from "react";
 
-import { EnsureAPIAccessPopup } from "@/components/auth0-ai/FederatedConnections/popup";
-import { FederatedConnectionInterrupt } from "@auth0/ai/interrupts";
+import { TokenVaultConsentPopup } from "@/components/auth0-ai/TokenVault/popup";
+import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
 import { useStream } from "@langchain/langgraph-sdk/react";
 
 const useFocus = () => {
@@ -69,12 +69,12 @@ export default function Chat() {
         ))}
 
       {thread.interrupt &&
-      FederatedConnectionInterrupt.isInterrupt(thread.interrupt.value) ? (
+      TokenVaultInterrupt.isInterrupt(thread.interrupt.value) ? (
         <div
           key={thread.interrupt.ns?.join("")}
           className="whitespace-pre-wrap"
         >
-          <EnsureAPIAccessPopup
+          <TokenVaultConsentPopup
             interrupt={thread.interrupt.value}
             onFinish={() => thread.submit(null)}
             connectWidget={{

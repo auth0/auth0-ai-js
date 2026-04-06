@@ -1,9 +1,9 @@
 import { tool } from "llamaindex";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import { withSlack } from "@/app/(llamaindex)/lib/auth0-ai";
-import { getCredentialsForConnection } from "@auth0/ai-llamaindex";
-import { FederatedConnectionError } from "@auth0/ai/interrupts";
+import { getCredentialsFromTokenVault } from "@auth0/ai-llamaindex";
+import { TokenVaultError } from "@auth0/ai/interrupts";
 import { ErrorCode, WebClient } from "@slack/web-api";
 
 export const listChannels = () =>
@@ -11,7 +11,7 @@ export const listChannels = () =>
     tool(
       async () => {
         // Get the access token from Auth0 AI
-        const credentials = getCredentialsForConnection();
+        const credentials = getCredentialsFromTokenVault();
 
         // Slack SDK
         try {
@@ -31,8 +31,8 @@ export const listChannels = () =>
         } catch (error) {
           if (error && typeof error === "object" && "code" in error) {
             if (error.code === ErrorCode.HTTPError) {
-              throw new FederatedConnectionError(
-                `Authorization required to access the Federated Connection`
+              throw new TokenVaultError(
+                `Authorization required to access the Token Vault`
               );
             }
           }

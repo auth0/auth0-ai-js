@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  AsyncAuthorizationInterrupt,
   Auth0Interrupt,
   AuthorizationRequestExpiredInterrupt,
-  CIBAInterrupt,
-  FederatedConnectionInterrupt,
+  TokenVaultInterrupt,
 } from "../src/interrupts";
 
 describe("interrupts", () => {
@@ -18,24 +18,24 @@ describe("interrupts", () => {
     expect(Auth0Interrupt.isInterrupt(auth0Interrupt)).toBe(false);
   });
 
-  describe("FederatedConnectionInterrupt", () => {
-    let interrupt: FederatedConnectionInterrupt;
+  describe("TokenVaultInterrupt", () => {
+    let interrupt: TokenVaultInterrupt;
     let serialized: any;
     beforeEach(() => {
-      interrupt = new FederatedConnectionInterrupt(
-        "this is a message",
-        "google-oauth2",
-        ["email"],
-        ["email"]
-      );
+      interrupt = new TokenVaultInterrupt("this is a message", {
+        connection: "google-oauth2",
+        scopes: ["email"],
+        requiredScopes: ["email"],
+      });
       serialized = interrupt.toJSON();
     });
 
     it("should contain the interrupt options", () => {
       expect(serialized).toMatchInlineSnapshot(`
         {
+          "authorizationParams": {},
           "behavior": "resume",
-          "code": "FEDERATED_CONNECTION_ERROR",
+          "code": "TOKEN_VAULT_ERROR",
           "connection": "google-oauth2",
           "message": "this is a message",
           "name": "AUTH0_AI_INTERRUPT",
@@ -50,20 +50,47 @@ describe("interrupts", () => {
     });
 
     it("should properly assert the serialized version", () => {
-      expect(FederatedConnectionInterrupt.isInterrupt(serialized)).toBe(true);
+      expect(TokenVaultInterrupt.isInterrupt(serialized)).toBe(true);
     });
 
     it("should properly assert the instance", () => {
-      expect(FederatedConnectionInterrupt.isInterrupt(interrupt)).toBe(true);
+      expect(TokenVaultInterrupt.isInterrupt(interrupt)).toBe(true);
     });
 
     it("should properly assert is an auth0interrupt", () => {
       expect(Auth0Interrupt.isInterrupt(interrupt)).toBe(true);
     });
+
+    it("should create interrupt with default empty authorizationParams", () => {
+      const interrupt = new TokenVaultInterrupt("test message", {
+        connection: "custom",
+        scopes: ["read:profile"],
+        requiredScopes: ["read:profile", "write:profile"],
+      });
+
+      expect(interrupt.authorizationParams).toEqual({});
+    });
+
+    it("should create interrupt with custom authorizationParams", () => {
+      const authParams = {
+        audience: "https://api.example.com",
+        prompt: "consent",
+      };
+
+      const interrupt = new TokenVaultInterrupt("test message", {
+        connection: "custom",
+        scopes: ["read:profile"],
+        requiredScopes: ["read:profile", "write:profile"],
+        authorizationParams: authParams,
+        behavior: "resume",
+      });
+
+      expect(interrupt.authorizationParams).toEqual(authParams);
+    });
   });
 
-  describe("CIBAInterrupt", () => {
-    let interrupt: CIBAInterrupt;
+  describe("AsyncAuthorizationInterrupt", () => {
+    let interrupt: AsyncAuthorizationInterrupt;
     let serialized: any;
 
     beforeEach(() => {
@@ -74,7 +101,7 @@ describe("interrupts", () => {
           requestedAt: 123,
           expiresIn: 123,
           interval: 123,
-        }
+        },
       );
       serialized = interrupt.toJSON();
     });
@@ -82,7 +109,7 @@ describe("interrupts", () => {
     it("should contain the interrupt options", () => {
       expect(serialized).toMatchInlineSnapshot(`
         {
-          "code": "CIBA_AUTHORIZATION_REQUEST_EXPIRED",
+          "code": "ASYNC_AUTHORIZATION_AUTHORIZATION_REQUEST_EXPIRED",
           "message": "The request has expired",
           "name": "AUTH0_AI_INTERRUPT",
           "request": {
@@ -96,27 +123,27 @@ describe("interrupts", () => {
     });
 
     it("should properly assert the serialized version with the base class", () => {
-      expect(CIBAInterrupt.isInterrupt(serialized)).toBe(true);
+      expect(AsyncAuthorizationInterrupt.isInterrupt(serialized)).toBe(true);
     });
 
     it("should properly assert the instance with the base class", () => {
-      expect(CIBAInterrupt.isInterrupt(interrupt)).toBe(true);
+      expect(AsyncAuthorizationInterrupt.isInterrupt(interrupt)).toBe(true);
     });
 
     it("should properly assert the serialized version", () => {
       expect(AuthorizationRequestExpiredInterrupt.isInterrupt(serialized)).toBe(
-        true
+        true,
       );
     });
 
     it("should properly assert the instance", () => {
       expect(AuthorizationRequestExpiredInterrupt.isInterrupt(interrupt)).toBe(
-        true
+        true,
       );
     });
 
     it("should not match other interrupts", () => {
-      expect(FederatedConnectionInterrupt.isInterrupt(interrupt)).toBe(false);
+      expect(TokenVaultInterrupt.isInterrupt(interrupt)).toBe(false);
     });
   });
 });

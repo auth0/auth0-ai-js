@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { google } from "googleapis";
-import { z } from "zod";
+import { z } from "zod/v3";
 
-import { getAccessTokenForConnection } from "@auth0/ai-vercel";
+import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 
 import type { ToolWrapper } from "@auth0/ai-vercel";
 
@@ -17,10 +17,10 @@ export const createListUserCalendarsTool = (
   googleCalendarWrapper(
     tool({
       description: "List all calendars the user has access to",
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         // Get the access token from Token Vault using the enhanced SDK
-        const token = getAccessTokenForConnection();
+        const token = getAccessTokenFromTokenVault();
 
         const calendar = google.calendar("v3");
         const auth = new google.auth.OAuth2();

@@ -1,7 +1,7 @@
-import { Message } from "ai";
+import { UIMessage } from "ai";
 import { Settings } from "llamaindex";
 
-import { FederatedConnectionInterrupt } from "@auth0/ai/interrupts";
+import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
 
 type ExecuteFN = (dataStream: any) => Promise<void> | void;
 type ExecutionErrorType = new (...args: any[]) => any;
@@ -9,13 +9,13 @@ type ExecutionErrorType = new (...args: any[]) => any;
 export function withInterruptions(
   fn: ExecuteFN,
   config: {
-    messages: Message[];
+    messages: UIMessage[];
     errorType: ExecutionErrorType;
   }
 ) {
   return async (dataStream: any): Promise<void> => {
     let hasToolCall = false;
-    let interruption: FederatedConnectionInterrupt | undefined;
+    let interruption: TokenVaultInterrupt | undefined;
     const toolMeta: any = {};
 
     function onLLMToolCall(event: CustomEvent) {
@@ -46,13 +46,13 @@ export function withInterruptions(
         toolName: toolMeta.toolName,
         toolArgs: toolMeta.toolArgs,
         toolCallId: `${config.messages[config.messages.length - 1].id}-${toolMeta.toolCallId}`,
-        cause: new FederatedConnectionInterrupt(
-          interruption.message,
-          interruption.connection,
-          interruption.scopes,
-          interruption.requiredScopes,
-          "reload"
-        ),
+        cause: new TokenVaultInterrupt(interruption.message, {
+          connection: interruption.connection,
+          scopes: interruption.scopes,
+          requiredScopes: interruption.requiredScopes,
+          authorizationParams: interruption.authorizationParams,
+          behavior: "reload"
+        }),
       });
     }
   };

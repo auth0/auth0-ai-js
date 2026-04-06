@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npm run clean && npm run build:esm ",
     "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
-    "build:esm": "tsc --outDir ./dist/esm",
+    "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "semantic-release": "npx --no semantic-release",
@@ -42,7 +42,7 @@
     "@auth0/ai-vercel": "*"
   },
   "peerDependencies": {
-    "agents": ">=0.0.51 <0.0.91"
+    "agents": ">=0.1.0 <0.4.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",

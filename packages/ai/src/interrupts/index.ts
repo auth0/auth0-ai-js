@@ -1,19 +1,19 @@
 export { Auth0Interrupt } from "./Auth0Interrupt";
 
 export {
-  FederatedConnectionInterrupt,
-  FederatedConnectionError,
-} from "./FederatedConnectionInterrupt";
+  TokenVaultInterrupt,
+  TokenVaultError,
+} from "./TokenVaultInterrupt";
 
 export {
-  CIBAInterrupt,
+  AsyncAuthorizationInterrupt,
   AccessDeniedInterrupt,
   UserDoesNotHavePushNotificationsInterrupt,
   AuthorizationRequestExpiredInterrupt,
   AuthorizationPendingInterrupt,
   AuthorizationPollingInterrupt,
   InvalidGrantInterrupt,
-} from "./CIBAInterrupts";
+} from "./AsyncAuthorizationInterrupt";
 
 export * as DeviceInterrupts from "./DeviceInterrupts";
 export { DeviceInterrupt } from "./DeviceInterrupts";

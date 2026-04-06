@@ -56,12 +56,12 @@ const auth0AI = new Auth0AI({
 
 ## Calling APIs
 
-The "Tokens for API" feature of Auth0 allows you to exchange refresh tokens for access tokens for third-party APIs. This is useful when you want to use a federated connection (like Google, Facebook, etc.) to authenticate users and then use the access token to call the API on behalf of the user.
+The "Tokens for API" feature of Auth0 allows you to exchange refresh tokens for access tokens for third-party APIs. This is useful when you want to use a token vault token vault (like Google, Facebook, etc.) to authenticate users and then use the access token to call the API on behalf of the user.
 
-First initialize the Federated Connection Authorizer as follows:
+First initialize the Token Vault Authorizer as follows:
 
 ```js
-const withGoogleAccess = auth0AI.withTokenForConnection({
+const withGoogleAccess = auth0AI.withTokenVault({
     //an optional function to specify were to retrieve the token
   //this is the defaults:
   refreshToken: async (params) => {
@@ -70,16 +70,20 @@ const withGoogleAccess = auth0AI.withTokenForConnection({
   // The connection name:
   connection: "google-oauth2",
   // The scopes to request:
-  scopes: ["https://www.googleapis.com/auth/calendar.freebusy"],
+  scopes: ["openid", "https://www.googleapis.com/auth/calendar.freebusy"],
+  // Additional authorization params needed to connect an account (optional).
+  authorizationParams: {
+    ...
+  },
 });
 ```
 
-Then use the `withGoogleAccess` to wrap the tool and use `getAccessTokenForConnection` from the SDK to get the access token.
+Then use the `withGoogleAccess` to wrap the tool and use `getAccessTokenFromTokenVault` from the SDK to get the access token.
 
 ```javascript
-import { getAccessTokenForConnection } from "@auth0/ai-genkit";
-import { FederatedConnectionError } from "@auth0/ai/interrupts";
-import { addHours } from "date-fns";
+import { getAccessTokenFromTokenVault } from "@auth0/ai-genkit";
+import { TokenVaultError } from "@auth0/ai/interrupts";
+import { addDays } from "date-fns";
 import { z } from "zod";
 
 export const checkCalendarTool = ai.defineTool(
@@ -95,10 +99,10 @@ export const checkCalendarTool = ai.defineTool(
     }),
   },
   async ({ date }) => {
-    const accessToken = getAccessTokenForConnection();
+    const accessToken = getAccessTokenFromTokenVault();
     const body = JSON.stringify({
       timeMin: date,
-      timeMax: addHours(date, 1),
+      timeMax: addDays(date, 1),
       timeZone: "UTC",
       items: [{ id: "primary" }],
     });
@@ -114,8 +118,8 @@ export const checkCalendarTool = ai.defineTool(
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new FederatedConnectionError(
-          `Authorization required to access the Federated Connection`
+        throw new TokenVaultError(
+          `Authorization required to access the Token Vault`
         );
       }
       throw new Error(
@@ -135,7 +139,7 @@ export const checkCalendarTool = ai.defineTool(
 CIBA (Client-Initiated Backchannel Authentication) enables secure, user-in-the-loop authentication for sensitive operations. This flow allows you to request user authorization asynchronously and resume execution once authorization is granted.
 
 ```js
-const buyStockAuthorizer = auth0AI.withAsyncUserConfirmation({
+const buyStockAuthorizer = auth0AI.withAsyncAuthorization({
   // A callback to retrieve the userID from tool context.
   userID: (_params, config) => {
     return config.configurable?.user_id;
@@ -144,6 +148,8 @@ const buyStockAuthorizer = auth0AI.withAsyncUserConfirmation({
   bindingMessage: async ({ qty , ticker }) => {
     return `Confirm the purchase of ${qty} ${ticker}`;
   },
+  // Expiration for this request in seconds (default=300s)
+  requestedExpiry: 300,
   // The scopes and audience to request
   audience: process.env["AUDIENCE"],
   scopes: ["stock:trade"]
@@ -154,7 +160,7 @@ Then wrap the tool as follows:
 
 ```javascript
 import { z } from "zod";
-import { getCIBACredentials } from "@auth0/ai-genkit";
+import { getAsyncAuthorizationCredentials } from "@auth0/ai-genkit";
 
 export const buyTool = ai.defineTool(
   ...buyStockAuthorizer({
@@ -178,7 +184,7 @@ export const buyTool = ai.defineTool(
     outputSchema: z.string(),
   },
   async ({ ticker, qty }) => {
-    const { accessToken } = getCIBACredentials();
+    const { accessToken } = getAsyncAuthorizationCredentials();
     fetch("http://yourapi.com/buy", {
       method: "POST",
       headers: {
@@ -198,7 +204,7 @@ Auth0 supports RAR (Rich Authorization Requests) for CIBA. This allows you to pr
 When defining the tool authorizer, you can specify the `authorizationDetails` parameter to include detailed information about the authorization being requested:
 
 ```js
-const buyStockAuthorizer = auth0AI.withAsyncUserConfirmation({
+const buyStockAuthorizer = auth0AI.withAsyncAuthorization({
   // A callback to retrieve the userID from tool context.
   userID: (_params, config) => {
     return config.configurable?.user_id;
@@ -207,6 +213,8 @@ const buyStockAuthorizer = auth0AI.withAsyncUserConfirmation({
   bindingMessage: async ({ qty , ticker }) => {
     return `Confirm the purchase of ${qty} ${ticker}`;
   },
+  // Expiration for this request in seconds (default=300s)
+  requestedExpiry: 300,
   authorizationDetails: async ({ qty, ticker }) => {
     return [{ type: "trade_authorization", qty, ticker, action: "buy" }];
   },
@@ -403,7 +411,7 @@ We appreciate feedback and contribution to this repo! Before you get started, pl
 
 ### Raise an issue
 
-To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0-lab/auth0-ai-js/issues).
+To provide feedback or report a bug, please [raise an issue on our issue tracker](https://github.com/auth0/auth0-ai-js/issues).
 
 ### Vulnerability Reporting
 

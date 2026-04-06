@@ -1,8 +1,6 @@
-import { ToolExecutionOptions } from "ai";
-
 import { DeviceAuthorizerBase } from "@auth0/ai/Device";
 
-import { ToolContext } from "../util/ToolContext";
+import { ToolContext, ToolExecutionOptions } from "../util/ToolContext";
 import { ToolWrapper } from "../util/ToolWrapper";
 
 /**

@@ -18,7 +18,9 @@ export default async function Home() {
     <div className="font-[family-name:var(--font-geist-sans)]">
       <header className="w-full max-w-7xl h-20 mx-auto flex items-center justify-between border-b border-gray-200 px-4 xl:px-0">
         <div className="font-semibold text-xl">Auth0 AI | Demo</div>
-        <UserButton user={session?.user!} logoutUrl="/auth/logout" />
+        {session?.user && (
+          <UserButton user={session.user} logoutUrl="/auth/logout" />
+        )}
       </header>
       <main className="flex flex-col gap-8 row-start-2 items-start md:items-center sm:items-start w-full">
         <div className="flex flex-col w-full max-w-md py-12 sm:py-24 px-4 sm:px-0 mx-auto stretch">

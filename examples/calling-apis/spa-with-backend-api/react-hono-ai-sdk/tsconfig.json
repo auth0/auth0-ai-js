@@ -31,10 +31,17 @@
 
     // Output control
     "skipLibCheck": true,
+    "noEmit": true,
 
     // Optional strict flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "include": [],
+  "references": [
+    { "path": "./client" },
+    { "path": "./server" },
+    { "path": "./shared" }
+  ]
 }

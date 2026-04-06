@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { google } from "googleapis";
-import { z } from "zod";
+import { z } from "zod/v3";
 
-import { getAccessTokenForConnection } from "@auth0/ai-vercel";
+import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 
 import type { ToolWrapper } from "@auth0/ai-vercel";
 
@@ -18,7 +18,7 @@ export const createListNearbyEventsTool = (
     tool({
       description:
         "List calendar events between a given start and end time from a user's calendar (personal or shared)",
-      parameters: z.object({
+      inputSchema: z.object({
         start: z.coerce.date(),
         end: z.coerce.date(),
         calendarId: z.string().optional().default("primary"),
@@ -38,7 +38,7 @@ export const createListNearbyEventsTool = (
           }
 
           // Get the access token from Token Vault using the enhanced SDK
-          const token = getAccessTokenForConnection();
+          const token = getAccessTokenFromTokenVault();
 
           const calendar = google.calendar("v3");
           const auth = new google.auth.OAuth2();

@@ -1,10 +1,7 @@
 import { Schedule } from "agents";
-import { Message } from "ai";
+import { UIMessage } from "ai";
 
-import {
-  AuthorizationPendingInterrupt,
-  AuthorizationPollingInterrupt,
-} from "@auth0/ai/interrupts";
+import { AuthorizationPendingInterrupt, AuthorizationPollingInterrupt } from "@auth0/ai/interrupts";
 
 type Constructor<T = object> = new (...args: any[]) => T;
 
@@ -23,8 +20,8 @@ interface ChatAgent {
     callback: keyof this,
     payload?: T
   ): Promise<Schedule<T>>;
-  messages: Message[];
-  saveMessages(messages: Message[]): Promise<void>;
+  messages: UIMessage[];
+  saveMessages(messages: UIMessage[]): Promise<void>;
   get name(): string;
 }
 
@@ -40,7 +37,7 @@ interface ChatAgent {
  * Call the `scheduleAsyncUserConfirmationCheck` method to initiate the scheduling from
  * within the `onAuthorizationInterrupt` callback of the authorizer.
  *
- * auth0AI.withAsyncUserConfirmation({
+ * auth0AI.withAsyncAuthorization({
  *   onAuthorizationInterrupt: async (interrupt, context) => {
  *     const { agent } = getCurrentAgent<Chat>();
  *     agent?.schedulePoller({ interrupt, context });
@@ -86,36 +83,38 @@ export const AsyncUserConfirmationResumer = <
       const message = this.messages.find((m) =>
         m.parts?.some(
           (p) =>
-            p.type === "tool-invocation" &&
-            p.toolInvocation?.toolCallId === params.context.toolCallID
+            p.type.startsWith("tool-") && "toolCallId" in p &&
+            p.toolCallId === params.context.toolCallID
         )
       );
       if (!message) {
         return;
       }
 
-      const newMessage: Message = {
+      const newMessage = {
         ...message,
-        parts: message.parts?.map((p) =>
-          p.type === "tool-invocation" &&
-          p.toolInvocation?.toolCallId === params.context.toolCallID
-            ? {
-                ...p,
-                toolInvocation: {
-                  ...p.toolInvocation,
-                  state: "result",
-                  result: { continueInterruption: true },
-                },
+        parts: message.parts?.map((p) => {
+          if (p.type.startsWith("tool-") && "toolCallId" in p &&
+            p.toolCallId === params.context.toolCallID) {
+              return {
+                  ...p,
+                  toolInvocation: {
+                    ...p,
+                    state: "output-available",
+                    output: { continueInterruption: true },
+                  },
+                }
               }
-            : p
-        ),
+          return p;
+        }
+      )
       };
 
       const newMessages = this.messages.map((m, index) =>
         index === this.messages.indexOf(message) ? newMessage : m
       );
 
-      await this.saveMessages(newMessages);
+      await this.saveMessages(newMessages as UIMessage[]);
     }
   };
 };

@@ -46,3 +46,6 @@ __db_documents.json
 bun.lock
 
 .store
+
+# LangGraph API
+.langgraph_api

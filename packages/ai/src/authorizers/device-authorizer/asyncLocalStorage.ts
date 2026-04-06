@@ -24,7 +24,7 @@ export const getDeviceAuthorizerCredentials = () => {
   const t = asyncLocalStorage.getStore();
   if (typeof t === "undefined") {
     throw new Error(
-      "The tool must be wrapped with the withAsyncUserConfirmation function."
+      "The tool must be wrapped with the withAsyncAuthorization function."
     );
   }
   return t.credentials;

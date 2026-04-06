@@ -22,7 +22,7 @@ jobs:
       id-token: write # to enable use of OIDC for npm provenance
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -37,8 +37,14 @@ jobs:
       - name: Verify the integrity of provenance attestations and registry signatures for installed dependencies
         run: npm audit signatures
 
+      - name: Clean build artifacts
+        run: npm run clean
+
+      - name: Rebuild workspace links
+        run: npm install --workspaces
+
       - name: Build
-        run: npm run build
+        run: npm run build -- --no-cache
 
       - name: Release
         env:

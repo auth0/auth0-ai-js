@@ -1,9 +1,9 @@
 import { tool } from "ai";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 export const getStockMetric = tool({
   description: "Get a stock metric",
-  parameters: z.object({
+  inputSchema: z.object({
     ticker: z.string(),
     metric: z.enum(["PE", "P/S", "P/B", "P/FCF", "P/EBITDA"]),
   }),

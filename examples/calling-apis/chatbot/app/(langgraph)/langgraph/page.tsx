@@ -19,7 +19,9 @@ export default async function Home() {
           </Link>
           <div className="font-semibold text-xl">Auth0 AI | LangGraph Demo</div>
         </div>
-        <UserButton user={session?.user!} logoutUrl="/auth/logout" />
+        {session?.user && (
+          <UserButton user={session.user} logoutUrl="/auth/logout" />
+        )}
       </header>
       <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start w-full">
         <Chat />

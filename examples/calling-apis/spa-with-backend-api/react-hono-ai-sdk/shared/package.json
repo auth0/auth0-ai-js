@@ -1,5 +1,6 @@
 {
-  "name": "shared",
+  "name": "@auth0/auth0-ai-js-examples-react-hono-ai-sdk-shared",
+  "private": true,
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

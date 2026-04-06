@@ -8,8 +8,8 @@
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs",
     "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
-    "build:esm": "tsc --outDir ./dist/esm",
-    "build:cjs": "tsc --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
+    "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
+    "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --declaration false --declarationMap false --outDir ./dist/cjs",
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "semantic-release": "npx --no semantic-release",
@@ -51,18 +51,18 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@auth0/ai": "*",
-    "auth0": "^4.18.0",
     "stable-hash": "^0.0.5",
     "zod-to-json-schema": "^3.24.5"
   },
   "peerDependencies": {
-    "ai": "^4.1.54",
-    "react": "^19.0.0"
+    "@ai-sdk/react": "^2.0.0 || ^3.0.0",
+    "ai": "^5.0.0 || ^6.0.0",
+    "react": "^19.2.1"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",
     "@types/node": "^22.10.6",
-    "@types/react": "^19.0.10",
+    "@types/react": "^19.2.7",
     "eslint": "^9.22.0",
     "typedoc": "^0.27.6",
     "typescript": "^5.7.3",

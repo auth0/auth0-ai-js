@@ -1,0 +1,27 @@
+{
+  "name": "@auth0/auth0-ai-js-examples-async-authorization-llamaindex",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx tsx  --no-deprecation src/index.ts",
+    "start:api": "npm --prefix ../sample-api install ../sample-api && npx tsx ../sample-api/app.ts"
+  },
+  "author": {
+    "name": "Auth0 Inc.",
+    "url": "https://auth0.com"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@auth0/ai": "*",
+    "@auth0/ai-llamaindex": "*",
+    "@llamaindex/openai": "^0.4.18",
+    "dotenv": "^16.4.7",
+    "enquirer": "^2.4.1",
+    "jwt-decode": "^4.0.0",
+    "llamaindex": "^0.11.28",
+    "open": "^10.1.0",
+    "zod": "^3.25.76"
+  }
+}

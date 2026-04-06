@@ -2,21 +2,21 @@ import { Tool } from "ai";
 
 import { MemoryStore, Store, SubStore } from "@auth0/ai/stores";
 
-import { CIBAAuthorizer } from "./CIBA";
+import { AsyncAuthorizer } from "./AsyncAuthorization";
 import { DeviceAuthorizer } from "./Device";
-import { FederatedConnectionAuthorizer } from "./FederatedConnections";
 import { FGA_AI } from "./FGA_AI";
+import { TokenVaultAuthorizer } from "./TokenVault";
 import { ToolWrapper } from "./util/ToolWrapper";
 
 import type { Auth0ClientParams } from "@auth0/ai";
 
-type FederatedConnectionParams = Omit<
-  ConstructorParameters<typeof FederatedConnectionAuthorizer>[1],
+type TokenVaultParams = Omit<
+  ConstructorParameters<typeof TokenVaultAuthorizer>[1],
   "store"
 >;
 
 export type CIBAParams = Omit<
-  ConstructorParameters<typeof CIBAAuthorizer>[1],
+  ConstructorParameters<typeof AsyncAuthorizer>[1],
   "store"
 >;
 
@@ -44,7 +44,7 @@ export class Auth0AI {
    * @param params - The CIBA authorizer options.
    * @returns - The authorizer.
    */
-  withAsyncUserConfirmation(params: CIBAParams): ToolWrapper;
+  withAsyncAuthorization(params: CIBAParams): ToolWrapper;
 
   /**
    * Protects a tool with the CIBA authorizer.
@@ -52,11 +52,11 @@ export class Auth0AI {
    * @param tool - The tool to protect.
    * @returns The protected tool.
    */
-  withAsyncUserConfirmation(params: CIBAParams, tool: Tool): Tool;
+  withAsyncAuthorization(params: CIBAParams, tool: Tool): Tool;
 
-  withAsyncUserConfirmation(params: CIBAParams, tool?: Tool) {
+  withAsyncAuthorization(params: CIBAParams, tool?: Tool) {
     const cibaStore = this.store.createSubStore("AUTH0_AI_CIBA");
-    const fc = new CIBAAuthorizer(this.config, { store: cibaStore, ...params });
+    const fc = new AsyncAuthorizer(this.config, { store: cibaStore, ...params });
     const authorizer = fc.authorizer();
     if (tool) {
       return authorizer(tool);
@@ -65,25 +65,25 @@ export class Auth0AI {
   }
 
   /**
-   * Builds a Federated Connection authorizer for a tool.
+   * Builds a Token Vault authorizer for a tool.
    *
-   * @param params - The Federated Connections authorizer options.
+   * @param params - The Token Vaults authorizer options.
    * @returns The authorizer.
    */
-  withTokenForConnection(params: FederatedConnectionParams): ToolWrapper;
+  withTokenVault(params: TokenVaultParams): ToolWrapper;
 
   /**
-   * Protects a tool execution with the Federated Connection authorizer.
+   * Protects a tool execution with the Token Vault authorizer.
    *
-   * @param params - The Federated Connections authorizer options.
+   * @param params - The Token Vaults authorizer options.
    * @param tool - The tool to protect.
    * @returns The protected tool.
    */
-  withTokenForConnection(params: FederatedConnectionParams, tool: Tool): Tool;
+  withTokenVault(params: TokenVaultParams, tool: Tool): Tool;
 
-  withTokenForConnection(params: FederatedConnectionParams, tool?: Tool) {
-    const store = this.store.createSubStore("AUTH0_AI_FEDERATED_CONNECTION");
-    const fc = new FederatedConnectionAuthorizer(this.config, {
+  withTokenVault(params: TokenVaultParams, tool?: Tool) {
+    const store = this.store.createSubStore("AUTH0_AI_TOKEN_VAULT");
+    const fc = new TokenVaultAuthorizer(this.config, {
       store,
       ...params,
     });

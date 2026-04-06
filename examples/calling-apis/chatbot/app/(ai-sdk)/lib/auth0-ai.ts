@@ -3,17 +3,17 @@ import { Auth0AI } from "@auth0/ai-vercel";
 
 const auth0AI = new Auth0AI();
 
-export const withGoogleCalendar = auth0AI.withTokenForConnection({
+export const withGoogleCalendar = auth0AI.withTokenVault({
   refreshToken: async () => {
     const session = await auth0.getSession();
     const refreshToken = session?.tokenSet.refreshToken as string;
     return refreshToken;
   },
   connection: "google-oauth2",
-  scopes: ["https://www.googleapis.com/auth/calendar.freebusy"],
+  scopes: ["openid", "https://www.googleapis.com/auth/calendar.freebusy"],
 });
 
-export const withSlack = auth0AI.withTokenForConnection({
+export const withSlack = auth0AI.withTokenVault({
   refreshToken: async () => {
     const session = await auth0.getSession();
     const refreshToken = session?.tokenSet.refreshToken as string;
@@ -23,7 +23,7 @@ export const withSlack = auth0AI.withTokenForConnection({
   scopes: ["channels:read", "groups:read"],
 });
 
-export const withGitHub = auth0AI.withTokenForConnection({
+export const withGitHub = auth0AI.withTokenVault({
   refreshToken: async () => {
     const session = await auth0.getSession();
     const refreshToken = session?.tokenSet.refreshToken as string;
@@ -33,12 +33,12 @@ export const withGitHub = auth0AI.withTokenForConnection({
   scopes: ["repo"],
 });
 
-export const withGoogleDriveTools = auth0AI.withTokenForConnection({
+export const withGoogleDriveTools = auth0AI.withTokenVault({
   refreshToken: async () => {
     const session = await auth0.getSession();
     const refreshToken = session?.tokenSet.refreshToken as string;
     return refreshToken;
   },
   connection: "google-oauth2",
-  scopes: ["https://www.googleapis.com/auth/drive"],
+  scopes: ["openid", "https://www.googleapis.com/auth/drive"],
 });

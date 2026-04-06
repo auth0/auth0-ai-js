@@ -1,19 +1,21 @@
 import "dotenv/config";
 
-import { createDataStreamResponse, generateId, streamText } from "ai";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  generateId,
+  streamText,
+} from "ai";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 import { openai } from "@ai-sdk/openai";
 import { setAIContext } from "@auth0/ai-vercel";
 import {
-  InterruptionPrefix,
+  errorSerializer,
   withInterruptions,
 } from "@auth0/ai-vercel/interrupts";
-import {
-  Auth0Interrupt,
-  FederatedConnectionInterrupt,
-} from "@auth0/ai/interrupts";
 import { serve } from "@hono/node-server";
 
 import { createGoogleCalendarTool } from "./lib/auth";
@@ -21,7 +23,7 @@ import { createListNearbyEventsTool } from "./lib/tools/listNearbyEvents";
 import { createListUserCalendarsTool } from "./lib/tools/listUserCalendars";
 import { jwtAuthMiddleware } from "./middleware/auth";
 
-import type { ApiResponse } from "shared/dist";
+import type { ApiResponse } from "@auth0/auth0-ai-js-examples-react-hono-ai-sdk-shared";
 
 const getAllowedOrigins = (): string[] => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS;
@@ -95,45 +97,55 @@ export const app = new Hono()
     // note: you can see more examples of Hono API consumption with AI SDK here:
     // https://ai-sdk.dev/cookbook/api-servers/hono?utm_source=chatgpt.com#hono
 
-    return createDataStreamResponse({
+    const modelMessages = await convertToModelMessages(requestMessages);
+    const date = new Date().toISOString();
+
+    const stream = createUIMessageStream({
+      originalMessages: requestMessages,
       execute: withInterruptions(
-        async (dataStream) => {
+        async ({ writer }) => {
           const result = streamText({
             model: openai("gpt-4o-mini"),
             system:
-              "You are a helpful calendar assistant! You can help users with their calendar events and schedules. Keep your responses concise and helpful.",
-            messages: requestMessages,
-            maxSteps: 5,
+              `You are a helpful calendar assistant! You can help users with their calendar events and schedules. Keep your responses concise and helpful. Always format your responses as plain text. Do not use markdown formatting like **bold**, ##headers, or -bullet points. Use simple text formatting with line breaks and indentation only. The current date and time is ${date}.`,
+            messages: modelMessages,
             tools,
-          });
 
-          result.mergeIntoDataStream(dataStream, {
-            sendReasoning: true,
-          });
-        },
-        { messages: requestMessages, tools }
-      ),
-      onError: (error: any) => {
-        // Handle Auth0 AI interrupts
-        if (
-          error.cause instanceof Auth0Interrupt ||
-          error.cause instanceof FederatedConnectionInterrupt
-        ) {
-          const serializableError = {
-            ...error.cause.toJSON(),
-            toolCall: {
-              id: error.toolCallId,
-              args: error.toolArgs,
-              name: error.toolName,
+            onFinish: (output) => {
+              if (output.finishReason === "tool-calls") {
+                const lastMessage = output.content[output.content.length - 1];
+                if (lastMessage?.type === "tool-error") {
+                  const { toolName, toolCallId, error, input } = lastMessage;
+                  const serializableError = {
+                    cause: error,
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    toolArgs: input,
+                  };
+
+                  throw serializableError;
+                }
+              }
             },
-          };
-
-          return `${InterruptionPrefix}${JSON.stringify(serializableError)}`;
+          });
+          writer.merge(
+            result.toUIMessageStream({
+              sendReasoning: true,
+            })
+          );
+        },
+        {
+          messages: requestMessages,
+          tools,
         }
-
-        return "Oops! An error occurred.";
-      },
+      ),
+      onError: errorSerializer((err) => {
+        console.error("react-hono-ai-sdk route: stream error", err);
+        return "Oops, an error occurred!";
+      }),
     });
+
+    return createUIMessageStreamResponse({ stream });
   });
 
 // Start the server for Node.js
