@@ -10,6 +10,7 @@
     "prepare": "node .husky/install.mjs"
   },
   "devDependencies": {
+    "axios": "1.7.9",
     "@commitlint/config-conventional": "^19.8.0",
     "@semantic-release/release-notes-generator": "^14.0.3",
     "@swc/core": "^1.7.26",
@@ -33,9 +34,6 @@
     "@openfga/sdk": "^0.8.0",
     "agents": "^0.3.0",
     "vite": "^6.2.3"
-  },
-  "overrides": {
-    "axios": "^1.15.0"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.0.0",
