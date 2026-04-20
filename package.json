@@ -19,7 +19,7 @@
     "lage": "^2.13.0",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.5.3",
-    "semantic-release": "^24.2.3",
+    "semantic-release": "^25.0.3",
     "semantic-release-monorepo": "^8.0.2",
     "semantic-release-unsquash": "^0.2.0",
     "terminal-link": "^3.0.0"
