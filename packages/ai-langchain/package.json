@@ -45,7 +45,7 @@
     "@langchain/core": "^0.3.72",
     "@langchain/langgraph": "^0.4.4",
     "@langchain/langgraph-sdk": "^0.0.109",
-    "@openfga/sdk": "0.8.0",
+    "@openfga/sdk": "^0.9.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {

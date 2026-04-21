@@ -53,7 +53,7 @@
     "magic-bytes.js": "^1.10.0"
   },
   "peerDependencies": {
-    "@openfga/sdk": "^0.8.0"
+    "@openfga/sdk": "^0.9.5"
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",

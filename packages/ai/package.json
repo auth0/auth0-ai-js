@@ -79,7 +79,7 @@
     "vitest": "^3.0.9"
   },
   "dependencies": {
-    "@openfga/sdk": "^0.8.0",
+    "@openfga/sdk": "^0.9.5",
     "auth0": "^4.30.0",
     "jose": "^5.9.6",
     "openid-client": "^6.1.7",
