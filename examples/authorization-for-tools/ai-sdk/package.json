@@ -21,7 +21,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.0",
     "@auth0/ai-vercel": "*",
-    "@openfga/sdk": "^0.8.0",
+    "@openfga/sdk": "^0.9.5",
     "ai": "^6.0.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",

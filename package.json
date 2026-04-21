@@ -30,12 +30,9 @@
     "examples/**"
   ],
   "dependencies": {
-    "@openfga/sdk": "^0.8.0",
+    "@openfga/sdk": "^0.9.5",
     "agents": "^0.3.0",
     "vite": "^6.2.3"
-  },
-  "overrides": {
-    "axios": "^1.15.0"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.0.0",

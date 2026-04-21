@@ -37,7 +37,7 @@
     "genkit": "^1.5"
   },
   "peerDependencies": {
-    "@openfga/sdk": "^0.8.0"
+    "@openfga/sdk": "^0.9.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.6",

@@ -15,7 +15,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@auth0/ai-genkit": "*",
-    "@openfga/sdk": "^0.8.0",
+    "@openfga/sdk": "^0.9.5",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "enquirer": "^2.4.1",
