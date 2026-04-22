@@ -2,6 +2,10 @@
   "name": "@auth0/ai",
   "version": "0.0.0",
   "description": "Auth0AI SDK for JavaScript",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/auth0/auth0-ai-js"
+  },
   "types": "dist/esm/index.d.ts",
   "main": "dist/cjs/index.js",
   "module": "./dist/esm/index.js",

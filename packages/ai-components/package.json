@@ -2,6 +2,10 @@
   "name": "@auth0/ai-components",
   "version": "0.0.0",
   "description": "Auth0 AI Components",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/auth0/auth0-ai-js"
+  },
   "bin": "./bin/cli.js",
   "files": [
     "dist/**/*.{*js,*js.map,d.ts}",
