@@ -1,6 +1,6 @@
 # Auth0 AI for Genkit
 
-`@auth0/ai-genkit` is an SDK for building secure AI-powered applications using [Auth0](https://www.auth0.ai/), [Okta FGA](https://docs.fga.dev/) and [Genkit](https://firebase.google.com/docs/genkit).
+`@auth0/ai-genkit` is an SDK for building secure AI-powered applications using [Auth0](https://www.auth0.ai/), [Okta FGA](https://docs.fga.dev/) and [Genkit](https://genkit.dev/docs/integrations/auth0/).
 
 ## Features
 
