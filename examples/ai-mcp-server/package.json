@@ -1,0 +1,37 @@
+{
+  "name": "@auth0/auth0-ai-js-examples-ai-mcp-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Online store MCP server that authenticates callers with Auth0 and calls store APIs on their behalf",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "start": "tsx --env-file=.env src/server.ts",
+    "start:api": "tsx --env-file=.env src/downstream-server.ts",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "author": {
+    "name": "Auth0 Inc.",
+    "url": "https://auth0.com"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@auth0/ai-mcp": "*",
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "jose": "^6.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.6",
+    "eslint": "^9.22.0",
+    "globals": "^15.11.0",
+    "msw": "^2.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^3.0.9"
+  }
+}
