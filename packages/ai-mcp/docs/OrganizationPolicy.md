@@ -9,7 +9,7 @@ Auth0 Organizations let you model the business customers of a multi-tenant appli
 | `organizationPolicy` | `'allow'` (default) performs no organization check. `'required'` rejects tokens that carry no `org_id` claim. |
 | `organizationId` | One organization id or a list of ids. With `'required'`, the token's `org_id` must be in the list. |
 
-`organizationId` takes `org_...` identifiers, not organization names, and the check compares entries exactly, so trim values that come from a delimited source such as an environment variable.
+`organizationId` takes `org_...` identifiers, not organization names, and the check compares entries exactly, so trim values that come from a delimited source such as an environment variable. An untrimmed or empty id makes the client constructor throw `InvalidConfigurationError`.
 
 ## Accepting any organization
 

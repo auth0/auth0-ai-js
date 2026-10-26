@@ -8,7 +8,7 @@ All authentication errors extend `AuthError` from `@auth0/auth0-api-js`, which c
 
 | Class | `statusCode` | `code` | Thrown when |
 | --- | --- | --- | --- |
-| `UnauthenticatedError` | 401 | `invalid_token` | Protected code runs without an authenticated caller, for example outside a request context, or `withToken` receives an expired token. |
+| `UnauthenticatedError` | 401 | `invalid_token` | Protected code runs without an authenticated caller, for example outside a request context, `withToken` receives an expired token, or a token exchange finds that the caller's token has expired or is about to expire. |
 | `InsufficientScopeError` | 403 | `insufficient_scope` | The caller lacks a scope that `requireScopes` checks. |
 | `DownscopedTokenError` | 403 | `insufficient_scope` | An on-behalf-of token exchange succeeded but did not include every requested scope. A client credentials grant that falls short is a server configuration failure instead, see [On Behalf Of](./OnBehalfOf.md#client-credentials). |
 | `ForeignCallerError` | none | none | `McpClient.withToken` receives a handle that this client did not issue. This is a programming error. It extends `Error`, not `AuthError`, so it is never turned into a challenge. |
@@ -39,11 +39,13 @@ Messages are generic by design:
 
 Only this package's three error classes become client-facing failures when they escape your handler. A failed token exchange or a `ForeignCallerError` is an internal error: the client gets a generic 500 and `onError` receives the real error. That includes an exchange that exceeds `requestTimeoutMs`. A discovery or JWKS fetch that exceeds it is different: core reports it as a failed token verification, so that request currently gets 401 `invalid_token`.
 
-With the official MCP SDK's `McpServer` (`createMcpSdkHandler` and `createNodeMcpHandler`), the SDK turns an error thrown inside a tool callback into a tool result with `isError: true` and a sanitized message, so the error does not reach the handler and the HTTP status stays 200. That includes `DownscopedTokenError` from a downscoped exchange. Catch errors in the tool when you want control over the message.
+With the official MCP SDK's `McpServer` (`createMcpSdkHandler` and `createNodeMcpHandler`), the SDK turns an error thrown inside a tool callback into a tool result with `isError: true` and the error's own message, unchanged, so the error does not reach the handler and the HTTP status stays 200. The message is generic for the errors this package throws and for errors from the request-scoped client. That includes `DownscopedTokenError` from a downscoped exchange. An error thrown by your own tool code reaches the caller with whatever message you gave it. Catch errors in the tool when you want control over the message.
+
+**Warning.** Do not put secrets, tokens or internal details (hostnames, query text, stack information) in the message of an error thrown from your own tool code. The SDK copies the message into the tool result that the caller sees.
 
 ## Core errors
 
-These come from `@auth0/auth0-api-js` and keep their class when they pass through the package.
+These come from `@auth0/auth0-api-js` and keep their class when they pass through the package, except that `VerifyAccessTokenError` raised during an exchange is reported as `UnauthenticatedError` (see below).
 
 | Class | `statusCode` | `code` |
 | --- | --- | --- |
@@ -55,7 +57,7 @@ These come from `@auth0/auth0-api-js` and keep their class when they pass throug
 
 `MissingOrganizationError` and `OrganizationNotAllowedError` extend `VerifyAccessTokenError`. Their `code` is for application logic and is never written to the challenge. Failures from the token endpoint, such as `TokenExchangeError` and `TokenByClientCredentialsError`, are also core classes.
 
-A request-scoped client method sanitizes the errors it throws: it replaces the message with `The token operation failed.`, keeps the class, `code`, `statusCode` and `headers`, and attaches the original error as `cause`. The package's own errors above pass through unchanged. Never serialize `cause` into a response.
+A request-scoped client method sanitizes the errors it throws: it replaces the message with `The token operation failed.`, keeps the class, `code`, `statusCode` and `headers`, and attaches the original error as `cause`. One exception: a core `VerifyAccessTokenError` raised during an exchange, which means the caller's token expired or is about to expire, is reported as `UnauthenticatedError` (HTTP 401 when it reaches the handler). The package's own errors above pass through unchanged. Never serialize `cause` into a response.
 
 ## Configuration errors
 

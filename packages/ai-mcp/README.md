@@ -8,7 +8,7 @@ An MCP server is a resource server. This package ships no MCP framework of its o
 
 ## How it works
 
-1. **Verify.** Before your MCP handler runs, the request handler checks the `Authorization` header (Bearer or DPoP) against your Auth0 tenant. A missing or invalid token gets a 401 with a `WWW-Authenticate` challenge and never reaches a tool. The handler also serves the RFC 9728 protected resource metadata document.
+1. **Verify.** Before your MCP handler runs, the request handler checks the `Authorization` header (Bearer or DPoP) against your Auth0 tenant. A missing or invalid token gets a 401 (a malformed `Authorization` header gets a 400) with a `WWW-Authenticate` challenge and never reaches a tool. The handler also serves the RFC 9728 protected resource metadata document.
 2. **Gate.** The gate checks scopes that every request must carry and answers a missing one with HTTP 403 `insufficient_scope`. A tool checks the scopes that only it needs and answers a missing one with a tool result that has `isError: true`.
 3. **Context.** On a valid token the handler builds a `Principal` from the verified claims and binds it, together with a request-scoped client, to the request through `AsyncLocalStorage`. Tool code reads the caller from there, so tool signatures stay clean.
 4. **On Behalf Of.** A tool calls `getTokenOnBehalfOf({ audience, scope })` to exchange the caller's token for a token to a downstream API. A token store enables caching. See [Token caching](./docs/TokenCaching.md).

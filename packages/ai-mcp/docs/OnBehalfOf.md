@@ -52,7 +52,7 @@ The same rule applies to client credentials grants.
 
 ## Narrowed grants
 
-Auth0 can grant fewer scopes than you asked for. When you request scopes and the grant does not include all of them, `getTokenOnBehalfOf` throws `DownscopedTokenError`, so a tool never runs with less authority than it asked for. The error carries no scope data. On `createMcpSdkHandler` and `createNodeMcpHandler`, the MCP SDK turns the error into a sanitized tool result with `isError: true` and the response stays HTTP 200. A 403 `insufficient_scope` is sent only when the error escapes a custom `createMcpHandler` handler.
+Auth0 can grant fewer scopes than you asked for. When you request scopes and the grant does not include all of them, `getTokenOnBehalfOf` throws `DownscopedTokenError`, so a tool never runs with less authority than it asked for. The error carries no scope data. On `createMcpSdkHandler` and `createNodeMcpHandler`, the MCP SDK turns the error into a tool result with `isError: true` that carries the error's message, which is generic for this error, and the response stays HTTP 200. A 403 `insufficient_scope` is sent only when the error escapes a custom `createMcpHandler` handler.
 
 The narrower token is still cached under the scopes it was actually granted. A later, narrower request can reuse it. See [Token caching](./TokenCaching.md).
 
@@ -83,7 +83,7 @@ Concurrent identical exchanges from one `McpClient` share a single request to Au
 
 ## Errors from the exchange
 
-Errors leave the request-scoped client with a fixed generic message. The original error is kept as `cause` for server-side diagnostics and must not be serialized into a response. Core errors keep their class, `code`, `statusCode` and `headers`, so `instanceof` checks against the error classes of `@auth0/auth0-api-js` still work. Catch these in your tool and return an `isError` result, as the example in [Examples](../EXAMPLES.md) does.
+Errors leave the request-scoped client with a fixed generic message. The original error is kept as `cause` for server-side diagnostics and must not be serialized into a response. Core errors keep their class, `code`, `statusCode` and `headers`, so `instanceof` checks against the error classes of `@auth0/auth0-api-js` still work. The exception is `VerifyAccessTokenError`: when the caller's token has expired or is about to expire, the exchange reports `UnauthenticatedError` (HTTP 401 when it reaches the handler). Catch these in your tool and return an `isError` result, as the example in [Examples](../EXAMPLES.md) does.
 
 ## Timeouts
 
