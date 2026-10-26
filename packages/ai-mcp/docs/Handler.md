@@ -143,7 +143,7 @@ The verified caller reaches your tools in two ways: as `extra.authInfo` in every
 
 The verified caller reaches your tools in the ways above, but the raw access token does not: `extra.authInfo.token` is intentionally an empty string. Call downstream APIs through the request-scoped client (`getCallerMcpClient()`), never with a token you read yourself. The MCP SDK still exposes the raw request headers, including `Authorization`, to tools through `extra.requestInfo.headers`, so tool code must not log or forward headers.
 
-A downscoped token exchange inside a tool is not an HTTP failure on this adapter. The SDK turns the error into a tool result with `isError: true` and a generic message, and the response stays HTTP 200. The 403 `insufficient_scope` response applies only when the error escapes a custom `createMcpHandler` handler, as in the table above. A request to the MCP endpoint with any method other than `POST` gets a 405 with `Allow: POST`.
+A downscoped token exchange inside a tool is not an HTTP failure on this adapter. The SDK turns the error into a tool result with `isError: true` and the error's message (generic for this error), and the response stays HTTP 200. The 403 `insufficient_scope` response applies only when the error escapes a custom `createMcpHandler` handler, as in the table above. A request to the MCP endpoint with any method other than `POST` gets a 405 with `Allow: POST`.
 
 `createServer` runs once per request, and the adapter closes the server when the request ends. Register tools inside it and keep expensive setup outside of it.
 

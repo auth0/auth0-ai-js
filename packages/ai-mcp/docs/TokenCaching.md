@@ -50,6 +50,8 @@ The package, not the store, builds the keys. A key combines:
 
 Because the subject is part of the key, one caller's token is never returned for another caller, and the session is part of the key, so separate sessions of the same user stay apart. Keys are opaque hashes that carry no claim value, but they are stable pseudonymous identifiers, so treat the store as sensitive.
 
+**Revocation window.** The session part of the key outlives any single access token, so a delegated token minted earlier in a session is reused for later tokens from the same session. A session revoked at the authorization server does not invalidate an already cached delegated token before that token's own expiry. This is inherent to caching delegated tokens.
+
 ## Scope matching
 
 `scopeMatching` controls when a cached token counts as a hit. Both modes compare the scopes the exchange was **granted**, never the scopes a previous call requested.
