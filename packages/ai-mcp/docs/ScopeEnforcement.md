@@ -96,7 +96,7 @@ It throws:
 - `UnauthenticatedError` when you pass no principal and no request context is active. Passing `undefined` explicitly means "use the current caller".
 - `InsufficientScopeError` when any scope is missing. The error's `requiredScopes` property holds the normalized list for server-side use. Do not echo it to clients.
 
-When `InsufficientScopeError` escapes a custom `createMcpHandler` handler, the handler answers HTTP 403 with `insufficient_scope`. On `createMcpSdkHandler` and `createNodeMcpHandler`, the official MCP SDK's `McpServer` turns an error thrown inside a tool callback into a tool result with `isError: true` and a sanitized message, and the HTTP status stays 200. The same applies to `DownscopedTokenError` from a downscoped exchange inside a tool.
+When `InsufficientScopeError` escapes a custom `createMcpHandler` handler, the handler answers HTTP 403 with `insufficient_scope`. On `createMcpSdkHandler` and `createNodeMcpHandler`, the official MCP SDK's `McpServer` turns an error thrown inside a tool callback into a tool result with `isError: true` and the error's own message, and the HTTP status stays 200. The message of `InsufficientScopeError` and `DownscopedTokenError` is generic. The same applies to `DownscopedTokenError` from a downscoped exchange inside a tool.
 
 ## Tenant-side setup
 
