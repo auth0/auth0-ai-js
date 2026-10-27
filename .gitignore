@@ -29,6 +29,9 @@ yarn-error.log*
 # local env files
 .env*
 !.env.example
+!.env.e2e.example
+# real-tenant e2e results written by the runner
+packages/ai-mcp/e2e-report.md
 
 # vercel
 .vercel

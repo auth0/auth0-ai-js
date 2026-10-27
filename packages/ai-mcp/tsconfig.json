@@ -3,8 +3,9 @@
   "compilerOptions": {
     "baseUrl": ".",
     "outDir": "./dist",
-    "lib": ["dom", "ES2022"]
+    "lib": ["dom", "ES2022"],
+    "allowJs": true
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "scripts/e2e/**/*"],
   "exclude": ["node_modules", "dist", "test/smoke/fixtures"]
 }
