@@ -10,6 +10,7 @@
     "start:api": "tsx --env-file=.env src/downstream-server.ts",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
+    "smoke:real": "tsx --env-file-if-exists=.env scripts/smoke-real-tenant.ts",
     "test": "vitest run"
   },
   "author": {

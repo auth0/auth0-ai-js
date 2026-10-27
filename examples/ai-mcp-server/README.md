@@ -89,6 +89,52 @@ With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and ea
 
 The `.env` file is read with Node's `--env-file` support, so no extra package is needed.
 
+## Run against a real tenant
+
+`npm run smoke:real` starts the store API and the MCP server on loopback, signs a test user in against your tenant, connects an MCP client over Streamable HTTP with that user's access token, lists the tools and calls all three. The store API checks every exchanged token against the tenant's JWKS (signature, issuer, audience, expiry, scope), so a passing run shows that real on-behalf-of and client credentials tokens arrived.
+
+### Tenant prerequisites
+
+Complete [Set up your tenant](#set-up-your-tenant) and fill in `.env` first. The smoke test also needs:
+
+- A login client that the password grant is enabled for (the password-realm grant if you set `SMOKE_REALM`), and a client grant that lets it request the three tool scopes for the MCP server. A scope reaches the token only when a client grant lists it. Create the grant like the ones in [Set up your tenant](#set-up-your-tenant):
+
+  ```bash
+  auth0 api post client-grants --data '{"client_id":"YOUR_LOGIN_CLIENT_ID","audience":"http://localhost:3001/mcp","scope":["tool:order_status_report","tool:fulfill_order","tool:sales_analytics_report"],"subject_type":"user"}'
+  ```
+
+  We have not run this against a tenant. Treat the grant as required until your own run shows the scopes in the token.
+- The test shopper from step 5, whose token must carry the three tool scopes. The script requests them by default.
+
+The smoke test uses the Resource Owner Password grant to get the user token. That grant is for local testing only. Production clients should sign users in with the authorization code flow and PKCE.
+
+### Configure and run
+
+```sh
+cp .env.example .env   # fill in every value, including the SMOKE_* ones
+npm run smoke:real
+```
+
+`smoke:real` needs Node 22.9 or later, because it loads `.env` with `--env-file-if-exists`.
+
+`.env` is ignored by git. Keep real values out of any file that is committed. The script calls `fulfill_order` for ORD-1002 on its own in-memory store API, so it leaves no state behind.
+
+### Expected output
+
+```
+PASS  servers started  (mcp port 52006, store api port 52005)
+PASS  user token issued  (length 734, claims aud,azp,exp,gty,iat,iss,scope,sub)
+PASS  mcp client connected
+PASS  tools listed  (fulfill_order,order_status_report,sales_analytics_report)
+PASS  order_status_report returned orders fetched with exchanged tokens  (ok)
+PASS  fulfill_order reserved stock with an inventory write token  (ok)
+PASS  sales_analytics_report used the server's own token  (ok)
+
+7/7 checks passed
+```
+
+The ports and the token length vary. The script prints no token or secret values, and exits with a non-zero status if any check fails. It shuts both servers down when it finishes, fails, or receives Ctrl-C or a termination signal (it then exits non-zero).
+
 ## Check
 
 ```sh
