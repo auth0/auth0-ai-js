@@ -1,7 +1,7 @@
 # Real-tenant end-to-end tests
 
 These specs use no mocks. A real user access token (password-realm grant) goes through a real
-`@modelcontextprotocol/sdk` client and `StreamableHTTPClientTransport` over HTTP on localhost into
+`@modelcontextprotocol/client` (MCP TypeScript SDK v2) client and `StreamableHTTPClientTransport` over HTTP on localhost into
 the real `@auth0/ai-mcp` handler, which performs a real token exchange against an Auth0 tenant. A local
 downstream API verifies the forwarded bearer against the tenant JWKS (issuer, audience and RS256
 checked) and reports the verified claims.

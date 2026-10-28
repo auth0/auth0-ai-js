@@ -1,6 +1,5 @@
 /** Clients that talk to the server under test: the real MCP SDK client and a raw HTTP probe. */
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { parseChallenge } from "./challenge.js";
 import type { ParsedChallenge } from "./challenge.js";
 

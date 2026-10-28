@@ -12,8 +12,7 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { decodeJwt } from "jose";
 import { loadDownstreamConfig, loadMcpServerConfig } from "../src/config.js";
 import { createDownstreamServer } from "../src/downstream-api.js";

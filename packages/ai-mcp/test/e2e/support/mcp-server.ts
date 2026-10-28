@@ -6,8 +6,8 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, Server as HttpServer, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod";
 import { createMcpClient } from "../../../src/client.js";
 import type { McpClient } from "../../../src/client.js";
 import { createMcpSdkHandler, createNodeMcpHandler } from "../../../src/mcp-sdk.js";
@@ -136,7 +136,7 @@ export function buildTools(deps: ToolDeps): McpServer {
     "delegate",
     {
       description: "Exchanges the caller's token for the downstream API and calls it.",
-      inputSchema: { scope: z.string().optional(), audience: z.string().optional() },
+      inputSchema: z.object({ scope: z.string().optional(), audience: z.string().optional() }),
     },
     async ({ scope, audience }) => {
       const context = getRequestContext();
@@ -162,10 +162,10 @@ export function buildTools(deps: ToolDeps): McpServer {
       "multi-downstream",
       {
         description: "Exchanges the caller's token for several downstream audiences and calls each service.",
-        inputSchema: {
+        inputSchema: z.object({
           audiences: z.array(z.string()).optional(),
           parallel: z.boolean().optional(),
-        },
+        }),
       },
       async ({ audiences, parallel }) => {
         const context = getRequestContext();
@@ -209,7 +209,7 @@ export function buildTools(deps: ToolDeps): McpServer {
     "service",
     {
       description: "Requests a third-party token through a Token Vault connection.",
-      inputSchema: { connection: z.string(), loginHint: z.string().optional() },
+      inputSchema: z.object({ connection: z.string(), loginHint: z.string().optional() }),
     },
     async ({ connection, loginHint }) => {
       const context = getRequestContext();

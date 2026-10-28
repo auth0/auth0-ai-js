@@ -4,8 +4,7 @@ import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import {
   buildDpopProof,
   generateDpopKeyPair,
