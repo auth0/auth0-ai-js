@@ -8,8 +8,8 @@ import {
   withRequiredScopes,
 } from "@auth0/ai-mcp";
 import { createNodeMcpHandler } from "@auth0/ai-mcp/mcp-sdk";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod";
 import type { McpServerConfig } from "./config.js";
 import {
   READ_ANALYTICS,
@@ -127,7 +127,7 @@ function buildServer(config: McpServerConfig): McpServer {
     {
       description:
         "Shows the signed-in shopper's recent orders with current stock levels.",
-      inputSchema: { order_id: z.string().min(1).optional() },
+      inputSchema: z.object({ order_id: z.string().min(1).optional() }),
       annotations: { readOnlyHint: true },
     },
     withRequiredScopes(SCOPE_ORDER_STATUS, async ({ order_id: orderId }) =>
@@ -186,7 +186,7 @@ function buildServer(config: McpServerConfig): McpServer {
     "fulfill_order",
     {
       description: "Fulfills an order by reserving its items in inventory.",
-      inputSchema: { order_id: z.string().min(1) },
+      inputSchema: z.object({ order_id: z.string().min(1) }),
       annotations: { destructiveHint: true },
     },
     withRequiredScopes(SCOPE_FULFILL, async ({ order_id: orderId }) =>
