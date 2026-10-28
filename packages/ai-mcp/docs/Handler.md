@@ -128,12 +128,12 @@ DPoP proofs are bound to the request URL, and the handler checks them against `r
 
 ## The MCP SDK adapter
 
-`createMcpSdkHandler` wraps `createMcpHandler` and serves each authenticated request with the SDK's web standard Streamable HTTP transport.
+`createMcpSdkHandler` wraps `createMcpHandler` and serves each authenticated request with the SDK's web standard Streamable HTTP transport from `@modelcontextprotocol/server` (MCP TypeScript SDK v2, version 2.3 or later). It creates a new stateless transport for every request and answers with a JSON body. Tool input schemas are zod 4.2 or later objects, for example `z.object({ id: z.string() })`.
 
 ```ts
 import { createMcpClient, getCallerPrincipal } from '@auth0/ai-mcp';
 import { createMcpSdkHandler } from '@auth0/ai-mcp/mcp-sdk';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 
 const client = createMcpClient({
   domain: 'your-tenant.us.auth0.com',
@@ -148,11 +148,11 @@ export const handle = createMcpSdkHandler({
     server.registerTool(
       'whoami',
       { description: 'Returns the subject of the caller.' },
-      async (extra) => ({
+      async (ctx) => ({
         content: [
           {
             type: 'text' as const,
-            text: `${getCallerPrincipal()?.sub} / ${extra.authInfo?.clientId}`,
+            text: `${getCallerPrincipal()?.sub} / ${ctx.http?.authInfo?.clientId}`,
           },
         ],
       }),
@@ -162,15 +162,44 @@ export const handle = createMcpSdkHandler({
 });
 ```
 
-The verified caller reaches your tools in two ways: as `extra.authInfo` in every tool callback, which is the SDK's own mechanism, and through the request context, so `getCallerMcpClient()`, `getCallerPrincipal()` and `withRequiredScopes()` work inside tools. `authInfo.clientId` is an empty string when the token carries neither `client_id` nor `azp`.
+The verified caller reaches your tools in two ways: as `ctx.http?.authInfo` in every tool callback, which is the SDK's own mechanism, and through the request context, so `getCallerMcpClient()`, `getCallerPrincipal()` and `withRequiredScopes()` work inside tools. `authInfo.clientId` is an empty string when the token carries neither `client_id` nor `azp`.
 
-The verified caller reaches your tools in the ways above, but the raw access token does not: `extra.authInfo.token` is intentionally an empty string. Call downstream APIs through the request-scoped client (`getCallerMcpClient()`), never with a token you read yourself. The MCP SDK still exposes the raw request headers, including `Authorization`, to tools through `extra.requestInfo.headers`, so tool code must not log or forward headers.
+The verified caller reaches your tools in the ways above, but the raw access token does not: `ctx.http?.authInfo?.token` is intentionally an empty string. Call downstream APIs through the request-scoped client (`getCallerMcpClient()`), never with a token you read yourself. The MCP SDK still exposes the raw request headers, including `Authorization`, to tools through `ctx.http?.req.headers`, a standard `Request`, so tool code must not log or forward headers.
 
 A downscoped token exchange inside a tool is not an HTTP failure on this adapter. The SDK turns the error into a tool result with `isError: true` and the error's message (generic for this error), and the response stays HTTP 200. The 403 `insufficient_scope` response applies only when the error escapes a custom `createMcpHandler` handler, as in the table above. A request to the MCP endpoint with any method other than `POST` gets a 405 with `Allow: POST`.
 
 `createServer` runs once per request, and the adapter closes the server when the request ends. Register tools inside it and keep expensive setup outside of it.
 
 The adapter is stateless and answers with JSON bodies. See [known limitations](./KnownLimitations.md#the-mcp-sdk-adapter-is-stateless).
+
+## Using the MCP SDK v1
+
+`@auth0/ai-mcp/mcp-sdk` supports the MCP SDK v2 only. Objects from `@modelcontextprotocol/sdk` (v1) and `@modelcontextprotocol/server` (v2) must not be mixed, so the adapters do not accept a v1 server. If you stay on v1, build the transport glue yourself on top of the framework-neutral `createMcpHandler`. This recipe is unsupported by the package and pinned to the v1.x line of the SDK. It sends a fresh stateless transport and server per request, the way the v2 adapter does:
+
+```text
+import { createMcpClient, createMcpHandler } from '@auth0/ai-mcp';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+
+const client = createMcpClient({ domain: 'your-tenant.us.auth0.com', audience: 'https://mcp.example.com/mcp' });
+
+export const handle = createMcpHandler({
+  client,
+  requiredScopes: ['mcp:access'],
+  handler: async (request) => {
+    const server = new McpServer({ name: 'reports', version: '1.0.0' }); // register tools here
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    await server.connect(transport);
+    try {
+      return await transport.handleRequest(request);
+    } finally {
+      await server.close();
+    }
+  },
+});
+```
+
+The handler authenticates the request and binds the request context, so `getCallerMcpClient()`, `getCallerPrincipal()` and `withRequiredScopes()` work in v1 tools as well. The recipe does not return a 405 for methods other than `POST` and does not fill `authInfo` in tool callbacks. Add those yourself if you need them.
 
 ## Node adapter
 

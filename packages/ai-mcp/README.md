@@ -20,14 +20,14 @@ An MCP server is a resource server. This package ships no MCP framework of its o
 ### 1. Install
 
 ```bash
-npm install @auth0/ai-mcp @modelcontextprotocol/sdk
+npm install @auth0/ai-mcp @modelcontextprotocol/server
 ```
 
 `@auth0/auth0-api-js` is a regular dependency, so npm installs it with the package. Your application does not need to depend on it directly, because the token store types are re-exported from `@auth0/ai-mcp`.
 
-`@modelcontextprotocol/sdk` (version 1.31 or later in the 1.x line) is an optional peer dependency. Only the `@auth0/ai-mcp/mcp-sdk` entry point imports it, so install it when you use that entry point. The main entry point `@auth0/ai-mcp` never loads it.
+`@modelcontextprotocol/server` (version 2.3 or later, from the MCP TypeScript SDK v2) is an optional peer dependency. Only the `@auth0/ai-mcp/mcp-sdk` entry point imports it, so install it when you use that entry point. The main entry point `@auth0/ai-mcp` never loads it.
 
-The package runs on Node.js and on runtimes that provide `node:async_hooks` with `AsyncLocalStorage`.
+The MCP SDK v2 requires Node.js 20 or later, and tool input schemas use zod 4.2 or later. The package runs on Node.js and on runtimes that provide `node:async_hooks` with `AsyncLocalStorage`.
 
 ### 2. Create the client
 
@@ -52,7 +52,7 @@ The `@auth0/ai-mcp/mcp-sdk` entry point connects the request handler to the offi
 import { createServer } from 'node:http';
 import { createMcpClient, getCallerMcpClientOrThrow, withRequiredScopes } from '@auth0/ai-mcp';
 import { createNodeMcpHandler } from '@auth0/ai-mcp/mcp-sdk';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 
 const client = createMcpClient({
   domain: 'your-tenant.us.auth0.com',
