@@ -25,8 +25,6 @@ const client = createMcpClient({
 
 export const handle = createMcpHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   requiredScopes: ['mcp:access'],
   handler: async () => Response.json({ ok: true }),
 });
