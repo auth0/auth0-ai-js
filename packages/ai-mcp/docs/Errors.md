@@ -37,7 +37,7 @@ Messages are generic by design:
 | `InsufficientScopeError` or `DownscopedTokenError` escaping a custom `createMcpHandler` handler | 403 | `insufficient_scope` |
 | Anything else thrown by your handler, including core and network errors | 500 | none, generic body |
 
-Only this package's three error classes become client-facing failures when they escape your handler. A failed token exchange or a `ForeignCallerError` is an internal error: the client gets a generic 500 and `onError` receives the real error. That includes an exchange that exceeds `requestTimeoutMs`. A discovery or JWKS fetch that exceeds it is different: core reports it as a failed token verification, so that request currently gets 401 `invalid_token`.
+Only this package's three error classes become client-facing failures when they escape your handler. A failed token exchange, an exchange or connection result that has already expired, or a `ForeignCallerError` is an internal error: the client gets a generic 500 and `onError` receives the real error. That includes an exchange that exceeds `requestTimeoutMs`. A discovery or JWKS fetch that exceeds it is different: core reports it as a failed token verification, so that request currently gets 401 `invalid_token`.
 
 With the official MCP SDK's `McpServer` (`createMcpSdkHandler` and `createNodeMcpHandler`), the SDK turns an error thrown inside a tool callback into a tool result with `isError: true` and the error's own message, unchanged, so the error does not reach the handler and the HTTP status stays 200. The message is generic for the errors this package throws and for errors from the request-scoped client. That includes `DownscopedTokenError` from a downscoped exchange. An error thrown by your own tool code reaches the caller with whatever message you gave it. Catch errors in the tool when you want control over the message.
 
@@ -69,7 +69,11 @@ A request-scoped client method sanitizes the errors it throws: it replaces the m
 - `organizationId` is set while `organizationPolicy` is not `'required'`,
 - `createEncryptedTokenStore` receives a `secret` shorter than 32 characters,
 - `MemoryIndexedTokenStore` receives a `maxEntries` that is not a positive integer,
-- `createMcpHandler` receives an invalid `metadata.path` or `realm`.
+- `createMcpHandler` receives an invalid `metadata.path` or `realm`,
+- a handler receives `client` together with inline client options such as `domain` or `clientId`; the message names the options and never their values,
+- an explicit `resource` differs from the client audience; the comparison is exact after lower-casing the scheme and host, a trailing slash counts, and a non-URL audience can therefore not be served,
+- `resolveMcpClientOptions`, or a handler that reads the environment, finds no `domain` or no `audience`; the message names the option and its variable (`AUTH0_DOMAIN`, `AUTH0_AUDIENCE`),
+- `requireScopes` or `withRequiredScopes` receives a requirement that names no scope (empty or whitespace-only string, empty list, blank or non-string entry).
 
 Handling an error in a tool:
 

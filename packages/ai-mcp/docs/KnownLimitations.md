@@ -41,6 +41,8 @@ If you need sessions or streaming, use `createMcpHandler` and manage the transpo
 
 - `MemoryIndexedTokenStore` lives in one process. Workers do not share it, and it is empty after a restart.
 - Client credentials tokens and Token Vault tokens are not cached by this package.
+- The core client stores an On Behalf Of result before this package checks its expiry. If the authorization server returns an already expired token, the call fails, and the expired entry can stay in the token store. The cache treats expired entries as misses, so it is never served.
+- The handler cannot serve an Auth0 API whose identifier is not the public URL of the server. See [resource and audience](./Handler.md#resource-and-audience).
 - The exchange request to Auth0 carries no DPoP proof. See [DPoP](./TokenVerification.md#dpop).
 - The handler routes nothing but the metadata document. Mount it only on the path that serves MCP.
 - The metadata route sends no CORS headers. Add them in your framework if browser-based clients read the document.

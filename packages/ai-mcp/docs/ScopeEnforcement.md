@@ -67,7 +67,7 @@ Calling `getOrderSummary('42')` for a caller without `read:payments` resolves to
 
 The text is generic and never names the scopes the server expects or the caller holds. Every other error, including errors thrown by your callback, propagates unchanged.
 
-`required` accepts one scope, a space-delimited string of scopes, or an array. An empty requirement always passes.
+`required` accepts one scope, a space-delimited string of scopes, or an array. A requirement that names no scope is a mistake, so `withRequiredScopes` throws `InvalidConfigurationError` for an empty string, a whitespace-only string, an empty array, or an array with a blank or non-string entry. It throws when you wrap the callback, not on each call, and it keeps its own copy of the list, so changing the array afterwards has no effect.
 
 ## Imperative checks
 
@@ -91,6 +91,7 @@ export function canWriteOrders(): boolean {
 
 It throws:
 
+- `InvalidConfigurationError` when the requirement names no scope, with the same rules as `withRequiredScopes`.
 - `UnauthenticatedError` when you pass no principal and no request context is active. Passing `undefined` explicitly means "use the current caller".
 - `InsufficientScopeError` when any scope is missing. The error's `requiredScopes` property holds the normalized list for server-side use. Do not echo it to clients.
 

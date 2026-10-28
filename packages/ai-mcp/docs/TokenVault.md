@@ -1,6 +1,6 @@
 # Token Vault
 
-`getTokenForService` exchanges the caller's Auth0 token for an access token issued by a federated provider such as Google or Slack, through Auth0 Token Vault. A tool can then call the third-party API as the user, and the user's original token never leaves the server.
+`getTokenForConnection` exchanges the caller's Auth0 token for an access token issued by a federated provider such as Google or Slack, through Auth0 Token Vault. A tool can then call the third-party API as the user, and the user's original token never leaves the server.
 
 ## Using it in a tool
 
@@ -9,7 +9,7 @@ import { getCallerMcpClientOrThrow } from '@auth0/ai-mcp';
 
 export async function listCalendarEvents(): Promise<unknown> {
   const mcpClient = getCallerMcpClientOrThrow();
-  const token = await mcpClient.getTokenForService({ connection: 'google-oauth2' });
+  const token = await mcpClient.getTokenForConnection({ connection: 'google-oauth2' });
 
   const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
     headers: { authorization: `Bearer ${token.accessToken}` },
@@ -18,14 +18,14 @@ export async function listCalendarEvents(): Promise<unknown> {
 }
 ```
 
-`getTokenForService` takes:
+`getTokenForConnection` takes:
 
 | Option | Description |
 | --- | --- |
 | `connection` | Name of the connection that holds the caller's linked account. |
 | `loginHint` | Optional hint that selects among several linked accounts. |
 
-It resolves to the core client's connection token set:
+It resolves to a `ConnectionTokenResult`, the core client's connection token set:
 
 | Field | Description |
 | --- | --- |
@@ -36,6 +36,8 @@ It resolves to the core client's connection token set:
 | `loginHint` | The hint passed with the request, if any. |
 
 Pass `loginHint` when the user has more than one linked account for the connection.
+
+The method rejects a result whose `expiresAt` is already in the past (or not a finite number), so a tool never receives a token that has expired. The rejection is the generic `The token operation failed.` error described in [Errors](./Errors.md), and the handler answers it with a 500 when it escapes a custom handler.
 
 ## Requirements
 

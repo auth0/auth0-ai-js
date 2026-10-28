@@ -4,15 +4,21 @@ import {
 } from "@auth0/auth0-api-js";
 import type { ApiClient } from "@auth0/auth0-api-js";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   DownscopedTokenError,
   InsufficientScopeError,
   MemoryIndexedTokenStore,
   UnauthenticatedError,
+  authenticateRequest,
+  buildPrincipal,
   createEncryptedTokenStore,
   createMcpClient,
   createMcpHandler,
   getCallerPrincipal,
+  mcpClientOptionsFromEnv,
   requireScopes,
   runWithRequestContext,
   withRequiredScopes,
@@ -50,7 +56,7 @@ function scopedClient(principal: Principal): RequestScopedMcpClient {
     getPrincipal: () => principal,
     getTokenOnBehalfOf: unused,
     getClientCredentialsToken: unused,
-    getTokenForService: unused,
+    getTokenForConnection: unused,
   };
 }
 
@@ -254,7 +260,28 @@ describe("scope enforcement (ScopeEnforcement.md)", () => {
     const principal = principalWith(["a", "b"]);
     expect(() => requireScopes("a b", principal)).not.toThrow();
     expect(() => requireScopes("a c", principal)).toThrow(InsufficientScopeError);
-    expect(() => requireScopes([], principal)).not.toThrow();
+    expect(() => requireScopes([], principal)).toThrow(InvalidConfigurationError);
+  });
+
+  it("rejects a requirement that names no scope, once, when the wrapper is created (ScopeEnforcement.md)", () => {
+    const noop = async () => "ran";
+    for (const blank of ["", "   ", [], ["a", " "], [1 as unknown as string]]) {
+      expect(() => withRequiredScopes(blank, noop), JSON.stringify(blank)).toThrow(
+        InvalidConfigurationError,
+      );
+      expect(() => requireScopes(blank, principalWith(["a"])), JSON.stringify(blank)).toThrow(
+        InvalidConfigurationError,
+      );
+    }
+  });
+
+  it("keeps its own copy of the required list (ScopeEnforcement.md)", async () => {
+    const required = ["a"];
+    const tool = withRequiredScopes(required, async () => "ran");
+    required.push("b");
+    const principal = principalWith(["a"]);
+    const context: RequestContext = { principal, mcpClient: scopedClient(principal) };
+    expect(await runWithRequestContext(context, () => tool())).toBe("ran");
   });
 
   it("keeps the required scopes out of the message", () => {
@@ -434,5 +461,284 @@ describe("narrowed grants (OnBehalfOf.md)", () => {
     });
     const caller = await client.verifyAccessToken({ accessToken: "t", scheme: "bearer" });
     expect(() => client.withToken(caller)).toThrow(UnauthenticatedError);
+  });
+});
+
+const packageDir = fileURLToPath(new URL("../..", import.meta.url));
+function doc(...parts: string[]): string {
+  return readFileSync(path.join(packageDir, ...parts), "utf8");
+}
+
+describe("configuration tiers and the environment (README.md, Handler.md, Errors.md)", () => {
+  const base = { domain: "your-tenant.us.auth0.com", audience: RESOURCE };
+
+  it("documents exactly the environment variables the helper reads", () => {
+    const read = new Set<string>();
+    const spy = new Proxy({} as Record<string, string | undefined>, {
+      get(_target, key) {
+        read.add(String(key));
+        return undefined;
+      },
+    });
+    mcpClientOptionsFromEnv(spy);
+    expect([...read].sort()).toEqual([
+      "AUTH0_AUDIENCE",
+      "AUTH0_CLIENT_ID",
+      "AUTH0_CLIENT_SECRET",
+      "AUTH0_DOMAIN",
+    ]);
+
+    for (const file of [["README.md"], ["docs", "Handler.md"], ["docs", "Errors.md"]]) {
+      const text = doc(...file);
+      for (const name of read) {
+        if (file[0] === "README.md") expect(text, `${file.join("/")} names ${name}`).toContain(name);
+      }
+      const mentioned = new Set(text.match(/AUTH0_[A-Z_]+/g) ?? []);
+      for (const name of mentioned) {
+        expect(read.has(name), `${file.join("/")} mentions ${name}`).toBe(true);
+      }
+    }
+  });
+
+  it("maps each documented variable to the documented option", () => {
+    expect(
+      mcpClientOptionsFromEnv({
+        AUTH0_DOMAIN: "d",
+        AUTH0_AUDIENCE: "a",
+        AUTH0_CLIENT_ID: "i",
+        AUTH0_CLIENT_SECRET: "s",
+      }),
+    ).toEqual({ domain: "d", audience: "a", clientId: "i", clientSecret: "s" });
+    expect(mcpClientOptionsFromEnv({ AUTH0_DOMAIN: "  " })).toEqual({});
+  });
+
+  it("starts the README with a quickstart that uses the one-call form", () => {
+    const readme = doc("README.md");
+    const quickstart = readme.split("## Quickstart")[1]?.split("\n## ")[0] ?? "";
+    expect(readme.indexOf("## Quickstart")).toBeLessThan(readme.indexOf("## How it works"));
+    const blocks = [...quickstart.matchAll(/^```ts\n([\s\S]*?)^```$/gm)].map((m) => m[1] ?? "");
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toContain("createNodeMcpHandler({\n  createServer:");
+    expect(blocks[0]).not.toContain("createMcpClient");
+    expect(blocks[1]).toContain("domain:");
+    expect(blocks[1]).toContain("audience:");
+    expect(blocks[1]).not.toContain("client:");
+  });
+
+  it("serves both metadata routes and names the suffixed one in the challenge (Handler.md)", async () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith([]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: RESOURCE,
+    };
+    const handle = createMcpHandler({ client, handler: async () => new Response("ok") });
+    const suffixed = await handle(new Request("https://mcp.example.com/.well-known/oauth-protected-resource/mcp"));
+    const root = await handle(new Request("https://mcp.example.com/.well-known/oauth-protected-resource"));
+    expect(suffixed.status).toBe(200);
+    expect(await root.json()).toEqual(await suffixed.json());
+    const other = await handle(
+      new Request("https://mcp.example.com/.well-known/oauth-protected-resource", { method: "POST" }),
+    );
+    expect(other.status).toBe(405);
+    expect(other.headers.get("allow")).toBe("GET");
+    const challenge = (await handle(post())).headers.get("www-authenticate") ?? "";
+    expect(challenge).toContain(
+      'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"',
+    );
+  });
+
+  it("requires a resource that equals the audience, with the documented trailing slash message (Handler.md)", () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith([]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: RESOURCE,
+    };
+    const create = (resource: string) =>
+      createMcpHandler({ client, resource, handler: async () => new Response("ok") });
+    expect(() => create("https://other.example.com/mcp")).toThrow(InvalidConfigurationError);
+    expect(() => create("https://MCP.example.com/mcp")).not.toThrow();
+    expect(() => create(RESOURCE)).not.toThrow();
+
+    let message = "";
+    try {
+      create(`${RESOURCE}/`);
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    const sentence = "The two differ only by a trailing slash, which counts as a difference.";
+    expect(message).toContain(sentence);
+    expect(message).not.toContain("example.com");
+    expect(doc("docs", "Handler.md")).toContain(sentence);
+  });
+
+  it("cannot serve a non-URL audience, even with an explicit URL resource (Handler.md)", () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith([]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: "urn:acme:mcp",
+    };
+    expect(() =>
+      createMcpHandler({ client, resource: RESOURCE, handler: async () => new Response("ok") }),
+    ).toThrow(InvalidConfigurationError);
+  });
+
+  it("rejects client combined with inline options without echoing values (README.md)", () => {
+    const client = createMcpClient(base);
+    let message = "";
+    try {
+      createMcpHandler({
+        client,
+        clientId: "secret-id",
+        handler: async () => new Response("ok"),
+      } as never);
+    } catch (error) {
+      expect(error).toBeInstanceOf(InvalidConfigurationError);
+      message = (error as Error).message;
+    }
+    expect(message).toContain('"client" cannot be combined with "clientId"');
+    expect(message).not.toContain("secret-id");
+  });
+
+  it("builds the handler client from the environment and names the missing variable (README.md)", () => {
+    const saved = { domain: process.env.AUTH0_DOMAIN, audience: process.env.AUTH0_AUDIENCE };
+    delete process.env.AUTH0_DOMAIN;
+    delete process.env.AUTH0_AUDIENCE;
+    try {
+      expect(() => createMcpHandler({ handler: async () => new Response("ok") })).toThrow(
+        /Missing MCP client option "domain".*AUTH0_DOMAIN/,
+      );
+      process.env.AUTH0_DOMAIN = "your-tenant.us.auth0.com";
+      process.env.AUTH0_AUDIENCE = RESOURCE;
+      expect(() => createMcpHandler({ handler: async () => new Response("ok") })).not.toThrow();
+    } finally {
+      for (const [key, value] of Object.entries({ AUTH0_DOMAIN: saved.domain, AUTH0_AUDIENCE: saved.audience })) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+});
+
+describe("authenticateRequest (Handler.md, Writing your own adapter)", () => {
+  it("returns a ready response for a bad request and runs work in the request context for a good one", async () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith(["mcp:access"]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: RESOURCE,
+    };
+    const rejected = await authenticateRequest(post(), { client });
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) expect(rejected.response.status).toBe(401);
+
+    const accepted = await authenticateRequest(post({ authorization: "Bearer abc.def.ghi" }), {
+      client,
+      requiredScopes: ["mcp:access"],
+    });
+    expect(accepted.ok).toBe(true);
+    if (accepted.ok) {
+      expect(accepted.scheme).toBe("Bearer");
+      expect(await accepted.run(async () => getCallerPrincipal()?.sub)).toBe("auth0|user-1");
+      expect(accepted.authInfo.token).toBe("");
+    }
+  });
+
+  it("rejects with InvalidConfigurationError for a resource that differs from the audience", async () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith([]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: RESOURCE,
+    };
+    await expect(
+      authenticateRequest(post(), { client, resource: "https://other.example.com/mcp" }),
+    ).rejects.toBeInstanceOf(InvalidConfigurationError);
+  });
+});
+
+describe("principal claims (TokenVerification.md)", () => {
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+
+  it("prefers azp over client_id and accepts a token with neither", () => {
+    expect(buildPrincipal({ sub: "u", exp, azp: "a", client_id: "c" }).clientId).toBe("a");
+    expect(buildPrincipal({ sub: "u", exp, client_id: "c" }).clientId).toBe("c");
+    expect(buildPrincipal({ sub: "u", exp }).clientId).toBeNull();
+  });
+
+  it("rejects malformed permissions and org_id claims without echoing them", () => {
+    expect(() => buildPrincipal({ sub: "u", exp, permissions: "read" })).toThrow(UnauthenticatedError);
+    expect(() => buildPrincipal({ sub: "u", exp, permissions: null })).toThrow(UnauthenticatedError);
+    expect(() => buildPrincipal({ sub: "u", exp, org_id: 7 })).toThrow(UnauthenticatedError);
+    expect(buildPrincipal({ sub: "u", exp, permissions: [] }).permissions).toEqual([]);
+    expect(buildPrincipal({ sub: "u", exp, org_id: "" }).orgId).toBeNull();
+    expect(() => buildPrincipal({ sub: "u", exp, org_id: 987654 })).toThrow(/invalid organization/);
+    try {
+      buildPrincipal({ sub: "u", exp, org_id: 987654 });
+    } catch (error) {
+      expect((error as Error).message).not.toContain("987654");
+    }
+  });
+});
+
+describe("expired token results (OnBehalfOf.md, TokenVault.md)", () => {
+  const nowSeconds = () => Math.floor(Date.now() / 1000);
+  const claims = {
+    iss: "https://your-tenant.us.auth0.com/",
+    sub: "auth0|user-1",
+    aud: RESOURCE,
+    exp: nowSeconds() + 3600,
+    iat: nowSeconds(),
+    scope: "mcp:access",
+    client_id: "client-1",
+  };
+
+  async function scopedWithExpiry(expiresAt: number) {
+    const result = { accessToken: "secret-token-value", expiresAt, scope: "read:reports" };
+    const apiClient = {
+      verifyAccessToken: async () => claims,
+      getTokenOnBehalfOf: async () => ({ ...result, grantedScopes: ["read:reports"] }),
+      getClientCredentialsToken: async () => result,
+      getAccessTokenForConnection: async () => ({ ...result, connection: "google-oauth2" }),
+    } as unknown as ApiClient;
+    const client = createMcpClient({ domain: "your-tenant.us.auth0.com", audience: RESOURCE, apiClient });
+    return client.withToken(await client.verifyAccessToken({ accessToken: "t", scheme: "bearer" }));
+  }
+
+  it("rejects an expired or non-finite expiry with the generic error and no token data", async () => {
+    for (const expiresAt of [nowSeconds() - 5, nowSeconds(), Number.NaN]) {
+      const scoped = await scopedWithExpiry(expiresAt);
+      const calls = [
+        () => scoped.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "read:reports" }),
+        () => scoped.getClientCredentialsToken({ audience: "https://api.example.com", scope: "read:reports" }),
+        () => scoped.getTokenForConnection({ connection: "google-oauth2" }),
+      ];
+      for (const call of calls) {
+        const error = await call().then(
+          () => undefined,
+          (e: unknown) => e as Error,
+        );
+        expect(error?.message).toBe("The token operation failed.");
+        expect(JSON.stringify(error)).not.toContain("secret-token-value");
+        expect(String((error as { cause?: unknown }).cause)).not.toContain("secret-token-value");
+      }
+    }
+  });
+
+  it("returns a result that has not expired", async () => {
+    const scoped = await scopedWithExpiry(nowSeconds() + 600);
+    const token = await scoped.getTokenForConnection({ connection: "google-oauth2" });
+    expect(token.accessToken).toBe("secret-token-value");
+  });
+});
+
+describe("renamed connection method (README.md, docs)", () => {
+  it("no document uses the old name", () => {
+    for (const file of [
+      ["README.md"],
+      ["EXAMPLES.md"],
+      ["docs", "TokenVault.md"],
+      ["docs", "RequestContext.md"],
+    ]) {
+      expect(doc(...file), file.join("/")).not.toMatch(/getTokenForService|ServiceTokenResult|TokenForServiceOptions/);
+    }
+    expect(doc("docs", "TokenVault.md")).toContain("getTokenForConnection");
   });
 });

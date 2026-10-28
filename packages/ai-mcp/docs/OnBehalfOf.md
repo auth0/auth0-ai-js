@@ -50,6 +50,8 @@ Use `grantedScopes`, not `scope`, to decide what a token covers. The token respo
 
 The same rule applies to client credentials grants.
 
+The request-scoped client also rejects a result whose `expiresAt` is at or before the current time, or is not a finite number. This applies to `getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection`. The rejection is the generic `The token operation failed.` error, and no token data is attached to it, so a tool never receives a token that is already dead. A cached on behalf of entry that has expired is a miss, so the next call performs a new exchange.
+
 ## Narrowed grants
 
 Auth0 can grant fewer scopes than you asked for. When you request scopes and the grant does not include all of them, `getTokenOnBehalfOf` throws `DownscopedTokenError`, so a tool never runs with less authority than it asked for. The error carries no scope data. On `createMcpSdkHandler` and `createNodeMcpHandler`, the MCP SDK turns the error into a tool result with `isError: true` that carries the error's message, which is generic for this error, and the response stays HTTP 200. A 403 `insufficient_scope` is sent only when the error escapes a custom `createMcpHandler` handler.
