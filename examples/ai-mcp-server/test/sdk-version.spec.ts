@@ -3,12 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
-const MIN = [1, 31, 0] as const;
-const SDK = "@modelcontextprotocol/sdk";
+const MIN = [2, 3, 0] as const;
+const SDK = "@modelcontextprotocol/server";
 
 function resolvedSdkVersion(): { version: string; dir: string } {
-  // Resolve the same entry the example imports, then walk up to the package root.
-  let dir = dirname(createRequire(import.meta.url).resolve(`${SDK}/server/mcp.js`));
+  // The package has no ./package.json export, so resolve the entry the example imports and walk up to the package root.
+  let dir = dirname(createRequire(import.meta.url).resolve(SDK));
   while (dir !== dirname(dir)) {
     const manifest = join(dir, "package.json");
     if (existsSync(manifest)) {
@@ -24,7 +24,7 @@ function resolvedSdkVersion(): { version: string; dir: string } {
 }
 
 // Semver precedence: build metadata is ignored, and any prerelease sorts below
-// its release, so 1.31.0-beta.1 does not satisfy >= 1.31.0.
+// its release, so 2.3.0-beta.1 does not satisfy >= 2.3.0.
 function meetsMinimum(version: string): boolean {
   const core = version.split("+")[0];
   const dash = core.indexOf("-");
