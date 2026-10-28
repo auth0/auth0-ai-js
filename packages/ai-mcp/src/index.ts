@@ -9,9 +9,9 @@ export type {
   OrganizationPolicy,
   OnBehalfOfOptions,
   ClientCredentialsOptions,
-  TokenForServiceOptions,
+  TokenForConnectionOptions,
   ClientCredentialsTokenResult,
-  ServiceTokenResult,
+  ConnectionTokenResult,
 } from './types.js';
 export { buildPrincipal } from './principal.js';
 export { createMcpClient, ForeignCallerError } from './client.js';

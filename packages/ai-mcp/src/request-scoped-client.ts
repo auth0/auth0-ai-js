@@ -9,7 +9,7 @@ import type {
   OnBehalfOfOptions,
   Principal,
   RequestScopedMcpClient,
-  TokenForServiceOptions,
+  TokenForConnectionOptions,
 } from './types.js';
 
 /** Everything a request-scoped client needs from its parent client. */
@@ -263,7 +263,7 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
       return { ...result, grantedScopes };
     },
 
-    getTokenForService: (options: TokenForServiceOptions) =>
+    getTokenForConnection: (options: TokenForConnectionOptions) =>
       guarded(() =>
         apiClient.getAccessTokenForConnection({
           connection: options.connection,

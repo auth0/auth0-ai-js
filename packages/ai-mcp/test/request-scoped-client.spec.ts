@@ -360,8 +360,8 @@ describe('request-scoped client: other operations', () => {
     const token = await subjectToken();
     const scoped = client.withToken(await client.verifyAccessToken({ accessToken: token }));
 
-    const first = await scoped.getTokenForService({ connection: 'github', loginHint: 'octo' });
-    await scoped.getTokenForService({ connection: 'github' });
+    const first = await scoped.getTokenForConnection({ connection: 'github', loginHint: 'octo' });
+    await scoped.getTokenForConnection({ connection: 'github' });
 
     expect(first.accessToken).toBe('connection-token');
     expect(seen).toHaveLength(2);

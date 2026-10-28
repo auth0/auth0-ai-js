@@ -65,8 +65,8 @@ export interface ClientCredentialsOptions {
   scope?: string;
 }
 
-/** Options for obtaining a token for a third-party service through a connection. */
-export interface TokenForServiceOptions {
+/** Options for obtaining a token for a third-party service through a connection (Token Vault). */
+export interface TokenForConnectionOptions {
   /** Name of the connection that holds the caller's linked account. */
   connection: string;
   /** Optional hint that selects among several linked accounts. */
@@ -87,7 +87,7 @@ export interface ClientCredentialsTokenResult extends TokenSet {
 }
 
 /** Result of a connection token request. Tracks the core client's return type. */
-export type ServiceTokenResult = Awaited<ReturnType<ApiClient['getAccessTokenForConnection']>>;
+export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessTokenForConnection']>>;
 
 /**
  * A client bound to a single verified request. Tool code receives this instead of
@@ -105,8 +105,8 @@ export interface RequestScopedMcpClient {
   getTokenOnBehalfOf(options: OnBehalfOfOptions): Promise<OnBehalfOfTokenResult>;
   /** Obtains a token for this server using its own client credentials. */
   getClientCredentialsToken(options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult>;
-  /** Obtains a token for a third-party service linked to the caller. */
-  getTokenForService(options: TokenForServiceOptions): Promise<ServiceTokenResult>;
+  /** Obtains a token for a third-party service linked to the caller through a connection. */
+  getTokenForConnection(options: TokenForConnectionOptions): Promise<ConnectionTokenResult>;
   /** Returns the identity of the caller this client is bound to. */
   getPrincipal(): Principal;
 }

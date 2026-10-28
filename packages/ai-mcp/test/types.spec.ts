@@ -9,7 +9,7 @@ import type {
   RequestContext,
   RequestScopedMcpClient,
   ScopeMatching,
-  ServiceTokenResult,
+  ConnectionTokenResult,
 } from '../src/types.js';
 
 const principal: Principal = {
@@ -75,9 +75,9 @@ describe('RequestScopedMcpClient', () => {
     >();
     expectTypeOf<RequestScopedMcpClient['getPrincipal']>().toEqualTypeOf<() => Principal>();
     expectTypeOf<RequestScopedMcpClient['getClientCredentialsToken']>().returns.resolves.toEqualTypeOf<ClientCredentialsTokenResult>();
-    expectTypeOf<RequestScopedMcpClient['getTokenForService']>().returns.resolves.toEqualTypeOf<ServiceTokenResult>();
+    expectTypeOf<RequestScopedMcpClient['getTokenForConnection']>().returns.resolves.toEqualTypeOf<ConnectionTokenResult>();
     expectTypeOf<keyof RequestScopedMcpClient>().toEqualTypeOf<
-      'getTokenOnBehalfOf' | 'getClientCredentialsToken' | 'getTokenForService' | 'getPrincipal'
+      'getTokenOnBehalfOf' | 'getClientCredentialsToken' | 'getTokenForConnection' | 'getPrincipal'
     >();
   });
 
@@ -86,7 +86,7 @@ describe('RequestScopedMcpClient', () => {
       // @ts-expect-error audience is required
       void client.getTokenOnBehalfOf({ scope: 'a' });
       // @ts-expect-error connection is required
-      void client.getTokenForService({ loginHint: 'x' });
+      void client.getTokenForConnection({ loginHint: 'x' });
     };
     void call;
   });
@@ -99,7 +99,7 @@ describe('result types', () => {
   });
 
   it('tracks the core connection token return type', () => {
-    expectTypeOf<ServiceTokenResult>().toEqualTypeOf<
+    expectTypeOf<ConnectionTokenResult>().toEqualTypeOf<
       Awaited<ReturnType<ApiClient['getAccessTokenForConnection']>>
     >();
   });
