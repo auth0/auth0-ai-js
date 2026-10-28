@@ -91,8 +91,6 @@ function buildServer(): McpServer {
 
 const handler = createNodeMcpHandler({
   client,
-  resource: RESOURCE,
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   requiredScopes: ['mcp:access'],
   metadata: {
     scopesSupported: ['mcp:access', 'tool:list_reports'],
@@ -155,8 +153,6 @@ const client = createMcpClient({
 
 export const handle = createMcpHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   handler: async () => Response.json({ organization: getCallerPrincipal()?.orgId }),
 });
 ```
@@ -176,8 +172,6 @@ const client = createMcpClient({
 
 export const handle = createMcpHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   handler: async () => Response.json({ ok: true }),
 });
 ```

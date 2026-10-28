@@ -162,6 +162,35 @@ describe("handler responses (Handler.md, ScopeEnforcement.md, Errors.md)", () =>
     });
   });
 
+  it("defaults resource and authorizationServers from the client (Handler.md)", async () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith([]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: RESOURCE,
+    };
+    const response = await createMcpHandler({
+      client,
+      handler: async () => Response.json({ ok: true }),
+    })(
+      new Request("https://mcp.example.com/.well-known/oauth-protected-resource/mcp"),
+    );
+    expect(await response.json()).toMatchObject({
+      resource: RESOURCE,
+      authorization_servers: ["https://your-tenant.us.auth0.com/"],
+    });
+  });
+
+  it("asks for an explicit resource when the audience is not a url (Handler.md)", () => {
+    const client: McpClient = {
+      ...stubClient(async () => ({ principal: principalWith([]) })),
+      domain: "your-tenant.us.auth0.com",
+      audience: "urn:acme:mcp",
+    };
+    expect(() =>
+      createMcpHandler({ client, handler: async () => new Response("ok") }),
+    ).toThrow(/"resource" is required/);
+  });
+
   it("maps this package's errors to statuses and turns other errors into a generic 500", async () => {
     const authenticated = stubClient(async () => ({
       principal: principalWith(["mcp:access"]),

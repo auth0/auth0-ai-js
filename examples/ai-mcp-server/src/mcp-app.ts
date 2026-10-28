@@ -283,10 +283,10 @@ export function createMcpApp(
     tokenStore: new MemoryIndexedTokenStore(),
   });
 
+  // `resource` and `authorizationServers` default to the client's audience
+  // (the public MCP URL) and to https://<domain>/, so they are not repeated here.
   return createNodeMcpHandler({
     client,
-    resource: config.serverUrl,
-    authorizationServers: [`https://${config.domain}/`],
     requiredScopes: config.requiredScopes,
     metadata: { resourceName: "Store example" },
     onError: (error) =>

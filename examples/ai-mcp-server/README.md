@@ -4,7 +4,7 @@ A small MCP server built with `@auth0/ai-mcp` and the MCP TypeScript SDK. It pla
 
 ## What it shows
 
-- `src/mcp-app.ts` wires `createNodeMcpHandler` to an `McpServer` over Streamable HTTP. Requests without a valid token are answered with a `WWW-Authenticate` challenge before any tool runs. The server also publishes its protected resource metadata (RFC 9728).
+- `src/mcp-app.ts` wires `createNodeMcpHandler` to an `McpServer` over Streamable HTTP. The handler takes its resource URL from the client audience and its authorization server from the tenant domain, so each is configured once. Requests without a valid token are answered with a `WWW-Authenticate` challenge before any tool runs. The server also publishes its protected resource metadata (RFC 9728).
 - Every tool is wrapped in `withRequiredScopes`. A caller without the tool's scope gets an error result for that tool only (HTTP 200); the other tools stay available.
 - `order_status_report` (scope `tool:order_status_report`, optional `order_id`) exchanges the caller's token twice, once for Orders (`read:orders`) and once for Inventory (`read:inventory`), and lists the orders with stock levels.
 - `fulfill_order` (scope `tool:fulfill_order`, required `order_id`) asks Orders for the same `read:orders` token, so a call right after a status report reuses the saved token, and asks Inventory for `read:inventory write:inventory` to reserve stock. Fulfilling the same order twice changes stock only once.
