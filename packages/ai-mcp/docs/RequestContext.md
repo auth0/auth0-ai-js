@@ -39,12 +39,12 @@ The context is visible to everything the handler starts, including code after `a
 | --- | --- |
 | `getTokenOnBehalfOf({ audience, scope? })` | Exchanges the caller's token for a downstream token. See [On Behalf Of](./OnBehalfOf.md). |
 | `getClientCredentialsToken({ audience, scope? })` | Gets a token for the server itself. See [client credentials](./OnBehalfOf.md#client-credentials). |
-| `getTokenForService({ connection, loginHint? })` | Gets a federated provider token. See [Token Vault](./TokenVault.md). |
+| `getTokenForConnection({ connection, loginHint? })` | Gets a federated provider token. See [Token Vault](./TokenVault.md). |
 | `getPrincipal()` | Returns the caller's `Principal`. |
 
 The verified access token is held privately by the implementation. The object is frozen, has no property that holds the token, and exposes no way to read the token, so tool code cannot forward or log it by accident.
 
-Errors that leave the request-scoped client carry a fixed generic message. They keep the original class, `code` and `statusCode` so `instanceof` checks and status mapping still work (a core `VerifyAccessTokenError` raised during an exchange becomes `UnauthenticatedError`, because the caller's token expired), and the original error is available as `cause` for server-side diagnostics. Do not serialize `cause` into a response.
+Each token method rejects a result that is already expired, with the same generic error. Errors that leave the request-scoped client carry a fixed generic message. They keep the original class, `code` and `statusCode` so `instanceof` checks and status mapping still work (a core `VerifyAccessTokenError` raised during an exchange becomes `UnauthenticatedError`, because the caller's token expired), and the original error is available as `cause` for server-side diagnostics. Do not serialize `cause` into a response.
 
 ## Setting the context yourself
 

@@ -17,11 +17,11 @@ A `Principal` describes the caller. It holds no credential and is safe to log. T
 | `sub` | `string` | The `sub` claim. Never blank. |
 | `expiresAt` | `number` | The `exp` claim, in epoch seconds. |
 | `scopes` | `readonly string[]` | The space-delimited `scope` claim. Empty when the claim is absent. |
-| `permissions` | `readonly string[] \| null` | The `permissions` claim (RBAC). `null` when the claim is absent, which means permissions are unknown. An empty array means the caller has none. |
-| `clientId` | `string \| null` | The `client_id` claim, falling back to `azp`. `null` when neither is present. |
-| `orgId` | `string \| null` | The `org_id` claim. `null` outside an organization context. |
+| `permissions` | `readonly string[] \| null` | The `permissions` claim (RBAC). `null` when the claim is absent, which means permissions are unknown. An empty array means the caller has none. A present claim must be an array of strings. |
+| `clientId` | `string \| null` | The `azp` claim, falling back to `client_id`. `null` when neither is present, and a token without either is still accepted. |
+| `orgId` | `string \| null` | The `org_id` claim. `null` outside an organization context. A present claim must be a string. |
 
-`buildPrincipal(claims)` builds a `Principal` from claims you have already verified. It does not verify anything and throws `UnauthenticatedError` when `sub` is blank or `exp` is missing. It reads every claim as an own property, so it ignores values inherited through the prototype chain.
+`buildPrincipal(claims)` builds a `Principal` from claims you have already verified. It does not verify anything. It throws `UnauthenticatedError` when `sub` is blank, when `exp` is missing or not a finite number, when a present `permissions` claim is not an array of strings (`null` included, only an absent claim means unknown), and when a present `org_id` claim is not a string. The messages never contain claim values. An empty `org_id` string maps to `null`. It reads every claim as an own property, so it ignores values inherited through the prototype chain.
 
 Scope checks use the `scopes` field only. The `permissions` claim is there for your own logic. Neither `requireScopes` nor the handler consults it.
 
