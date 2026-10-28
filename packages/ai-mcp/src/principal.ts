@@ -21,22 +21,25 @@ function nonEmptyString(value: unknown): string | null {
  *
  * - `sub` must be a non-blank string.
  * - `expiresAt` comes from `exp`, which must be a finite number of epoch seconds.
- * - `clientId` is the `client_id` claim when it is a non-empty string, otherwise
- *   the `azp` claim when that is a non-empty string, otherwise `null`.
- * - `orgId` is the `org_id` claim when it is a non-empty string, otherwise `null`.
+ * - `clientId` is the `azp` claim when it is a non-empty string, otherwise the
+ *   `client_id` claim when that is a non-empty string, otherwise `null`. Auth0 tokens
+ *   carry `azp` and not `client_id`, so a token with neither is still accepted.
+ * - `orgId` is the `org_id` claim when it is a non-empty string, otherwise `null`. A
+ *   present `org_id` that is not a string is rejected.
  * - `scopes` come from the space-delimited `scope` claim only. Empty entries are
  *   dropped, and a missing or non-string claim gives an empty list.
  * - `permissions` come from the `permissions` claim. `null` means the claim is
- *   absent, so permissions are unknown. When the claim is present but is not an
- *   array the result is an empty list (no permissions), and non-string entries
- *   are dropped, so malformed data never widens access.
+ *   absent, so permissions are unknown. A present claim must be an array of
+ *   strings, otherwise the token is rejected.
  *
  * The returned principal and its arrays are frozen.
  *
  * @param claims - Verified access token claims.
  * @returns The resolved principal.
- * @throws {UnauthenticatedError} When `sub` is missing, blank or not a string, or
- * `exp` is missing or not a finite number. The message never contains claim values.
+ * @throws {UnauthenticatedError} When `sub` is missing, blank or not a string,
+ * `exp` is missing or not a finite number, `permissions` is present but not an array
+ * of strings, or `org_id` is present but not a string. The message never contains
+ * claim values.
  * The error carries no `WWW-Authenticate` challenge, so the HTTP layer must add it.
  */
 export function buildPrincipal(claims: VerifiedAccessTokenClaims): Principal {
@@ -56,10 +59,15 @@ export function buildPrincipal(claims: VerifiedAccessTokenClaims): Principal {
   const rawPermissions = ownClaim(claims, 'permissions');
   let permissions: string[] | null = null;
   if (rawPermissions !== undefined) {
-    permissions = Array.isArray(rawPermissions)
-      ? rawPermissions.filter((p): p is string => typeof p === 'string')
-      : [];
-    Object.freeze(permissions);
+    if (!Array.isArray(rawPermissions) || !rawPermissions.every((p): p is string => typeof p === 'string')) {
+      throw new UnauthenticatedError('Access token has invalid permissions.');
+    }
+    permissions = Object.freeze([...rawPermissions]) as string[];
+  }
+
+  const rawOrgId = ownClaim(claims, 'org_id');
+  if (rawOrgId !== undefined && typeof rawOrgId !== 'string') {
+    throw new UnauthenticatedError('Access token has an invalid organization.');
   }
 
   return Object.freeze({
@@ -67,7 +75,7 @@ export function buildPrincipal(claims: VerifiedAccessTokenClaims): Principal {
     expiresAt: exp,
     scopes: Object.freeze(scopes) as string[],
     permissions,
-    clientId: nonEmptyString(ownClaim(claims, 'client_id')) ?? nonEmptyString(ownClaim(claims, 'azp')),
-    orgId: nonEmptyString(ownClaim(claims, 'org_id')),
+    clientId: nonEmptyString(ownClaim(claims, 'azp')) ?? nonEmptyString(ownClaim(claims, 'client_id')),
+    orgId: nonEmptyString(rawOrgId),
   });
 }

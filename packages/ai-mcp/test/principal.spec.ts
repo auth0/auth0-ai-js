@@ -87,13 +87,17 @@ describe('buildPrincipal', () => {
       expect(buildPrincipal(claims({ ...BASE, azp: 'azp1' })).clientId).toBe('azp1');
     });
 
-    it('prefers client_id over azp', () => {
-      expect(buildPrincipal(claims({ ...BASE, client_id: 'cid', azp: 'azp1' })).clientId).toBe('cid');
+    it('prefers azp over client_id when both are present', () => {
+      expect(buildPrincipal(claims({ ...BASE, client_id: 'cid', azp: 'azp1' })).clientId).toBe('azp1');
     });
 
-    it('falls back to azp when client_id is empty or not a string', () => {
-      expect(buildPrincipal(claims({ ...BASE, client_id: '', azp: 'azp1' })).clientId).toBe('azp1');
-      expect(buildPrincipal(claims({ ...BASE, client_id: 7, azp: 'azp1' })).clientId).toBe('azp1');
+    it('falls back to client_id when azp is empty or not a string', () => {
+      expect(buildPrincipal(claims({ ...BASE, client_id: 'cid', azp: '' })).clientId).toBe('cid');
+      expect(buildPrincipal(claims({ ...BASE, client_id: 'cid', azp: 7 })).clientId).toBe('cid');
+    });
+
+    it('accepts a token that carries neither azp nor client_id, with a null clientId', () => {
+      expect(buildPrincipal(claims(BASE)).clientId).toBeNull();
     });
 
     it('is null when neither is a usable string', () => {
@@ -113,11 +117,17 @@ describe('buildPrincipal', () => {
       expect(buildPrincipal(claims({ ...BASE, org_id: 'org_1' })).orgId).toBe('org_1');
     });
 
-    it('is null when absent, empty or not a string', () => {
+    it('is null when absent or empty', () => {
       expect(buildPrincipal(claims(BASE)).orgId).toBeNull();
       expect(buildPrincipal(claims({ ...BASE, org_id: '' })).orgId).toBeNull();
-      expect(buildPrincipal(claims({ ...BASE, org_id: 9 })).orgId).toBeNull();
     });
+
+    it.each([['a number', 9], ['null', null], ['an object', { id: 'org_1' }], ['an array', ['org_1']]])(
+      'rejects an org_id that is %s',
+      (_label, value) => {
+        expect(() => buildPrincipal(claims({ ...BASE, org_id: value }))).toThrow(UnauthenticatedError);
+      }
+    );
 
     it('ignores org_id on the prototype chain', () => {
       const input = Object.create({ org_id: 'org_inherited' });
@@ -165,14 +175,20 @@ describe('buildPrincipal', () => {
       expect(buildPrincipal(claims({ ...BASE, permissions: [] })).permissions).toEqual([]);
     });
 
-    it('fails safe to an empty list when the claim is not an array', () => {
-      expect(buildPrincipal(claims({ ...BASE, permissions: 'read:a' })).permissions).toEqual([]);
-      expect(buildPrincipal(claims({ ...BASE, permissions: null })).permissions).toEqual([]);
+    it.each([['a string', 'read:a'], ['null', null], ['an object', { a: 1 }]])(
+      'rejects a permissions claim that is %s',
+      (_label, value) => {
+        expect(() => buildPrincipal(claims({ ...BASE, permissions: value }))).toThrow(UnauthenticatedError);
+      }
+    );
+
+    it('rejects a permissions array with a non-string entry', () => {
+      expect(() => buildPrincipal(claims({ ...BASE, permissions: ['read:a', 1] }))).toThrow(UnauthenticatedError);
+      expect(() => buildPrincipal(claims({ ...BASE, permissions: ['read:a', null] }))).toThrow(UnauthenticatedError);
     });
 
-    it('drops non-string entries', () => {
-      const p = buildPrincipal(claims({ ...BASE, permissions: ['read:a', 1, null, { x: 1 }, 'b'] }));
-      expect(p.permissions).toEqual(['read:a', 'b']);
+    it('keeps an empty permissions array as no permissions', () => {
+      expect(buildPrincipal(claims({ ...BASE, permissions: [] })).permissions).toEqual([]);
     });
 
     it('ignores permissions on the prototype chain', () => {

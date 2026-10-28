@@ -41,8 +41,8 @@ export interface Principal {
    */
   readonly permissions: readonly string[] | null;
   /**
-   * The OAuth client the token was issued to. Taken from the `client_id` claim,
-   * falling back to `azp`. `null` when neither is present.
+   * The OAuth client the token was issued to. Taken from the `azp` claim (what
+   * Auth0 access tokens carry), falling back to `client_id`. `null` when neither is present.
    */
   readonly clientId: string | null;
   /** The `org_id` claim. `null` when the token was not issued in an organization context. */
