@@ -2,14 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   DownscopedTokenError,
   InsufficientScopeError,
-  MemoryIndexedTokenStore,
-  createMcpClient,
   getCallerMcpClientOrThrow,
   withRequiredScopes,
 } from "@auth0/ai-mcp";
-import { createNodeMcpHandler } from "@auth0/ai-mcp/mcp-sdk";
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod";
+import { createAuthenticatedHandler } from "./auth.js";
 import type { McpServerConfig } from "./config.js";
 import {
   READ_ANALYTICS,
@@ -274,26 +272,5 @@ function buildServer(config: McpServerConfig): McpServer {
 export function createMcpApp(
   config: McpServerConfig,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const client = createMcpClient({
-    domain: config.domain,
-    audience: config.serverUrl,
-    clientId: config.clientId,
-    clientSecret: config.clientSecret,
-    // Reuses exchanged tokens for repeat calls by the same caller.
-    tokenStore: new MemoryIndexedTokenStore(),
-  });
-
-  // `resource` and `authorizationServers` default to the client's audience
-  // (the public MCP URL) and to https://<domain>/, so they are not repeated here.
-  return createNodeMcpHandler({
-    client,
-    requiredScopes: config.requiredScopes,
-    metadata: { resourceName: "Store example" },
-    onError: (error) =>
-      console.error(
-        "request failed",
-        error instanceof Error ? error.name : "unknown",
-      ),
-    createServer: () => buildServer(config),
-  });
+  return createAuthenticatedHandler(config, () => buildServer(config));
 }
