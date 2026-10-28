@@ -4,13 +4,15 @@ import { connect } from "node:net";
 import type { Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { setupServer } from "msw/node";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import * as z from "zod";
 import {
-  InsufficientScopeError as SdkInsufficientScopeError,
-  InvalidTokenError as SdkInvalidTokenError,
-} from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import type { AuthInfo as SdkAuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+  McpServer,
+  OAuthError,
+  OAuthErrorCode,
+  requireBearerAuth as requireBearerAuthGate,
+} from "@modelcontextprotocol/server";
+import type { AuthInfo as SdkAuthInfo } from "@modelcontextprotocol/server";
+import { requireBearerAuth } from "@modelcontextprotocol/express";
 import {
   AuthError,
   InvalidConfigurationError,
@@ -100,8 +102,8 @@ interface Seen {
 
 function buildMcpServer(seen: Seen[]): McpServer {
   const mcp = new McpServer({ name: "test", version: "1.0.0" });
-  mcp.registerTool("whoami", { description: "Reports the caller." }, async (extra) => {
-    const info = (extra as { authInfo?: SdkAuthInfo }).authInfo;
+  mcp.registerTool("whoami", { description: "Reports the caller." }, async (ctx) => {
+    const info = ctx.http?.authInfo;
     seen.push({
       authInfo: info as unknown as Record<string, unknown>,
       contextSub: getCallerPrincipal()?.sub,
@@ -306,6 +308,65 @@ describe("createMcpSdkHandler", () => {
     const body = (await response.json()) as ToolResult;
 
     expect(body.result?.content[0]?.text).toBe("secret");
+  });
+
+  it("passes validated tool arguments and the caller context to a tool with an input schema", async () => {
+    useTenant();
+    const handle = makeHandler([], {
+      createServer: () => {
+        const mcp = new McpServer({ name: "test", version: "1.0.0" });
+        mcp.registerTool(
+          "echo",
+          { description: "Echoes.", inputSchema: z.object({ text: z.string() }) },
+          async ({ text }, ctx) => ({
+            content: [{ type: "text" as const, text: `${text}:${ctx.http?.authInfo?.clientId}` }],
+          }),
+        );
+        return mcp;
+      },
+    });
+    const response = await handle(
+      new Request(ENDPOINT, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${await token()}`,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "echo", arguments: { text: "hi" } },
+        }),
+      }),
+    );
+    const body = (await response.json()) as ToolResult;
+
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(body.result?.content[0]?.text).toBe("hi:client-a");
+  });
+
+  it("answers an unknown tool with a JSON-RPC error, not a tool result", async () => {
+    useTenant();
+    const response = await makeHandler([])(
+      toolCall("nope", { authorization: `Bearer ${await token()}` }),
+    );
+    const body = (await response.json()) as { error?: { code: number }; result?: unknown };
+
+    expect(response.status).toBe(200);
+    expect(body.result).toBeUndefined();
+    expect(body.error?.code).toBe(-32602);
+  });
+
+  it("answers with a JSON body and no session id", async () => {
+    useTenant();
+    const response = await makeHandler([])(
+      toolCall("whoami", { authorization: `Bearer ${await token()}` }),
+    );
+
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.get("mcp-session-id")).toBeNull();
   });
 
   it("closes the server after each request", async () => {
@@ -940,7 +1001,8 @@ describe("asTokenVerifier", () => {
 
     const error = await verifier.verifyAccessToken("t").catch((e: unknown) => e);
 
-    expect(error).toBeInstanceOf(SdkInvalidTokenError);
+    expect(error).toBeInstanceOf(OAuthError);
+    expect((error as OAuthError).code).toBe(OAuthErrorCode.InvalidToken);
     expect((error as Error).message).toBe("Invalid access token.");
   });
 
@@ -954,7 +1016,8 @@ describe("asTokenVerifier", () => {
       .verifyAccessToken("t")
       .catch((e: unknown) => e);
 
-    expect(error).toBeInstanceOf(SdkInsufficientScopeError);
+    expect(error).toBeInstanceOf(OAuthError);
+    expect((error as OAuthError).code).toBe(OAuthErrorCode.InsufficientScope);
     expect((error as Error).message).toBe("Insufficient scope.");
   });
 
@@ -966,7 +1029,8 @@ describe("asTokenVerifier", () => {
       .verifyAccessToken("t")
       .catch((e: unknown) => e);
 
-    expect(error).toBeInstanceOf(SdkInvalidTokenError);
+    expect(error).toBeInstanceOf(OAuthError);
+    expect((error as OAuthError).code).toBe(OAuthErrorCode.InvalidToken);
   });
 
   it("rethrows server-side failures so the middleware answers 500", async () => {
@@ -1008,6 +1072,90 @@ describe("asTokenVerifier", () => {
 
     expect(res.statusCode).toBe(500);
     expect(JSON.stringify(res.body)).not.toContain("jwks");
+  });
+
+  describe("with the web standard requireBearerAuth gate", () => {
+    const gateRequest = (authorization?: string) =>
+      new Request(ENDPOINT, {
+        method: "POST",
+        headers: authorization === undefined ? {} : { authorization },
+      });
+
+    it("lets a valid token through with the v2 AuthInfo shape", async () => {
+      useTenant();
+      const gate = requireBearerAuthGate({ verifier: asTokenVerifier(makeClient()) });
+      const result = await gate(gateRequest(`Bearer ${await token()}`));
+
+      expect(result).not.toBeInstanceOf(Response);
+      expect(result).toMatchObject({
+        token: "",
+        clientId: "client-a",
+        scopes: ["read", "write"],
+        extra: { sub: "user|1" },
+      });
+    });
+
+    // The v2 middleware maps only its own OAuthError to 401 and 403. A verifier that
+    // throws any other error type makes an invalid token a 500, so these tests pin
+    // the error type the adapter throws against the real middleware.
+    it("answers 401 invalid_token for a bad token, not 500", async () => {
+      useTenant();
+      const gate = requireBearerAuthGate({ verifier: asTokenVerifier(makeClient()) });
+      const result = (await gate(gateRequest("Bearer garbage.token.value"))) as Response;
+
+      expect(result).toBeInstanceOf(Response);
+      expect(result.status).toBe(401);
+      expect(result.headers.get("www-authenticate")).toContain('error="invalid_token"');
+      expect(await result.json()).toMatchObject({ error: "invalid_token" });
+    });
+
+    it("answers 403 insufficient_scope for a missing scope, not 500", async () => {
+      useTenant();
+      const gate = requireBearerAuthGate({
+        verifier: asTokenVerifier(makeClient()),
+        requiredScopes: ["admin"],
+      });
+      const result = (await gate(gateRequest(`Bearer ${await token("read")}`))) as Response;
+
+      expect(result.status).toBe(403);
+      expect(result.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
+    });
+
+    it("answers 403 when the core reports insufficient scope", async () => {
+      const client = makeClient();
+      vi.spyOn(client, "verifyAccessToken").mockRejectedValue(
+        new AuthError("detail", "insufficient_scope", 403),
+      );
+      const gate = requireBearerAuthGate({ verifier: asTokenVerifier(client) });
+      const result = (await gate(gateRequest("Bearer abc"))) as Response;
+
+      expect(result.status).toBe(403);
+    });
+
+    it("shows that a verifier throwing a generic error turns an invalid token into 500", async () => {
+      const gate = requireBearerAuthGate({
+        verifier: {
+          verifyAccessToken: async () => {
+            throw new Error("Invalid access token.");
+          },
+        },
+      });
+      const result = (await gate(gateRequest("Bearer abc"))) as Response;
+
+      expect(result.status).toBe(500);
+    });
+
+    it("answers a core 5xx with a generic 500 body", async () => {
+      const client = makeClient();
+      vi.spyOn(client, "verifyAccessToken").mockRejectedValue(
+        new AuthError("jwks host down", "x", 503),
+      );
+      const gate = requireBearerAuthGate({ verifier: asTokenVerifier(client) });
+      const result = (await gate(gateRequest("Bearer abc"))) as Response;
+
+      expect(result.status).toBe(500);
+      expect(await result.text()).not.toContain("jwks");
+    });
   });
 
   it("leaves the request context empty inside requireBearerAuth routes", async () => {
