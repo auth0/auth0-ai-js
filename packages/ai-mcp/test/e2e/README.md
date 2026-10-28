@@ -62,6 +62,7 @@ inside the leeway window not being served.
   rejecting a user with no organization. Needs the organization variables.
 - `discovery.e2e.spec.ts`: a 401 leads through the protected resource metadata to the authorization server and its signing
   keys. The authorize check that uses only the MCP URL as `resource` runs when the organization group is set.
+- `configuration.e2e.spec.ts`: the handler built without a client object, with the `env` tier (the four `AUTH0_` variables) and the `inline` tier (the same values as handler options), and neither `resource` nor `authorizationServers`. It follows the discovery chain on the defaults: the 401 challenge names the suffixed metadata route, the suffixed and the root routes serve the same document, and the document names the live tenant. A live user token is then verified and exchanged on behalf of the caller. The web-standard handler is covered with the `env` tier too. It needs no variables beyond the required ones.
 - `slow/expiry.e2e.slow.spec.ts`: described under the slow tier.
 
 ### Organization usage prerequisite
@@ -122,7 +123,8 @@ The credential needs permission to read tenant settings.
 - `postTokenRequest(env, form)`: raw token endpoint POST with retry; returns `{ status, body }`.
 - `decodeClaims(token)`: unverified payload, for claim-name assertions only.
 - `startDownstreamApi({ domain, audience })`: local verifier; `{ url, calls, close }`.
-- `startMcpServer({ env, downstreamUrl, scopeMatching?, tokenStore?, requiredScopes?, organizationPolicy?, organizationId?, audience?, clientSecret?, dpop?, registerTools? })`: Node adapter (`createNodeMcpHandler`). Returns `{ url, htu, client, close }`. Tools: `whoami`, `delegate({ scope?, audience? })`, `service({ connection, loginHint? })` (Token Vault, returns `{ ok, hasToken, scopeGranted }`, never a token).
+- `startMcpServer({ env, downstreamUrl, configuration?, scopeMatching?, tokenStore?, requiredScopes?, organizationPolicy?, organizationId?, audience?, clientSecret?, dpop?, registerTools? })`: Node adapter (`createNodeMcpHandler`). Returns `{ url, htu, client, close }`; `client` is `undefined` unless `configuration` is `client`. Tools: `whoami`, `delegate({ scope?, audience? })`, `service({ connection, loginHint? })` (calls `getTokenForConnection` through Token Vault, returns `{ ok, hasToken, scopeGranted }`, never a token).
+  - `configuration` selects how the handler gets its client: `client` (default, a client built with `createMcpClient`), `inline` (the connection settings passed as handler options) or `env` (no connection settings at all; the support code sets `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` only while the handler is constructed, then restores the previous values). The handler is built once per server, like a real one.
   - No `tokenStore` (or `tokenStore: null`) means no store: nothing is cached and only single-flight applies.
   - `clientSecret` overrides the exchange client secret. `dpop` is passed to the ingress client (`{ mode: "allowed" | "required" | "disabled" }`, default `allowed`).
   - `htu` is the URL the handler sees for the MCP endpoint (`<resource origin>/mcp`, the Node adapter and the bridge below rebuild requests on the resource origin). Use it as the `htu` of DPoP proofs.

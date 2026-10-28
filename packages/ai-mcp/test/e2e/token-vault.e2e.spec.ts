@@ -79,7 +79,7 @@ const OBSERVED = {
   error: "unauthorized_client",
 };
 
-describe("e2e Token Vault getTokenForService", () => {
+describe("e2e Token Vault getTokenForConnection", () => {
   let downstream: DownstreamApi;
   let counter: FetchCounter | undefined;
   let tap: ReturnType<typeof installResponseTap> | undefined;
