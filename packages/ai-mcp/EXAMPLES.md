@@ -184,7 +184,7 @@ Requests must send `Authorization: DPoP <token>` and a `DPoP` proof header. The 
 import { getCallerMcpClientOrThrow } from '@auth0/ai-mcp';
 
 export async function listFiles(): Promise<unknown> {
-  const token = await getCallerMcpClientOrThrow().getTokenForService({
+  const token = await getCallerMcpClientOrThrow().getTokenForConnection({
     connection: 'google-oauth2',
     loginHint: 'user@example.com',
   });
@@ -222,7 +222,7 @@ const context: RequestContext = {
     getClientCredentialsToken: async () => {
       throw new Error('not used in this test');
     },
-    getTokenForService: async () => {
+    getTokenForConnection: async () => {
       throw new Error('not used in this test');
     },
   },

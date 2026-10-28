@@ -4,7 +4,59 @@
 
 An MCP server is a resource server. This package ships no MCP framework of its own. It verifies the access token on every request, hands the verified caller to your tool code, and exchanges the caller's token for tokens to downstream APIs, with an optional cache in front of the exchange. A small adapter connects all of this to the official MCP TypeScript SDK.
 
-[Documentation](#documentation) | [Getting started](#getting-started) | [Feedback](#feedback)
+[Quickstart](#quickstart) | [Documentation](#documentation) | [Getting started](#getting-started) | [Feedback](#feedback)
+
+## Quickstart
+
+Set the connection details in the environment, then pass nothing but your tools:
+
+```bash
+export AUTH0_DOMAIN=your-tenant.us.auth0.com
+export AUTH0_AUDIENCE=https://mcp.example.com/mcp
+export AUTH0_CLIENT_ID=your-client-id
+export AUTH0_CLIENT_SECRET=your-client-secret
+```
+
+```ts
+import { createServer } from 'node:http';
+import { getCallerPrincipal } from '@auth0/ai-mcp';
+import { createNodeMcpHandler } from '@auth0/ai-mcp/mcp-sdk';
+import { McpServer } from '@modelcontextprotocol/server';
+
+const handler = createNodeMcpHandler({
+  createServer: () => {
+    const server = new McpServer({ name: 'hello', version: '1.0.0' });
+    server.registerTool('hello', { description: 'Greets the caller.' }, async () => ({
+      content: [{ type: 'text' as const, text: `Hello ${getCallerPrincipal()?.sub}` }],
+    }));
+    return server;
+  },
+});
+
+createServer((req, res) => void handler(req, res)).listen(3000);
+```
+
+This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` are needed only when a tool exchanges tokens.
+
+To keep the settings in code, pass them as options instead. Anything you leave out is still read from the environment:
+
+```ts
+import { createServer } from 'node:http';
+import { createNodeMcpHandler } from '@auth0/ai-mcp/mcp-sdk';
+import { McpServer } from '@modelcontextprotocol/server';
+
+const handler = createNodeMcpHandler({
+  domain: 'your-tenant.us.auth0.com',
+  audience: 'https://mcp.example.com/mcp',
+  clientId: process.env.MY_CLIENT_ID,
+  clientSecret: process.env.MY_CLIENT_SECRET,
+  createServer: () => new McpServer({ name: 'hello', version: '1.0.0' }),
+});
+
+createServer((req, res) => void handler(req, res)).listen(3000);
+```
+
+The rest of this page explains the pieces.
 
 ## How it works
 
@@ -12,7 +64,7 @@ An MCP server is a resource server. This package ships no MCP framework of its o
 2. **Gate.** The gate checks scopes that every request must carry and answers a missing one with HTTP 403 `insufficient_scope`. A tool checks the scopes that only it needs and answers a missing one with a tool result that has `isError: true`.
 3. **Context.** On a valid token the handler builds a `Principal` from the verified claims and binds it, together with a request-scoped client, to the request through `AsyncLocalStorage`. Tool code reads the caller from there, so tool signatures stay clean.
 4. **On Behalf Of.** A tool calls `getTokenOnBehalfOf({ audience, scope })` to exchange the caller's token for a token to a downstream API. A token store enables caching. See [Token caching](./docs/TokenCaching.md).
-5. **Token Vault.** A tool calls `getTokenForService({ connection })` to get a federated provider token, such as a Google access token, through Auth0 Token Vault. See [Token Vault](./docs/TokenVault.md).
+5. **Token Vault.** A tool calls `getTokenForConnection({ connection })` to get a federated provider token, such as a Google access token, through Auth0 Token Vault. See [Token Vault](./docs/TokenVault.md).
 6. **Client credentials.** A tool calls `getClientCredentialsToken({ audience, scope })` to act as the server itself. See [On Behalf Of](./docs/OnBehalfOf.md#client-credentials).
 
 ## Getting started
@@ -43,6 +95,8 @@ export const client = createMcpClient({
 ```
 
 `audience` is the identifier of your MCP server as an API in Auth0. Access tokens must be issued for it. Your tools need `clientId` and `clientSecret` only when they exchange tokens. A server that just verifies incoming tokens can omit them.
+
+`createMcpClient` reads nothing from the environment. See [Configuration](#configuration) for the environment helper and the handler shortcuts.
 
 ### 3. Serve MCP over HTTP
 
@@ -96,24 +150,59 @@ createServer((req, res) => void handler(req, res)).listen(3000);
 What this gives you:
 
 - `POST /mcp` requires a valid access token with the `mcp:access` scope. Otherwise the client gets a 401 or 403 with a `WWW-Authenticate` challenge.
-- `GET /.well-known/oauth-protected-resource/mcp` serves the protected resource metadata, so MCP clients can discover your authorization server. Some clients, such as Claude Code, also need tenant settings: see [MCP clients and tenant settings](./docs/McpClients.md).
+- `GET /.well-known/oauth-protected-resource/mcp` serves the protected resource metadata, so MCP clients can discover your authorization server. The same document is also served at `/.well-known/oauth-protected-resource`. Some clients, such as Claude Code, also need tenant settings: see [MCP clients and tenant settings](./docs/McpClients.md).
 - `list_reports` runs only for callers whose token carries `tool:list_reports`. Other callers get a tool result with `isError: true`.
 - The token exchange always acts for the caller of the current request.
 
-The handler needs no `resource` or `authorizationServers` here. `resource` defaults to the `audience` of the client (which must then be the public URL of your server) and `authorizationServers` defaults to `https://<domain>/`. See [when to set them yourself](./docs/Handler.md#when-to-set-resource-and-authorizationservers-yourself).
+The handler needs no `resource` or `authorizationServers` here. `resource` defaults to the `audience` of the client, which must therefore be the public URL of your server, and `authorizationServers` defaults to `https://<domain>/`. If you set `resource` yourself it must equal the audience. See [resource and audience](./docs/Handler.md#resource-and-audience).
 
-`createNodeMcpHandler` mounts on `http.createServer` as shown above. On Express, route both the MCP path and the protected resource metadata path to the handler, or MCP clients cannot discover your authorization server:
+`createNodeMcpHandler` mounts on `http.createServer` as shown above. On Express, route the MCP path and both protected resource metadata paths to the handler, or MCP clients cannot discover your authorization server:
 
 ```text
 app.all('/mcp', handler);
 app.get('/.well-known/oauth-protected-resource/mcp', handler);
+app.get('/.well-known/oauth-protected-resource', handler);
 ```
 
-The metadata path is `/.well-known/oauth-protected-resource` followed by the path of `resource`. Set `metadata.path` to serve it elsewhere. Mount the handler before any body-parsing middleware. For other runtimes use `createMcpSdkHandler`, which takes a standard `Request` and returns a `Response`. For a different MCP stack use [`createMcpHandler`](./docs/Handler.md).
+The suffixed metadata path is `/.well-known/oauth-protected-resource` followed by the path of `resource`. Set `metadata.path` to replace it. The root path `/.well-known/oauth-protected-resource` is always served as well. Mount the handler before any body-parsing middleware. For other runtimes use `createMcpSdkHandler`, which takes a standard `Request` and returns a `Response`. For a different MCP stack use [`createMcpHandler`](./docs/Handler.md).
+
+## Configuration
+
+The client behind a handler can be configured in three ways. All three give the same result.
+
+| Tier | You pass | Use it when |
+| --- | --- | --- |
+| Environment | Nothing. The handler reads the variables below. | The settings live in the environment, which is the common case. |
+| Inline options | `domain`, `audience`, `clientId`, `clientSecret` and any other client option, directly on the handler options. | You want the settings visible in code. A value you leave out is still read from the environment. |
+| Shared client | `client`, built with `createMcpClient`. | You use the same client elsewhere, for example `client.verifyAccessToken` in your own code. |
+
+`createMcpHandler`, `createMcpSdkHandler` and `createNodeMcpHandler` accept all three. Passing `client` together with any inline client option throws `InvalidConfigurationError`, and the message names the options but never their values.
+
+| Variable | Option | Required |
+| --- | --- | --- |
+| `AUTH0_DOMAIN` | `domain` | yes |
+| `AUTH0_AUDIENCE` | `audience` | yes |
+| `AUTH0_CLIENT_ID` | `clientId` | only to exchange tokens |
+| `AUTH0_CLIENT_SECRET` | `clientSecret` | only to exchange tokens |
+
+A variable that is unset, empty or only whitespace counts as unset. A missing `domain` or `audience` throws `InvalidConfigurationError` with a message such as `Missing MCP client option "domain": pass it explicitly or set the AUTH0_DOMAIN environment variable.`
+
+To build a client from the environment yourself, use the helpers. `createMcpClient` itself never reads the environment.
+
+```ts
+import { createMcpClient, mcpClientOptionsFromEnv, resolveMcpClientOptions } from '@auth0/ai-mcp';
+
+// Only what the environment provides. Required options may be missing.
+const fromEnv = mcpClientOptionsFromEnv();
+console.log(Object.keys(fromEnv));
+
+// Explicit values win, the environment fills the rest, and a missing domain or audience throws.
+export const client = createMcpClient(resolveMcpClientOptions({ scopeMatching: 'strict' }));
+```
 
 ## Documentation
 
-- [Handler and adapters](./docs/Handler.md): the framework-agnostic handler, the MCP SDK adapter and the Node adapter.
+- [Handler and adapters](./docs/Handler.md): the framework-agnostic handler, the MCP SDK adapter, the Node adapter and how to write your own adapter.
 - [Token verification](./docs/TokenVerification.md): what the check covers, how the `Principal` is built, and DPoP support.
 - [Request context](./docs/RequestContext.md): reading the caller inside a tool.
 - [Scope enforcement](./docs/ScopeEnforcement.md): gate-level and tool-level scope checks.
