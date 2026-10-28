@@ -31,7 +31,7 @@ import {
   UnauthenticatedError,
 } from "../src/errors.js";
 import { createMcpHandler } from "../src/handler.js";
-import type { AuthInfo, McpHandlerOptions } from "../src/handler.js";
+import type { AuthInfo, McpHandlerBaseOptions } from "../src/handler.js";
 import {
   getCallerMcpClient,
   getCallerPrincipal,
@@ -98,7 +98,7 @@ interface Harness {
 }
 
 function makeHandler(
-  options: Partial<McpHandlerOptions> = {},
+  options: Partial<McpHandlerBaseOptions> = {},
   downstream?: (request: Request, authInfo: AuthInfo) => Promise<Response>,
   client: McpClient = makeClient(),
 ): Harness {
@@ -783,9 +783,11 @@ describe("protected resource metadata route", () => {
   });
 
   it("inserts the resource path after the well-known prefix", async () => {
-    const { handle } = makeHandler({
-      resource: "https://mcp.example.com/mcp/",
-    });
+    const { handle } = makeHandler(
+      { resource: "https://mcp.example.com/mcp/" },
+      undefined,
+      makeClient({ audience: "https://mcp.example.com/mcp/" }),
+    );
     const url =
       "https://mcp.example.com/.well-known/oauth-protected-resource/mcp";
     const served = await handle(request({}, { method: "GET" }, url));
@@ -810,9 +812,15 @@ describe("protected resource metadata route", () => {
         )
       ).status,
     ).toBe(200);
-    expect((await handle(request({}, { method: "GET" }, PRM))).status).toBe(
-      401,
-    );
+    // The root route is served as well; the custom path overrides only the primary route.
+    expect((await handle(request({}, { method: "GET" }, PRM))).status).toBe(200);
+    expect(
+      (
+        await handle(
+          request({}, { method: "GET" }, "https://mcp.example.com/other.json"),
+        )
+      ).status,
+    ).toBe(401);
     expect(calls).toHaveLength(0);
   });
 
@@ -837,7 +845,7 @@ describe("protected resource metadata route", () => {
 describe("error mapping", () => {
   async function run(
     error: unknown,
-    options: Partial<McpHandlerOptions> = {},
+    options: Partial<McpHandlerBaseOptions> = {},
     claims = {},
   ) {
     useTenant();
@@ -1042,7 +1050,7 @@ describe("authentication-phase core errors", () => {
 
   async function failWith(
     error: unknown,
-    options: Partial<McpHandlerOptions> = {},
+    options: Partial<McpHandlerBaseOptions> = {},
   ) {
     const { handle } = makeHandler(options, undefined, failingClient(error));
     return handle(request({ authorization: "Bearer abc.def.ghi" }));
@@ -1296,14 +1304,16 @@ describe("pre-verification responses never escape", () => {
 
 describe("configuration", () => {
   it("rejects a resource that is not an absolute URL", () => {
-    expect(() => makeHandler({ resource: "not a url" })).toThrow(TypeError);
+    expect(() =>
+      makeHandler({ resource: "not a url" }, undefined, makeClient({ audience: "not a url" })),
+    ).toThrow(TypeError);
   });
 });
 
 describe("resource and authorizationServers defaults", () => {
   async function metadataFor(
     client: McpClient,
-    options: Partial<McpHandlerOptions> = {},
+    options: Partial<McpHandlerBaseOptions> = {},
     url?: string,
   ) {
     const { handle } = makeHandler(
@@ -1382,20 +1392,15 @@ describe("resource and authorizationServers defaults", () => {
     );
   });
 
-  it("accepts an explicit resource when the audience cannot be one", async () => {
-    const { body } = await metadataFor(bare({ audience: "my-mcp-server" }), {
-      resource: "https://mcp.example.com",
-    });
-    expect(body.resource).toBe("https://mcp.example.com");
+  it("rejects an explicit resource when the audience cannot be one", () => {
+    expect(() =>
+      makeHandler({ resource: "https://mcp.example.com" }, undefined, bare({ audience: "my-mcp-server" })),
+    ).toThrow(InvalidConfigurationError);
   });
 
-  it("lets an explicit resource win over a usable audience", async () => {
-    const { body } = await metadataFor(
-      makeClient(),
-      { resource: "https://public.example.org/mcp" },
-      "https://public.example.org/.well-known/oauth-protected-resource/mcp",
-    );
-    expect(body.resource).toBe("https://public.example.org/mcp");
+  it("accepts an explicit resource that equals the audience", async () => {
+    const { body } = await metadataFor(makeClient(), { resource: AUDIENCE });
+    expect(body.resource).toBe(AUDIENCE);
   });
 
   it("requires an explicit resource when the client declares no audience", () => {

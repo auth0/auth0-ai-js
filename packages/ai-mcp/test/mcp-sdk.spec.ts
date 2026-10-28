@@ -20,7 +20,7 @@ import {
 } from "@auth0/auth0-api-js";
 import { createMcpClient } from "../src/client.js";
 import type { McpClient } from "../src/client.js";
-import type { AuthInfo } from "../src/handler.js";
+import type { AuthInfo, McpHandlerBaseOptions } from "../src/handler.js";
 import {
   asTokenVerifier,
   createMcpSdkHandler,
@@ -149,7 +149,12 @@ function toolCall(name: string, headers: Record<string, string> = {}, url = ENDP
   });
 }
 
-function makeHandler(seen: Seen[], overrides: Partial<McpSdkHandlerOptions> = {}) {
+type SdkOverrides = Partial<Omit<McpHandlerBaseOptions, "handler">> & {
+  client?: McpClient;
+  createServer?: McpSdkHandlerOptions["createServer"];
+};
+
+function makeHandler(seen: Seen[], overrides: SdkOverrides = {}) {
   return createMcpSdkHandler({
     client: makeClient(),
     resource: AUDIENCE,
@@ -530,11 +535,11 @@ describe("Node adapter", () => {
     );
   });
 
-  it("uses an explicit resource for the adapter origin when the audience differs", async () => {
+  it("uses an explicit resource equal to the audience for the adapter origin", async () => {
     useTenant();
     const url = await listen(
       createNodeMcpHandler({
-        client: makeClient({ audience: "my-mcp-server" }),
+        client: makeClient({ audience: ENDPOINT }),
         resource: ENDPOINT,
         createServer: () => buildMcpServer([]),
       }),
