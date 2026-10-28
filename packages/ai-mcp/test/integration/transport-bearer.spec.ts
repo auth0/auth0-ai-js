@@ -18,14 +18,14 @@ install({ beforeAll, afterEach, afterAll });
 
 const PRM = `${ORIGIN}/.well-known/oauth-protected-resource`;
 
-async function refused(attempt: Promise<unknown>): Promise<{ code: number | undefined; seen: Seen[] }> {
+async function refused(attempt: Promise<unknown>): Promise<{ status: number | undefined; seen: Seen[] }> {
   const error = (await attempt.then(
     () => {
       throw new Error("The connection was expected to be refused.");
     },
     (e: unknown) => e,
-  )) as { code?: number; seen: Seen[] };
-  return { code: error.code, seen: error.seen };
+  )) as { status?: number; seen: Seen[] };
+  return { status: error.status, seen: error.seen };
 }
 
 describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)", (wiring) => {
@@ -45,9 +45,9 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
 
   it("answers 401 with a bare challenge when no credential is sent", async () => {
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app));
+      const { status, seen } = await refused(connectClient(app));
 
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       const challenge = seen[0]!.wwwAuthenticate!;
       expect(challenge.startsWith(`Bearer resource_metadata="${PRM}"`)).toBe(true);
       expect(challenge).not.toContain("error=");
@@ -56,9 +56,9 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
 
   it("answers 401 invalid_token for a token that is not a JWT", async () => {
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app, "not-a.valid.token"));
+      const { status, seen } = await refused(connectClient(app, "not-a.valid.token"));
 
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       expect(seen[0]!.wwwAuthenticate).toContain('error="invalid_token"');
       expect(seen[0]!.wwwAuthenticate).toContain(`resource_metadata="${PRM}"`);
     });
@@ -69,9 +69,9 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
     const other = await createTestKey();
     const forged = await mintAccessToken(other, { iss: tenant.auth0.issuer, aud: AUDIENCE, sub: "user|1" });
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app, forged));
+      const { status, seen } = await refused(connectClient(app, forged));
 
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       expect(seen[0]!.wwwAuthenticate).toContain('error="invalid_token"');
     });
   });
@@ -79,9 +79,9 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
   it("answers 401 invalid_token for an expired token", async () => {
     const expired = await rig().token({ exp: Math.floor(Date.now() / 1000) - 120 });
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app, expired));
+      const { status, seen } = await refused(connectClient(app, expired));
 
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       expect(seen[0]!.wwwAuthenticate).toContain('error="invalid_token"');
     });
   });
@@ -93,9 +93,9 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
       sub: "user|1",
     });
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app, wrongAudience));
+      const { status, seen } = await refused(connectClient(app, wrongAudience));
 
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       expect(seen[0]!.wwwAuthenticate).toContain('error="invalid_token"');
     });
   });
@@ -111,18 +111,18 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
 
   it("answers 400 invalid_request for a malformed Authorization header", async () => {
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app, { authorization: "Bearer two tokens" }));
+      const { status, seen } = await refused(connectClient(app, { authorization: "Bearer two tokens" }));
 
-      expect(code).toBe(400);
+      expect(status).toBe(400);
       expect(seen[0]!.wwwAuthenticate).toContain('error="invalid_request"');
     });
   });
 
   it("answers 401 without an error value for an unsupported scheme", async () => {
     await run(async (app) => {
-      const { code, seen } = await refused(connectClient(app, { authorization: "Basic dXNlcjpwYXNz" }));
+      const { status, seen } = await refused(connectClient(app, { authorization: "Basic dXNlcjpwYXNz" }));
 
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       expect(seen[0]!.wwwAuthenticate).not.toContain("error=");
     });
   });

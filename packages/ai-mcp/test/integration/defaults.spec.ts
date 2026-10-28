@@ -48,9 +48,9 @@ describe.each(WIRINGS)("handler built from only the client and createServer (%s 
           throw new Error("The connection was expected to be refused.");
         },
         (e: unknown) => e,
-      )) as { code?: number; seen: Array<{ wwwAuthenticate: string | null }> };
+      )) as { status?: number; seen: Array<{ wwwAuthenticate: string | null }> };
 
-      expect(error.code).toBe(401);
+      expect(error.status).toBe(401);
       const challenge = error.seen[0]!.wwwAuthenticate!;
       const advertised = /resource_metadata="([^"]+)"/.exec(challenge)?.[1];
       expect(advertised).toBe(`${ORIGIN}/.well-known/oauth-protected-resource`);
