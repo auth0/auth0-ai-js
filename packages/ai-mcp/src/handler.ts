@@ -29,9 +29,8 @@ export interface AuthInfo {
    * Always the empty string. The presented access token is intentionally
    * withheld so tool code cannot forward or log it by accident; tools should use
    * the request-scoped client (`getCallerMcpClient()`) to call downstream APIs.
-   * Note that the MCP SDK transport still exposes the raw request headers through
-   * `extra.requestInfo.headers`, so the `Authorization` header remains reachable
-   * there.
+   * Note that the MCP SDK still exposes the original request to tool callbacks
+   * as `ctx.http.req`, so the `Authorization` header remains reachable there.
    */
   token: string;
   /** The OAuth client the token was issued to. Empty when the token names none. */
