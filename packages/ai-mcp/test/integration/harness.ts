@@ -352,15 +352,20 @@ export interface App {
 export type HandlerOptions = Omit<McpSdkHandlerOptions, "resource" | "authorizationServers" | "createServer"> & {
   createServer: McpSdkHandlerOptions["createServer"];
   authorizationServers?: string[];
+  /** Leaves `resource` and `authorizationServers` out so the handler applies its defaults. */
+  useDefaults?: boolean;
 };
 
 /** Starts the server under test with the given wiring. */
 export async function startApp(wiring: Wiring, tenant: Tenant, options: HandlerOptions): Promise<App> {
-  const full: McpSdkHandlerOptions = {
-    resource: AUDIENCE,
-    authorizationServers: [tenant.auth0.issuer],
-    ...options,
-  };
+  const { useDefaults, ...rest } = options;
+  const full: McpSdkHandlerOptions = useDefaults
+    ? rest
+    : {
+        resource: AUDIENCE,
+        authorizationServers: [tenant.auth0.issuer],
+        ...rest,
+      };
 
   if (wiring === "web") {
     const handle = createMcpSdkHandler(full);
