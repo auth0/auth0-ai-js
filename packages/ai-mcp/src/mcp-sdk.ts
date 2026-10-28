@@ -1,19 +1,21 @@
 /**
- * Glue between this package and the MCP TypeScript SDK (`@modelcontextprotocol/sdk`).
+ * Glue between this package and the MCP TypeScript SDK v2
+ * (`@modelcontextprotocol/server`).
  *
  * This module is the only one that imports the SDK. The SDK is an optional peer
  * dependency, so the module is published as its own entry point and nothing else
- * in the package imports it.
+ * in the package imports it. Only the v2 packages are supported: the v1 package
+ * (`@modelcontextprotocol/sdk`) uses different class and error types, and objects
+ * from the two lines must not be mixed.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AuthError } from '@auth0/auth0-api-js';
 import {
-  InsufficientScopeError as SdkInsufficientScopeError,
-  InvalidTokenError as SdkInvalidTokenError,
-} from '@modelcontextprotocol/sdk/server/auth/errors.js';
-import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
-import type { AuthInfo as SdkAuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+  OAuthError,
+  OAuthErrorCode,
+  WebStandardStreamableHTTPServerTransport,
+} from '@modelcontextprotocol/server';
+import type { AuthInfo as SdkAuthInfo, OAuthTokenVerifier } from '@modelcontextprotocol/server';
 import type { McpClient } from './client.js';
 import { createMcpHandler, resolveHandlerEndpoints } from './handler.js';
 import type { AuthInfo, McpHandlerOptions } from './handler.js';
@@ -44,7 +46,7 @@ export interface McpSdkHandlerOptions extends Omit<McpHandlerOptions, 'handler'>
  * {@link createMcpHandler} and serves them with the SDK's web standard
  * Streamable HTTP transport. It takes a standard `Request` and returns a `Response`.
  *
- * The verified caller reaches your tools in two ways: as `extra.authInfo` in every
+ * The verified caller reaches your tools in two ways: as `ctx.http.authInfo` in every
  * tool callback (the SDK's own mechanism), and through the request context, so
  * `getCallerMcpClient()`, `getCallerPrincipal()` and `withRequiredScopes()` work
  * inside tools.
@@ -52,13 +54,14 @@ export interface McpSdkHandlerOptions extends Omit<McpHandlerOptions, 'handler'>
  * `AuthInfo.clientId` is `''` when the token carries no `client_id` or `azp`.
  * `AuthInfo.token` is always `''`: the bearer is deliberately withheld, so tools
  * should call downstream APIs through the request-scoped client. The SDK
- * transport still exposes raw request headers as `extra.requestInfo.headers`, so
+ * still exposes the original request to tool callbacks as `ctx.http.req`, so
  * the `Authorization` header is reachable there.
  *
- * Mode: stateless and JSON responses. The server is closed as soon as
- * `handleRequest` returns, which is only valid for JSON response mode (a streamed
- * response would be cut off), so this function does not offer
- * streaming. Each POST is answered with one JSON body and no session id is
+ * Mode: stateless and JSON responses, using the SDK's low-level web standard
+ * transport. The SDK's own `createMcpHandler` is not used because it answers
+ * with an event stream. The server is closed as soon as `handleRequest` returns,
+ * which is only valid for JSON response mode (a streamed response would be cut
+ * off), so this function does not offer streaming. Each POST is answered with one JSON body and no session id is
  * issued, so any instance can serve any request.
  * Server-to-client notifications and standalone event streams (GET) are not
  * offered. If you need sessions or streaming, use {@link createMcpHandler} and
@@ -347,7 +350,8 @@ export function createNodeMcpHandler(
 
 /**
  * Adapts an {@link McpClient} to the SDK's `OAuthTokenVerifier`, for use with the
- * SDK's `requireBearerAuth` Express middleware.
+ * SDK's `requireBearerAuth` (the Express middleware in `@modelcontextprotocol/express`
+ * or the web standard gate in `@modelcontextprotocol/server`).
  *
  * Prefer {@link createMcpHandler} or {@link createMcpSdkHandler}. This shim
  * INHERITS THE SDK MIDDLEWARE'S CHALLENGE BEHAVIOUR, which does not meet this
@@ -364,9 +368,10 @@ export function createNodeMcpHandler(
  * yourself in a wrapper and use `runWithRequestContext`, or switch to the handler.
  *
  * Errors are mapped with generic messages: any failed verification becomes the
- * SDK's `InvalidTokenError`, a 403 from the core becomes the SDK's
- * `InsufficientScopeError`, and everything else is rethrown so the middleware
- * answers 500.
+ * SDK's `OAuthError` with code `invalid_token`, a 403 from the core becomes an
+ * `OAuthError` with code `insufficient_scope`, and everything else is rethrown so
+ * the middleware answers 500. The v2 middleware only maps `OAuthError` to 401 and
+ * 403; any other error type (including the v1 SDK's error classes) would end as 500.
  *
  * @param client - The client that verifies tokens.
  * @returns A verifier for `requireBearerAuth({ verifier })`.
@@ -380,10 +385,10 @@ export function asTokenVerifier(client: McpClient): OAuthTokenVerifier {
       } catch (error) {
         if (error instanceof AuthError) {
           if (error.statusCode === 403) {
-            throw new SdkInsufficientScopeError('Insufficient scope.');
+            throw new OAuthError(OAuthErrorCode.InsufficientScope, 'Insufficient scope.');
           }
           if (error.statusCode === undefined || error.statusCode < 500) {
-            throw new SdkInvalidTokenError('Invalid access token.');
+            throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid access token.');
           }
         }
         throw error;
