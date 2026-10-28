@@ -148,6 +148,21 @@ describe("example MCP server", () => {
     expect(response.headers.get("www-authenticate")).toMatch(/^Bearer /);
   });
 
+  it("serves its metadata at the suffixed and the root route, and the challenge names a route that serves it", async () => {
+    const suffixed = await fetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource/mcp`);
+    const root = await fetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource`);
+    expect(suffixed.status).toBe(200);
+    expect(root.status).toBe(200);
+    const document = (await suffixed.json()) as { resource: string; authorization_servers: string[] };
+    expect(document.resource).toBe(MCP_URL);
+    expect(document.authorization_servers).toEqual(["https://tenant.example.com/"]);
+    expect(await root.json()).toEqual(document);
+
+    const refused = await callTool("order_status_report");
+    const advertised = /resource_metadata="([^"]+)"/.exec(refused.headers.get("www-authenticate") ?? "")?.[1];
+    expect(advertised).toBe("https://mcp.example.com/.well-known/oauth-protected-resource/mcp");
+  });
+
   it("lists recent orders with two exchanged tokens", async () => {
     const out = await run("order_status_report", ALL_TOOLS, "user|status");
 
