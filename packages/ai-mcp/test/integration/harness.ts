@@ -23,6 +23,7 @@ import { createMcpClient } from "../../src/client.js";
 import type { McpClient } from "../../src/client.js";
 import { createMcpSdkHandler, createNodeMcpHandler } from "../../src/mcp-sdk.js";
 import type { McpSdkHandlerOptions } from "../../src/mcp-sdk.js";
+import type { McpHandlerBaseOptions, McpHandlerClientConfig } from "../../src/handler.js";
 import { getRequestContext } from "../../src/request-context.js";
 import { withRequiredScopes } from "../../src/scopes.js";
 import {
@@ -345,7 +346,8 @@ export interface App {
   stop(): Promise<void>;
 }
 
-export type HandlerOptions = Omit<McpSdkHandlerOptions, "resource" | "authorizationServers" | "createServer"> & {
+export type HandlerOptions = McpHandlerClientConfig &
+  Omit<McpHandlerBaseOptions, "handler" | "resource" | "authorizationServers"> & {
   createServer: McpSdkHandlerOptions["createServer"];
   authorizationServers?: string[];
   /** Leaves `resource` and `authorizationServers` out so the handler applies its defaults. */
@@ -355,13 +357,15 @@ export type HandlerOptions = Omit<McpSdkHandlerOptions, "resource" | "authorizat
 /** Starts the server under test with the given wiring. */
 export async function startApp(wiring: Wiring, tenant: Tenant, options: HandlerOptions): Promise<App> {
   const { useDefaults, ...rest } = options;
-  const full: McpSdkHandlerOptions = useDefaults
-    ? rest
-    : {
-        resource: AUDIENCE,
-        authorizationServers: [tenant.auth0.issuer],
-        ...rest,
-      };
+  const full = (
+    useDefaults
+      ? rest
+      : {
+          resource: AUDIENCE,
+          authorizationServers: [tenant.auth0.issuer],
+          ...rest,
+        }
+  ) as McpSdkHandlerOptions;
 
   if (wiring === "web") {
     const handle = createMcpSdkHandler(full);
