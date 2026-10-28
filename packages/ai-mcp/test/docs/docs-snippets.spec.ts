@@ -181,3 +181,26 @@ describe("documentation structure", () => {
     },
   );
 });
+
+describe("documentation targets the MCP SDK v2", () => {
+  it("compiled snippets import no v1 package", () => {
+    const offenders = snippets
+      .filter((s) => s.code.includes("@modelcontextprotocol/sdk"))
+      .map((s) => s.id);
+    expect(offenders).toEqual([]);
+  });
+
+  it("the install line names the v2 server package", () => {
+    const readme = readFileSync(path.join(packageDir, "README.md"), "utf8");
+    expect(readme).toContain("npm install @auth0/ai-mcp @modelcontextprotocol/server");
+    expect(readme).not.toContain("npm install @auth0/ai-mcp @modelcontextprotocol/sdk");
+  });
+
+  it("keeps the v1 recipe as plain text so it is never compiled", () => {
+    const handler = readFileSync(path.join(packageDir, "docs", "Handler.md"), "utf8");
+    const section = handler.split("## Using the MCP SDK v1")[1]?.split("\n## ")[0] ?? "";
+    expect(section).toContain("WebStandardStreamableHTTPServerTransport");
+    expect(section).toContain("unsupported");
+    expect(section).not.toMatch(/^```ts$/m);
+  });
+});

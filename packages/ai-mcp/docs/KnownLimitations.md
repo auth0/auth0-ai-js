@@ -18,17 +18,17 @@ If one process verifies a request and a different process needs to exchange the 
 
 ## `requireBearerAuth` does not restore the request context
 
-`asTokenVerifier` adapts an `McpClient` to the MCP SDK's `OAuthTokenVerifier`, for use with the SDK's `requireBearerAuth` Express middleware. Prefer `createMcpHandler`, `createMcpSdkHandler` or `createNodeMcpHandler`. The shim has these differences:
+`asTokenVerifier` adapts an `McpClient` to the MCP SDK's `OAuthTokenVerifier`, for use with the `requireBearerAuth` middleware from `@modelcontextprotocol/express` (or the web standard `requireBearerAuth` from `@modelcontextprotocol/server`). Prefer `createMcpHandler`, `createMcpSdkHandler` or `createNodeMcpHandler`. The shim has these differences:
 
 - **No request context.** `requireBearerAuth` does not run this package's context binding. Inside your routes `getRequestContext()`, `getCallerPrincipal()` and `getCallerMcpClient()` return `undefined`, and no request-scoped client exists. To get them back, call `client.verifyAccessToken` and `client.withToken` in your own wrapper and use `runWithRequestContext`, or switch to the handler.
 - **The SDK's challenge behavior.** The middleware answers a missing credential with `error="invalid_token"`, although RFC 6750 section 3.1 says to send no error value in that case. It echoes the SDK's own messages in `error_description` and lists the configured scopes instead of only the missing ones.
 - **Bearer only.** The shim does not know DPoP. A DPoP-bound token fails verification.
 
-Failed verification maps to the SDK's invalid token error, a 403 from the core maps to its insufficient scope error, and everything else is rethrown so the middleware answers 500.
+Failed verification maps to the SDK's `OAuthError` with code `invalid_token`, a 403 from the core maps to an `OAuthError` with code `insufficient_scope`, and everything else is rethrown so the middleware answers 500. The v2 middleware answers 500 for any error that is not an `OAuthError`, so a verifier of your own must throw `OAuthError`, not the error classes of the v1 SDK.
 
 ## The MCP SDK adapter is stateless
 
-`createMcpSdkHandler` and `createNodeMcpHandler` run the SDK's Streamable HTTP transport in stateless mode with JSON responses:
+`createMcpSdkHandler` and `createNodeMcpHandler` run the SDK v2 web standard Streamable HTTP transport in stateless mode with JSON responses:
 
 - Each POST gets one JSON body and no session id, so any instance can serve any request.
 - The adapter creates the server per request and closes it when the request ends. A streamed response would be cut off, so streaming is not offered.
