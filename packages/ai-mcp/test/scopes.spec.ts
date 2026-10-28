@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { InvalidConfigurationError } from '@auth0/auth0-api-js';
 import { InsufficientScopeError, UnauthenticatedError } from '../src/errors.js';
 import { runWithRequestContext, getCallerPrincipal } from '../src/request-context.js';
 import { requireScopes, withRequiredScopes } from '../src/scopes.js';
@@ -24,10 +25,23 @@ describe('requireScopes', () => {
     expect(() => requireScopes('  read \t write ', p)).not.toThrow();
   });
 
-  it('passes for an empty requirement', () => {
-    expect(() => requireScopes([], p)).not.toThrow();
-    expect(() => requireScopes('', makePrincipal('u', []))).not.toThrow();
-    expect(() => requireScopes([])).not.toThrow();
+  it('rejects a requirement that names no scope', () => {
+    expect(() => requireScopes([], p)).toThrow(InvalidConfigurationError);
+    expect(() => requireScopes('', p)).toThrow(InvalidConfigurationError);
+    expect(() => requireScopes('   ', p)).toThrow(InvalidConfigurationError);
+    expect(() => requireScopes([])).toThrow(InvalidConfigurationError);
+  });
+
+  it('rejects a list that contains a blank or non-string entry', () => {
+    expect(() => requireScopes(['read', ''], p)).toThrow(InvalidConfigurationError);
+    expect(() => requireScopes(['read', '  '], p)).toThrow(InvalidConfigurationError);
+    expect(() => requireScopes(['read', 5 as unknown as string], p)).toThrow(InvalidConfigurationError);
+    expect(() => requireScopes(['read', null as unknown as string], p)).toThrow(InvalidConfigurationError);
+  });
+
+  it('does not echo the offending value in the error', () => {
+    expect(() => requireScopes(['read', 12345 as unknown as string], p)).toThrow(/non-blank string/);
+    expect(() => requireScopes(['read', 12345 as unknown as string], p)).not.toThrow(/12345/);
   });
 
   it('requires every scope (AND semantics)', () => {
@@ -72,6 +86,14 @@ describe('requireScopes', () => {
 });
 
 describe('withRequiredScopes', () => {
+  it('throws when it is created with a requirement that names no scope', () => {
+    const handler = () => 'ok';
+    expect(() => withRequiredScopes('', handler)).toThrow(InvalidConfigurationError);
+    expect(() => withRequiredScopes([], handler)).toThrow(InvalidConfigurationError);
+    expect(() => withRequiredScopes(['read', ' '], handler)).toThrow(InvalidConfigurationError);
+    expect(() => withRequiredScopes(['read', 1 as unknown as string], handler)).toThrow(InvalidConfigurationError);
+  });
+
   it('runs the handler with its arguments when scopes are held', async () => {
     const handler = vi.fn(async (a: number, b: number) => a + b);
     const wrapped = withRequiredScopes('read', handler);
