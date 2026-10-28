@@ -434,6 +434,74 @@ describe("Node adapter", () => {
     expect(response.headers.get("www-authenticate")).toContain("resource_metadata=");
   });
 
+  it("serves a tool call when only client and createServer are given", async () => {
+    useTenant();
+    const seen: Seen[] = [];
+    const url = await listen(
+      createNodeMcpHandler({
+        client: makeClient(),
+        createServer: () => buildMcpServer(seen),
+      }),
+    );
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { ...jsonHeaders, authorization: `Bearer ${await token()}` },
+      body: rpc,
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("answers 401 with a challenge that points at the defaulted metadata url", async () => {
+    useTenant();
+    const url = await listen(
+      createNodeMcpHandler({
+        client: makeClient(),
+        createServer: () => buildMcpServer([]),
+      }),
+    );
+    const response = await fetch(url, { method: "POST", headers: jsonHeaders, body: rpc });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain(
+      `resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource"`,
+    );
+  });
+
+  it("uses an explicit resource for the adapter origin when the audience differs", async () => {
+    useTenant();
+    const url = await listen(
+      createNodeMcpHandler({
+        client: makeClient({ audience: "my-mcp-server" }),
+        resource: ENDPOINT,
+        createServer: () => buildMcpServer([]),
+      }),
+    );
+    const response = await fetch(url, { method: "POST", headers: jsonHeaders, body: rpc });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain(
+      `resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/mcp"`,
+    );
+  });
+
+  it("throws at construction when a default cannot be derived", () => {
+    expect(() =>
+      createNodeMcpHandler({
+        client: makeClient({ audience: "my-mcp-server" }),
+        createServer: () => buildMcpServer([]),
+      }),
+    ).toThrow(/"resource" is required/);
+    expect(() =>
+      createMcpSdkHandler({
+        client: { ...makeClient(), domain: undefined },
+        resource: AUDIENCE,
+        createServer: () => buildMcpServer([]),
+      }),
+    ).toThrow(/"authorizationServers" is required/);
+  });
+
   it("rejects a body over the limit with 413 and does not call the handler", async () => {
     const handle = vi.fn(async () => new Response("x"));
     const url = await listen(toNodeHandler(handle, { resource: AUDIENCE, maxBodyBytes: 16 }));

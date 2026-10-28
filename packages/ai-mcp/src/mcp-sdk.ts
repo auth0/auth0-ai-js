@@ -15,7 +15,7 @@ import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/p
 import type { AuthInfo as SdkAuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { McpClient } from './client.js';
-import { createMcpHandler } from './handler.js';
+import { createMcpHandler, resolveHandlerEndpoints } from './handler.js';
 import type { AuthInfo, McpHandlerOptions } from './handler.js';
 
 /**
@@ -324,15 +324,24 @@ export function toNodeHandler(
 /**
  * Convenience for {@link createMcpSdkHandler} followed by {@link toNodeHandler}.
  *
+ * `resource` and `authorizationServers` are optional here: they default to the
+ * client's audience and to `https://<domain>/` (see {@link McpHandlerOptions}).
+ * The resolved resource is also the public origin the Node adapter uses to
+ * rebuild request URLs.
+ *
  * @param options - Handler options plus an optional body limit.
  * @returns A Node request listener.
+ * @throws {InvalidConfigurationError} When a default is needed and the client
+ * does not provide a usable audience or domain.
  */
 export function createNodeMcpHandler(
   options: McpSdkHandlerOptions & Pick<NodeHandlerOptions, 'maxBodyBytes'>,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  return toNodeHandler(createMcpSdkHandler(options), {
-    resource: options.resource,
-    maxBodyBytes: options.maxBodyBytes,
+  const { maxBodyBytes, ...handlerOptions } = options;
+  const endpoints = resolveHandlerEndpoints(handlerOptions);
+  return toNodeHandler(createMcpSdkHandler({ ...handlerOptions, ...endpoints }), {
+    resource: endpoints.resource,
+    maxBodyBytes,
   });
 }
 
