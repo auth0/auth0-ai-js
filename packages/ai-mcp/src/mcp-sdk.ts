@@ -17,8 +17,8 @@ import {
 } from '@modelcontextprotocol/server';
 import type { AuthInfo as SdkAuthInfo, OAuthTokenVerifier } from '@modelcontextprotocol/server';
 import type { McpClient } from './client.js';
-import { createMcpHandler, resolveHandlerEndpoints } from './handler.js';
-import type { AuthInfo, McpHandlerOptions } from './handler.js';
+import { createMcpHandler, resolveHandlerClient, resolveHandlerEndpoints } from './handler.js';
+import type { AuthInfo, McpHandlerBaseOptions, McpHandlerClientConfig, McpHandlerOptions } from './handler.js';
 
 /**
  * The part of the SDK's `McpServer` (or low-level `Server`) this module uses.
@@ -29,17 +29,22 @@ export interface McpServerLike {
   close(): Promise<void>;
 }
 
-/** Options for {@link createMcpSdkHandler}. */
-export interface McpSdkHandlerOptions extends Omit<McpHandlerOptions, 'handler'> {
-  /**
-   * Creates the server that answers one request. It is called once per request
-   * and the server is closed when the request ends, because the transport runs
-   * in stateless mode and the SDK does not allow a stateless transport to be
-   * shared between requests. Register tools inside this function; keep expensive
-   * setup outside of it.
-   */
-  createServer: () => McpServerLike | Promise<McpServerLike>;
-}
+/**
+ * Options for {@link createMcpSdkHandler}: the handler options without `handler`, plus
+ * `createServer`. The client is configured through `client`, inline client options or the
+ * environment; see {@link McpHandlerClientConfig}.
+ */
+export type McpSdkHandlerOptions = McpHandlerClientConfig &
+  Omit<McpHandlerBaseOptions, 'handler'> & {
+    /**
+     * Creates the server that answers one request. It is called once per request
+     * and the server is closed when the request ends, because the transport runs
+     * in stateless mode and the SDK does not allow a stateless transport to be
+     * shared between requests. Register tools inside this function; keep expensive
+     * setup outside of it.
+     */
+    createServer: () => McpServerLike | Promise<McpServerLike>;
+  };
 
 /**
  * Creates a function that authenticates MCP HTTP requests with
@@ -106,7 +111,7 @@ export function createMcpSdkHandler(
         await server.close().catch(() => undefined);
       }
     },
-  });
+  } as McpHandlerOptions);
 }
 
 /** Options for {@link toNodeHandler}. */
@@ -328,21 +333,27 @@ export function toNodeHandler(
  * Convenience for {@link createMcpSdkHandler} followed by {@link toNodeHandler}.
  *
  * `resource` and `authorizationServers` are optional here: they default to the
- * client's audience and to `https://<domain>/` (see {@link McpHandlerOptions}).
+ * client's audience and to `https://<domain>/` (see {@link McpHandlerOptions}); an
+ * explicit `resource` must equal the client audience. The client is configured through
+ * `client`, inline client options or the environment, like in {@link createMcpHandler}.
  * The resolved resource is also the public origin the Node adapter uses to
  * rebuild request URLs.
  *
  * @param options - Handler options plus an optional body limit.
  * @returns A Node request listener.
  * @throws {InvalidConfigurationError} When a default is needed and the client
- * does not provide a usable audience or domain.
+ * does not provide a usable audience or domain, when `client` is combined with inline
+ * client options, or when a required client value is missing from the options and the
+ * environment.
  */
 export function createNodeMcpHandler(
   options: McpSdkHandlerOptions & Pick<NodeHandlerOptions, 'maxBodyBytes'>,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   const { maxBodyBytes, ...handlerOptions } = options;
-  const endpoints = resolveHandlerEndpoints(handlerOptions);
-  return toNodeHandler(createMcpSdkHandler({ ...handlerOptions, ...endpoints }), {
+  // Resolve the client once so the handler and the endpoint defaults use the same one.
+  const { client, rest } = resolveHandlerClient(handlerOptions);
+  const endpoints = resolveHandlerEndpoints(client, rest);
+  return toNodeHandler(createMcpSdkHandler({ ...rest, client, ...endpoints } as McpSdkHandlerOptions), {
     resource: endpoints.resource,
     maxBodyBytes,
   });

@@ -1,70 +1,50 @@
+import { InvalidConfigurationError } from "@auth0/auth0-api-js";
 import {
-  AuthError,
-  BearerMethod,
-  InvalidConfigurationError,
-  InvalidDpopProofError,
-  InvalidRequestError,
-  ProtectedResourceMetadataBuilder,
-  VerifyAccessTokenError,
-} from "@auth0/auth0-api-js";
-import type { VerifyAccessTokenOptions } from "@auth0/auth0-api-js";
-import { buildWwwAuthenticate, sanitizeChallengeValue } from "./challenge.js";
-import type { ChallengeErrorCode, ChallengeScheme } from "./challenge.js";
+  WELL_KNOWN_PRM,
+  authFailure,
+  classifyDownstream,
+  createAuthenticator,
+  resolveResource,
+  resourcePathOf,
+} from "./authenticate.js";
+import type { AuthInfo } from "./authenticate.js";
+import { createMcpClient } from "./client.js";
 import type { McpClient } from "./client.js";
-import {
-  DownscopedTokenError,
-  InsufficientScopeError,
-  UnauthenticatedError,
-} from "./errors.js";
-import { runWithRequestContext } from "./request-context.js";
-import type { Principal, RequestScopedMcpClient } from "./types.js";
+import { resolveMcpClientOptions } from "./env.js";
+import { buildProtectedResourceMetadata, resolveAuthorizationServers } from "./metadata.js";
+import type { McpClientOptions } from "./types.js";
+
+export type { AuthInfo, HandlerDpopMode } from "./authenticate.js";
 
 /**
- * What the downstream handler learns about the authenticated caller. The shape
- * matches the `AuthInfo` type of the MCP TypeScript SDK, so the object can be
- * handed to that SDK as is.
+ * The client part of the handler options. Choose one of three ways to configure it:
+ *
+ * 1. `client`: a client you built with `createMcpClient`.
+ * 2. Inline client options (`domain`, `audience`, `clientId`, `clientSecret`, `tokenStore` and
+ *    the other {@link McpClientOptions}): the handler builds the client for you. Values you leave
+ *    out of `domain`, `audience`, `clientId` and `clientSecret` are read from the environment
+ *    variables `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`.
+ * 3. Neither: all of the above come from the environment.
+ *
+ * Passing `client` together with any inline client option throws `InvalidConfigurationError`.
  */
-export interface AuthInfo {
-  /**
-   * Always the empty string. The presented access token is intentionally
-   * withheld so tool code cannot forward or log it by accident; tools should use
-   * the request-scoped client (`getCallerMcpClient()`) to call downstream APIs.
-   * Note that the MCP SDK still exposes the original request to tool callbacks
-   * as `ctx.http.req`, so the `Authorization` header remains reachable there.
-   */
-  token: string;
-  /** The OAuth client the token was issued to. Empty when the token names none. */
-  clientId: string;
-  /** Scopes from the `scope` claim. */
-  scopes: string[];
-  /** Token expiry in epoch seconds. */
-  expiresAt: number;
-  /** The protected resource the token was issued for. */
-  resource?: URL;
-  /** Additional caller data: `sub`, and `orgId` and `permissions` when present. */
-  extra?: Record<string, unknown>;
-}
+export type McpHandlerClientConfig =
+  | ({ client: McpClient } & { [K in keyof McpClientOptions]?: never })
+  | ({ client?: undefined } & Partial<McpClientOptions>);
 
-/**
- * DPoP handling of the {@link McpClient}. The handler reads it from
- * {@link McpClient.dpopMode} to decide which schemes it accepts and advertises.
- */
-export type HandlerDpopMode = McpClient["dpopMode"];
-
-/** Options for {@link createMcpHandler}. */
-export interface McpHandlerOptions {
-  /** Verifies tokens and creates the request-scoped client. */
-  client: McpClient;
+/** Options for {@link createMcpHandler} other than the client configuration. */
+export interface McpHandlerBaseOptions {
   /**
    * Identifier of this MCP server: the absolute URL clients use to reach it,
    * published as the `resource` of the RFC 9728 metadata document and sent back by
    * clients as the RFC 8707 `resource` parameter.
    *
-   * Defaults to `client.audience` when that is an absolute `http` or `https` URL
-   * without a fragment or credentials, which is the recommended setup. Set it
-   * yourself when the audience is not such a URL (for example a plain identifier
-   * or a URN) or when the public URL differs from the audience (a proxy, a
-   * different public host).
+   * Defaults to the client audience when that is an absolute `http` or `https` URL
+   * without a fragment or credentials, which is the recommended setup. When you set it,
+   * it must equal the client audience: the check is an exact string match after
+   * lower-casing the scheme and the host only, so a trailing slash counts as a
+   * difference. `createMcpHandler` throws `InvalidConfigurationError` on a mismatch,
+   * because tokens for any other audience are rejected.
    */
   resource?: string;
   /**
@@ -114,320 +94,74 @@ export interface McpHandlerOptions {
   onError?: (error: unknown) => void;
 }
 
-const WELL_KNOWN_PRM = "/.well-known/oauth-protected-resource";
-const TOKEN_PATTERN = /^[A-Za-z0-9\-._~+/]+=*$/;
-const PROOF_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-const NONCE_PATTERN = /^[\x21\x23-\x5B\x5D-\x7E]{1,256}$/;
-const MAX_CREDENTIAL_LENGTH = 8192;
+/** Options for {@link createMcpHandler}. */
+export type McpHandlerOptions = McpHandlerClientConfig & McpHandlerBaseOptions;
 
-const DESCRIPTIONS: Record<ChallengeErrorCode, string> = {
-  invalid_token: "The access token is invalid or has expired.",
-  invalid_request: "The request is malformed.",
-  insufficient_scope: "The access token does not include the required scope.",
-  invalid_dpop_proof: "The DPoP proof is invalid.",
-  use_dpop_nonce: "A server-provided DPoP nonce is required.",
-};
-
-const GENERIC_500_BODY =
-  '{"error":"server_error","error_description":"Internal server error."}';
-
-function genericServerError(): Response {
-  return new Response(GENERIC_500_BODY, {
-    status: 500,
-    headers: {
-      "content-type": "application/json",
-      "cache-control": "no-store",
-    },
-  });
-}
-
-type Credentials =
-  | { kind: "absent" }
-  | { kind: "malformed"; scheme: ChallengeScheme }
-  | { kind: "bearer"; token: string }
-  | { kind: "dpop"; token: string; proof: string };
-
-/** An error the handler turns into an HTTP response. */
-interface Failure {
-  status: number;
-  error?: ChallengeErrorCode;
-  /** Body `error` value for responses that carry no challenge error. */
-  bodyError?: string;
-  description: string;
-  scope?: readonly string[];
-  challenge: boolean;
-  scheme?: ChallengeScheme;
-  forward?: Array<[string, string]>;
-}
+const CLIENT_OPTION_NAMES = [
+  "domain",
+  "audience",
+  "clientId",
+  "clientSecret",
+  "tokenStore",
+  "scopeMatching",
+  "organizationPolicy",
+  "organizationId",
+  "dpop",
+  "requestTimeoutMs",
+  "apiClient",
+] as const satisfies ReadonlyArray<keyof McpClientOptions>;
 
 /**
- * Reads the credential. A scheme the configured DPoP mode does not accept
- * (Bearer when DPoP is required, DPoP when it is disabled) and any unknown
- * scheme count as no credential: the client gets a challenge without an error
- * value, because RFC 6750 section 3.1 reserves error values for requests that
- * did carry the authentication the server supports.
+ * Splits handler options into the client and everything else. The client is the given
+ * `client`, or one built from the inline options and the environment.
+ *
+ * @throws {InvalidConfigurationError} When `client` is combined with inline client options,
+ * when a required value is missing from both the options and the environment, or when the
+ * client options are invalid.
+ * @internal
  */
-function extractCredentials(
-  request: Request,
-  mode: HandlerDpopMode,
-): Credentials {
-  const authorization = request.headers.get("authorization");
-  if (authorization === null) {
-    return { kind: "absent" };
-  }
-  const [rawScheme, token, ...rest] = authorization.split(/ +/);
-  const scheme = rawScheme?.toLowerCase();
-  if (scheme === "bearer" && mode !== "required") {
-    if (
-      rest.length > 0 ||
-      token === undefined ||
-      token.length > MAX_CREDENTIAL_LENGTH ||
-      !TOKEN_PATTERN.test(token)
-    ) {
-      return { kind: "malformed", scheme: "Bearer" };
+export function resolveHandlerClient<T extends McpHandlerClientConfig>(
+  options: T,
+): { client: McpClient; rest: Omit<T, "client" | (typeof CLIENT_OPTION_NAMES)[number]> } {
+  const bag = options as Record<string, unknown>;
+  const inline = CLIENT_OPTION_NAMES.filter((name) => bag[name] !== undefined);
+  const rest: Record<string, unknown> = { ...bag };
+  delete rest["client"];
+  for (const name of CLIENT_OPTION_NAMES) delete rest[name];
+  if (bag["client"] !== undefined) {
+    if (inline.length > 0) {
+      throw new InvalidConfigurationError(
+        `Invalid configuration: "client" cannot be combined with ${inline.map((n) => `"${n}"`).join(", ")}. Pass either a client or client options.`,
+      );
     }
-    return { kind: "bearer", token };
+    return { client: bag["client"] as McpClient, rest: rest as never };
   }
-  if (scheme === "dpop" && mode !== "disabled") {
-    const proof = request.headers.get("dpop");
-    if (
-      rest.length > 0 ||
-      token === undefined ||
-      token.length > MAX_CREDENTIAL_LENGTH ||
-      !TOKEN_PATTERN.test(token) ||
-      proof === null ||
-      proof.length > MAX_CREDENTIAL_LENGTH ||
-      !PROOF_PATTERN.test(proof)
-    ) {
-      return { kind: "malformed", scheme: "DPoP" };
-    }
-    return { kind: "dpop", token, proof };
-  }
-  return { kind: "absent" };
-}
-
-function schemesFor(mode: HandlerDpopMode): ChallengeScheme[] {
-  if (mode === "required") return ["DPoP"];
-  if (mode === "disabled") return ["Bearer"];
-  return ["Bearer", "DPoP"];
-}
-
-function jsonResponse(
-  status: number,
-  body: Record<string, unknown>,
-  headers: Headers = new Headers(),
-): Response {
-  headers.set("content-type", "application/json");
-  headers.set("cache-control", "no-store");
-  return new Response(JSON.stringify(body), { status, headers });
-}
-
-/** Header values from a core error that are safe to put on a response (RFC 9449 nonce syntax). */
-function nonceValues(error: AuthError): Array<[string, string]> {
-  const headers = error.headers;
-  if (headers === undefined || headers === null) return [];
-  const entry = Object.entries(headers).find(
-    ([key]) => key.toLowerCase() === "dpop-nonce",
-  );
-  if (entry === undefined) return [];
-  const values: unknown[] = Array.isArray(entry[1]) ? entry[1] : [entry[1]];
-  return values
-    .filter(
-      (value): value is string =>
-        typeof value === "string" && NONCE_PATTERN.test(value),
-    )
-    .map((value): [string, string] => ["DPoP-Nonce", value]);
-}
-
-function statusToError(
-  status: number | undefined,
-): ChallengeErrorCode | undefined {
-  if (status === 400) return "invalid_request";
-  if (status === 401) return "invalid_token";
-  if (status === 403) return "insufficient_scope";
-  return undefined;
-}
-
-function missingFrom(
-  required: readonly string[],
-  held: readonly string[],
-): string[] {
-  const have = new Set(held);
-  return required.filter((scope) => !have.has(scope));
-}
-
-function authFailure(
-  status: number,
-  code: ChallengeErrorCode,
-  extra: Partial<Failure> = {},
-): Failure {
+  const explicit: Record<string, unknown> = {};
+  for (const name of inline) explicit[name] = bag[name];
   return {
-    status,
-    error: code,
-    description: DESCRIPTIONS[code],
-    challenge: true,
-    ...extra,
+    client: createMcpClient(resolveMcpClientOptions(explicit as Partial<McpClientOptions>)),
+    rest: rest as never,
   };
-}
-
-const SERVER_FAILURE: Failure = {
-  status: 500,
-  bodyError: "server_error",
-  description: "Internal server error.",
-  challenge: false,
-};
-
-/**
- * Maps an error from credential extraction, verification, `withToken` or the
- * scope gate. Core errors keep their status class; everything else is a 500.
- */
-function classifyAuthentication(error: unknown): Failure {
-  if (error instanceof UnauthenticatedError) {
-    return authFailure(401, "invalid_token");
-  }
-  if (error instanceof AuthError) {
-    const forward = nonceValues(error);
-    const causeCode = (error.cause as { code?: unknown } | undefined)?.code;
-    if (error.code === "use_dpop_nonce" || causeCode === "use_dpop_nonce") {
-      // Without a usable nonce the client cannot retry, so report the proof as invalid.
-      return forward.length > 0
-        ? authFailure(401, "use_dpop_nonce", { scheme: "DPoP", forward })
-        : authFailure(401, "invalid_dpop_proof", { scheme: "DPoP" });
-    }
-    if (error instanceof InvalidDpopProofError) {
-      return authFailure(401, "invalid_dpop_proof", {
-        scheme: "DPoP",
-        forward,
-      });
-    }
-    if (error instanceof InvalidRequestError) {
-      return authFailure(400, "invalid_request", { forward });
-    }
-    if (error instanceof VerifyAccessTokenError) {
-      return authFailure(401, "invalid_token", { forward });
-    }
-    const code = statusToError(error.statusCode);
-    if (code !== undefined && error.statusCode !== undefined) {
-      return authFailure(error.statusCode, code, { forward });
-    }
-  }
-  return SERVER_FAILURE;
-}
-
-/**
- * Maps an error thrown by the downstream handler. Only the wrapper's own errors
- * become client-facing failures; anything else, including core errors such as a
- * failed token exchange, is an internal error and must not turn into a challenge.
- * These errors only reach this function when they escape the downstream handler.
- * Under `createMcpSdkHandler` the MCP SDK catches errors thrown by tools first, so
- * a downscoped exchange there becomes an `isError` tool result with HTTP 200.
- */
-function classifyDownstream(error: unknown, held: readonly string[]): Failure {
-  if (error instanceof InsufficientScopeError) {
-    return authFailure(403, "insufficient_scope", {
-      scope: missingFrom(error.requiredScopes, held),
-    });
-  }
-  if (error instanceof DownscopedTokenError) {
-    return authFailure(403, "insufficient_scope");
-  }
-  if (error instanceof UnauthenticatedError) {
-    return authFailure(401, "invalid_token");
-  }
-  return SERVER_FAILURE;
-}
-
-/**
- * The audience as a resource URL, or `undefined` when it cannot be one: not a
- * string, not an absolute http or https URL, or carrying a fragment or
- * credentials. The value is returned unchanged so it keeps matching the API
- * identifier byte for byte.
- */
-function resourceFromAudience(audience: unknown): string | undefined {
-  if (typeof audience !== "string" || audience === "" || audience !== audience.trim()) {
-    return undefined;
-  }
-  let url: URL;
-  try {
-    url = new URL(audience);
-  } catch {
-    return undefined;
-  }
-  if (
-    (url.protocol !== "http:" && url.protocol !== "https:") ||
-    url.hostname === "" ||
-    url.username !== "" ||
-    url.password !== "" ||
-    audience.includes("#")
-  ) {
-    return undefined;
-  }
-  return audience;
-}
-
-/**
- * The issuer for a tenant domain, normalized the way the core client normalizes
- * it: the scheme is optional and must be https, the host is lower-cased, and no
- * path, query, fragment or credentials are allowed. Returns `undefined` for
- * anything else.
- */
-function issuerFromDomain(domain: unknown): string | undefined {
-  if (typeof domain !== "string") return undefined;
-  const trimmed = domain.trim();
-  if (trimmed === "" || /^http:\/\//i.test(trimmed)) return undefined;
-  const withScheme = /^https:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  let url: URL;
-  try {
-    url = new URL(withScheme);
-  } catch {
-    return undefined;
-  }
-  if (
-    url.hostname === "" ||
-    url.username !== "" ||
-    url.password !== "" ||
-    url.search !== "" ||
-    url.hash !== "" ||
-    withScheme.includes("?") ||
-    withScheme.includes("#") ||
-    (url.pathname !== "/" && url.pathname !== "")
-  ) {
-    return undefined;
-  }
-  return `https://${url.host}/`;
 }
 
 /**
  * Applies the defaults for `resource` and `authorizationServers`. Explicit values
- * are returned unchanged. A missing value that cannot be derived from the client
- * is a configuration error that names the option to set.
+ * are returned unchanged, except that an explicit `resource` must equal the client
+ * audience. A missing value that cannot be derived from the client is a
+ * configuration error that names the option to set.
  *
  * @throws {InvalidConfigurationError} When a default is needed and the client does
- * not provide a usable audience or domain.
+ * not provide a usable audience or domain, or when `resource` differs from the audience.
+ * @internal
  */
 export function resolveHandlerEndpoints(
-  options: Pick<McpHandlerOptions, "client" | "resource" | "authorizationServers">,
+  client: McpClient,
+  options: Pick<McpHandlerBaseOptions, "resource" | "authorizationServers">,
 ): { resource: string; authorizationServers: string[] } {
-  let resource = options.resource;
-  if (resource === undefined) {
-    resource = resourceFromAudience(options.client.audience);
-    if (resource === undefined) {
-      throw new InvalidConfigurationError(
-        'Invalid configuration: "resource" is required because the client audience is not an absolute http or https URL. Set "resource" to the public URL of this server.',
-      );
-    }
-  }
-  let authorizationServers = options.authorizationServers;
-  if (authorizationServers === undefined) {
-    const issuer = issuerFromDomain(options.client.domain);
-    if (issuer === undefined) {
-      throw new InvalidConfigurationError(
-        'Invalid configuration: "authorizationServers" is required because the client does not declare a single tenant domain. Set "authorizationServers" to the issuer URLs of your authorization servers.',
-      );
-    }
-    authorizationServers = [issuer];
-  }
-  return { resource, authorizationServers };
+  return {
+    resource: resolveResource(client, options.resource),
+    authorizationServers: resolveAuthorizationServers(client, options.authorizationServers),
+  };
 }
 
 function validateMetadataPath(path: string, origin: string): void {
@@ -466,10 +200,18 @@ function validateMetadataPath(path: string, origin: string): void {
  * has no option to override it. The metadata route sends no CORS headers.
  *
  * `resource` and `authorizationServers` are optional. They default to the client's
- * audience and to `https://<domain>/`; see {@link McpHandlerOptions}.
+ * audience and to `https://<domain>/`; see {@link McpHandlerBaseOptions}. An explicit
+ * `resource` must equal the client audience. The client itself is configured through
+ * `client`, inline client options or the environment; see {@link McpHandlerClientConfig}.
+ *
+ * The metadata document is served at the RFC 9728 path derived from `resource` and also
+ * at the root `/.well-known/oauth-protected-resource`. Challenges point at the former.
  *
  * @throws {TypeError} When an explicit `resource` is not an absolute URL.
- * @throws {InvalidConfigurationError} When `resource` is omitted and the client
+ * @throws {InvalidConfigurationError} When `client` is combined with inline client options,
+ * when a required client value is missing from both the options and the environment,
+ * when an explicit `resource` differs from the client audience,
+ * when `resource` is omitted and the client
  * audience is not an absolute http or https URL, when `authorizationServers` is omitted
  * and the client does not declare a usable tenant domain, when `metadata.path` is not a normalized absolute path,
  * or `realm` is empty, whitespace-only or contains characters a challenge cannot carry.
@@ -477,100 +219,36 @@ function validateMetadataPath(path: string, origin: string): void {
 export function createMcpHandler(
   options: McpHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  const { resource, authorizationServers } = resolveHandlerEndpoints(options);
+  const { client, rest } = resolveHandlerClient(options);
+  const { resource, authorizationServers } = resolveHandlerEndpoints(client, rest);
   const resourceUrl = new URL(resource);
-  if (
-    options.realm !== undefined &&
-    (typeof options.realm !== "string" ||
-      options.realm.trim() === "" ||
-      sanitizeChallengeValue(options.realm) !== options.realm)
-  ) {
-    throw new InvalidConfigurationError(
-      'Invalid configuration: "realm" must be a non-empty string without quotes, backslashes or control characters.',
-    );
+  const resourcePath = resourcePathOf(resourceUrl);
+  if (rest.metadata?.path !== undefined) {
+    validateMetadataPath(rest.metadata.path, resourceUrl.origin);
   }
-  const dpop = options.client.dpopMode;
-  const schemes = schemesFor(dpop);
-  const resourcePath =
-    resourceUrl.pathname === "/" ? "" : resourceUrl.pathname.replace(/\/$/, "");
-  if (options.metadata?.path !== undefined) {
-    validateMetadataPath(options.metadata.path, resourceUrl.origin);
-  }
-  const metadataPath =
-    options.metadata?.path ?? `${WELL_KNOWN_PRM}${resourcePath}`;
-  const metadataUrl = new URL(metadataPath, resourceUrl.origin).href;
-  const requiredScopes = [...new Set(options.requiredScopes ?? [])];
-
-  const builder = new ProtectedResourceMetadataBuilder(
+  // The RFC 9728 route is the primary one and the only one challenges point at. The root
+  // route is served as well, because clients that probe the origin look there first.
+  const metadataPath = rest.metadata?.path ?? `${WELL_KNOWN_PRM}${resourcePath}`;
+  const metadataPaths = new Set([metadataPath, WELL_KNOWN_PRM]);
+  const authenticator = createAuthenticator({
+    client,
     resource,
-    authorizationServers,
+    requiredScopes: rest.requiredScopes,
+    realm: rest.realm,
+    resourceMetadataUrl: new URL(metadataPath, resourceUrl.origin).href,
+    onError: rest.onError,
+  });
+  const metadataBody = JSON.stringify(
+    buildProtectedResourceMetadata({
+      client,
+      resource,
+      authorizationServers,
+      scopesSupported: rest.metadata?.scopesSupported,
+      resourceName: rest.metadata?.resourceName,
+      resourceDocumentation: rest.metadata?.resourceDocumentation,
+    }),
   );
-  builder.withBearerMethodsSupported([BearerMethod.HEADER]);
-  if (dpop !== "disabled") builder.withDpopSigningAlgValuesSupported(["ES256"]);
-  if (dpop === "required") builder.withDpopBoundAccessTokensRequired(true);
-  const meta = options.metadata;
-  if (meta?.scopesSupported !== undefined)
-    builder.withScopesSupported(meta.scopesSupported);
-  if (meta?.resourceName !== undefined)
-    builder.withResourceName(meta.resourceName);
-  if (meta?.resourceDocumentation !== undefined)
-    builder.withResourceDocumentation(meta.resourceDocumentation);
-  const metadataBody = JSON.stringify(builder.build().toJSON());
-
-  function respond(failure: Failure, presented?: ChallengeScheme): Response {
-    const headers = new Headers();
-    if (failure.challenge) {
-      const values = buildWwwAuthenticate({
-        schemes,
-        error: failure.error,
-        errorDescription:
-          failure.error === undefined ? undefined : failure.description,
-        scope: failure.scope,
-        realm: options.realm,
-        resourceMetadata: metadataUrl,
-        errorScheme: failure.scheme ?? presented,
-      });
-      for (const value of values) headers.append("www-authenticate", value);
-    }
-    for (const [name, value] of failure.forward ?? [])
-      headers.append(name, value);
-    return jsonResponse(
-      failure.status,
-      {
-        error: failure.error ?? failure.bodyError,
-        error_description: failure.description,
-      },
-      headers,
-    );
-  }
-
-  function report(error: unknown): void {
-    try {
-      const result: unknown = options.onError?.(error);
-      if (isThenable(result)) {
-        // An async observer that rejects must not surface as an unhandled rejection.
-        result.then(undefined, () => {});
-      }
-    } catch {
-      // A failing observer must not change the response.
-    }
-  }
-
-  /** Builds the failure response. Nothing in here may escape to the framework. */
-  function fail(
-    classify: () => Failure,
-    error: unknown,
-    presented?: ChallengeScheme,
-  ): Response {
-    try {
-      const failure = classify();
-      if (failure.status === 500) report(error);
-      return respond(failure, presented);
-    } catch {
-      report(error);
-      return genericServerError();
-    }
-  }
+  const { fail } = authenticator.responder;
 
   return async function handle(request: Request): Promise<Response> {
     let url: URL;
@@ -580,7 +258,7 @@ export function createMcpHandler(
       // Same treatment as other malformed requests: a well-formed 400 challenge.
       return fail(() => authFailure(400, "invalid_request"), undefined);
     }
-    if (url.pathname === metadataPath) {
+    if (metadataPaths.has(url.pathname)) {
       if (request.method !== "GET") {
         return new Response(null, { status: 405, headers: { allow: "GET" } });
       }
@@ -593,88 +271,17 @@ export function createMcpHandler(
       });
     }
 
-    const credentials = extractCredentials(request, dpop);
-    if (credentials.kind === "absent") {
-      return fail(
-        () => ({
-          status: 401,
-          bodyError: "unauthorized",
-          description: "Authentication is required.",
-          challenge: true,
-        }),
-        undefined,
-      );
-    }
-    if (credentials.kind === "malformed") {
-      return fail(
-        () => authFailure(400, "invalid_request"),
-        undefined,
-        credentials.scheme,
-      );
-    }
-
-    const presented: ChallengeScheme =
-      credentials.kind === "dpop" ? "DPoP" : "Bearer";
-    let principal: Principal;
-    let mcpClient: RequestScopedMcpClient;
+    const result = await authenticator.authenticate(request);
+    if (!result.ok) return result.response;
+    const { authInfo, caller } = result;
     try {
-      const verifyOptions: VerifyAccessTokenOptions =
-        credentials.kind === "dpop"
-          ? {
-              accessToken: credentials.token,
-              scheme: "dpop",
-              dpopProof: credentials.proof,
-              httpMethod: request.method,
-              httpUrl: request.url,
-            }
-          : { accessToken: credentials.token, scheme: "bearer" };
-      const caller = await options.client.verifyAccessToken(verifyOptions);
-      principal = caller.principal;
-
-      const missing = missingFrom(requiredScopes, principal.scopes);
-      if (missing.length > 0) {
-        return respond(
-          authFailure(403, "insufficient_scope", { scope: missing }),
-          presented,
-        );
-      }
-      mcpClient = options.client.withToken(caller);
-    } catch (error) {
-      return fail(() => classifyAuthentication(error), error, presented);
-    }
-
-    const authInfo: AuthInfo = {
-      token: '',
-      clientId: principal.clientId ?? "",
-      scopes: [...principal.scopes],
-      expiresAt: principal.expiresAt,
-      resource: resourceUrl,
-      extra: {
-        sub: principal.sub,
-        ...(principal.orgId !== null && { orgId: principal.orgId }),
-        ...(principal.permissions !== null && {
-          permissions: [...principal.permissions],
-        }),
-      },
-    };
-    try {
-      return await runWithRequestContext({ principal, mcpClient }, () =>
-        options.handler(request, authInfo),
-      );
+      return await result.run(() => rest.handler(request, authInfo));
     } catch (error) {
       return fail(
-        () => classifyDownstream(error, principal.scopes),
+        () => classifyDownstream(error, caller.principal.scopes),
         error,
-        presented,
+        result.scheme,
       );
     }
   };
-}
-
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { then?: unknown }).then === "function"
-  );
 }
