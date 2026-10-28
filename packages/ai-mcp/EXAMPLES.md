@@ -25,7 +25,7 @@ import {
   withRequiredScopes,
 } from '@auth0/ai-mcp';
 import { createNodeMcpHandler } from '@auth0/ai-mcp/mcp-sdk';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 
 const RESOURCE = 'https://mcp.example.com/mcp';
 const DOWNSTREAM = 'https://reports-api.example.com';

@@ -27,7 +27,7 @@ Scope checks use the `scopes` field only. The `permissions` claim is there for y
 
 ## The token inside tools
 
-Tools never receive the raw access token. On the MCP SDK adapter, `extra.authInfo.token` is intentionally an empty string, and tools call downstream APIs through the request-scoped client. The MCP SDK still exposes the raw request headers, including `Authorization`, to tools through `extra.requestInfo.headers`, so tool code must not log or forward headers.
+Tools never receive the raw access token. On the MCP SDK adapter, `ctx.http.authInfo.token` is intentionally an empty string, and tools call downstream APIs through the request-scoped client. The MCP SDK still exposes the raw request headers, including `Authorization`, to tools through `ctx.http.req.headers`, so tool code must not log or forward headers.
 
 ## Verifying a token yourself
 
