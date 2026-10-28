@@ -123,6 +123,19 @@ function withCause<T extends Error>(error: T, cause: unknown): T {
   return error;
 }
 
+/**
+ * Rejects a token the authorization server issued that is already expired, so it is never
+ * returned to tool code. The failure carries the generic message and a diagnostic `cause`
+ * that holds no token data. `expiresAt` is epoch seconds, the convention of the core client.
+ * The core client stores an exchange result before this check runs and its cache treats an
+ * expired entry as a miss, so an expired entry may remain in a store but is never served.
+ */
+function assertNotExpired(expiresAt: number): void {
+  if (!Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) {
+    throw withCause(new Error(GENERIC_FAILURE_MESSAGE), new Error('The token endpoint issued an already expired token.'));
+  }
+}
+
 /** Prototypes of the error classes the core package exports. Only these are ever copied onto a sanitized error. */
 const CORE_ERROR_PROTOTYPES: ReadonlySet<object> = new Set(
   (Object.values(core) as unknown[]).flatMap((value) =>
@@ -239,6 +252,7 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
         const shared = key === undefined ? await exchange(options) : await exchanges.run(key, () => exchange(options));
         // Each caller gets its own copy, so one caller changing its result cannot alter another's.
         const result = { ...shared, grantedScopes: [...shared.grantedScopes] };
+        assertNotExpired(result.expiresAt);
 
         // The core client caches the token under the scopes it was granted and does not
         // reject a narrowed result. Rejecting it here keeps the cache correct (a later,
@@ -249,12 +263,14 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
       }),
 
     getClientCredentialsToken: async (options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult> => {
-      const result = await guarded(() =>
-        apiClient.getClientCredentialsToken({
+      const result = await guarded(async () => {
+        const issued = await apiClient.getClientCredentialsToken({
           audience: options.audience,
           ...(options.scope !== undefined && { scope: options.scope }),
-        })
-      );
+        });
+        assertNotExpired(issued.expiresAt);
+        return issued;
+      });
       // RFC 6749 section 5.1: an absent `scope` means the grant equals the request, while an
       // empty string means nothing was granted. `??` keeps those two apart; `||` would not.
       const grantedScopes = normalizeScopes(result.scope ?? options.scope ?? '');
@@ -264,15 +280,17 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
     },
 
     getTokenForConnection: (options: TokenForConnectionOptions) =>
-      guarded(() =>
-        apiClient.getAccessTokenForConnection({
+      guarded(async () => {
+        const issued = await apiClient.getAccessTokenForConnection({
           connection: options.connection,
           accessToken: verified.accessToken,
           ...(options.loginHint !== undefined && {
             loginHint: options.loginHint,
           }),
-        })
-      ),
+        });
+        assertNotExpired(issued.expiresAt);
+        return issued;
+      }),
 
     getPrincipal(): Principal {
       return principal;
