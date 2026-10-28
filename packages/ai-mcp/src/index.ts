@@ -14,6 +14,7 @@ export type {
   ConnectionTokenResult,
 } from './types.js';
 export { buildPrincipal } from './principal.js';
+export { mcpClientOptionsFromEnv, resolveMcpClientOptions } from './env.js';
 export { createMcpClient, ForeignCallerError } from './client.js';
 export type { McpClient, VerifiedCaller } from './client.js';
 export {
