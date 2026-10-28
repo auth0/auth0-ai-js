@@ -10,8 +10,8 @@
  * Scenario ids (E-M-01 and so on) are part of the test titles; the runner builds report rows from them.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { McpServer } from "@modelcontextprotocol/server";
+import * as z from "zod";
 import { MemoryIndexedTokenStore } from "../../src/stores/memory-indexed-store.js";
 import { getRequestContext } from "../../src/request-context.js";
 import { withRequiredScopes } from "../../src/scopes.js";
@@ -90,7 +90,7 @@ function registerTools(urls: Downstreams["urls"]) {
     );
     mcp.registerTool(
       "store-report",
-      { description: "Orders and Inventory on behalf of the caller, Analytics as the server.", inputSchema: { parallel: z.boolean().optional() } },
+      { description: "Orders and Inventory on behalf of the caller, Analytics as the server.", inputSchema: z.object({ parallel: z.boolean().optional() }) },
       async ({ parallel }) => {
         const context = getRequestContext();
         if (context === undefined) throw new Error("No request context.");
@@ -117,7 +117,7 @@ function registerTools(urls: Downstreams["urls"]) {
     );
     mcp.registerTool(
       "machine-token",
-      { description: "Client credentials token for an audience; reports the outcome only.", inputSchema: { audience: z.string(), scope: z.string() } },
+      { description: "Client credentials token for an audience; reports the outcome only.", inputSchema: z.object({ audience: z.string(), scope: z.string() }) },
       async ({ audience, scope }) => {
         const context = getRequestContext();
         if (context === undefined) throw new Error("No request context.");
