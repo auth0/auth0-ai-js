@@ -253,7 +253,7 @@ describe('request-scoped client: error hygiene', () => {
     const client = makeClient();
     const scoped = client.withToken(await caller(client));
 
-    expectSanitized(await rejection(scoped.getTokenForService({ connection: 'github' })));
+    expectSanitized(await rejection(scoped.getTokenForConnection({ connection: 'github' })));
   });
 
   it('gives every concurrent waiter its own sanitized error', async () => {
