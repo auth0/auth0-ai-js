@@ -17,9 +17,8 @@ import type { AddressInfo } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpClient } from "../../src/client.js";
 import type { McpClient } from "../../src/client.js";
 import { createMcpSdkHandler, createNodeMcpHandler } from "../../src/mcp-sdk.js";
@@ -298,13 +297,10 @@ export function buildToolServer(options: ToolServerOptions): McpServer {
   mcp.registerTool(
     "forward_inbound",
     { description: "Sends the caller's own inbound token downstream, which a server must never do." },
-    async (extra) => {
+    async (ctx) => {
       // AuthInfo.token is withheld (always ''), so a server that forwards the inbound token has to
       // read the raw Authorization header, the one remaining channel the transport exposes.
-      const headers = (extra as { requestInfo?: { headers?: Record<string, string | string[] | undefined> } })
-        .requestInfo?.headers;
-      const raw = headers?.authorization;
-      const authorization = Array.isArray(raw) ? raw[0] : raw;
+      const authorization = ctx.http?.req?.headers.get("authorization") ?? undefined;
       if (authorization === undefined) {
         throw new Error("forward_inbound: the request carried no Authorization header to forward");
       }

@@ -116,7 +116,7 @@ describe.each(WIRINGS)("request context under concurrency (%s wiring)", (wiring)
         }
 
         // A request without credentials never reaches a tool and must not disturb anyone's context.
-        await expect(connectClient(app)).rejects.toMatchObject({ code: 401 });
+        await expect(connectClient(app)).rejects.toMatchObject({ status: 401 });
 
         open();
         expect(await Promise.all(probe.pending)).toEqual(["user|first"]);
