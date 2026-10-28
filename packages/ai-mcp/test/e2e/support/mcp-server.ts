@@ -25,8 +25,19 @@ export interface DownstreamTarget {
   scope?: string;
 }
 
+/**
+ * How the handler under test gets its client. `client` builds one with `createMcpClient` and
+ * passes it (the default). `inline` passes the connection settings as handler options. `env`
+ * passes none of them: the handler reads `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID`
+ * and `AUTH0_CLIENT_SECRET`, which the support code sets while the handler is constructed and
+ * restores right after.
+ */
+export type E2eConfigurationTier = "client" | "inline" | "env";
+
 export interface E2eMcpServerOptions {
   env: E2eEnv;
+  /** Configuration tier of the handler. Defaults to `client`. */
+  configuration?: E2eConfigurationTier;
   /** Downstream API URL the `delegate` tool calls (see `startDownstreamApi`). */
   downstreamUrl: string;
   /** Audience the server accepts. Defaults to the MCP API of the contract. */
@@ -69,8 +80,8 @@ export interface E2eMcpServer {
    * rebuilds requests on the resource origin, so this is the `htu` a DPoP proof must carry.
    */
   htu: string;
-  /** The wrapper client the handler uses. */
-  client: McpClient;
+  /** The wrapper client the handler uses. `undefined` unless the configuration tier is `client`. */
+  client: McpClient | undefined;
   close(): Promise<void>;
 }
 
@@ -214,7 +225,7 @@ export function buildTools(deps: ToolDeps): McpServer {
     async ({ connection, loginHint }) => {
       const context = getRequestContext();
       if (context === undefined) throw new Error("No request context.");
-      const result = await context.mcpClient.getTokenForService({
+      const result = await context.mcpClient.getTokenForConnection({
         connection,
         ...(loginHint !== undefined && { loginHint }),
       });
@@ -231,36 +242,78 @@ export function buildTools(deps: ToolDeps): McpServer {
 }
 
 interface Built {
-  client: McpClient;
+  client: McpClient | undefined;
   handlerOptions: Parameters<typeof createMcpSdkHandler>[0];
   audience: string;
+  /** Environment values the handler reads while it is constructed (tier `env` only). */
+  handlerEnv: Record<string, string>;
+}
+
+/** Runs `construct` with the given variables set, then restores the previous values. */
+function withEnvironment<T>(values: Record<string, string>, construct: () => T): T {
+  const previous = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries(values)) {
+    previous.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+  try {
+    return construct();
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 }
 
 function build(options: E2eMcpServerOptions): Built {
   const { env } = options;
   const audience = options.audience ?? env.mcpAudience;
-  const client = createMcpClient({
-    domain: env.domain,
-    audience,
-    clientId: env.oboClientId,
-    clientSecret: options.clientSecret ?? env.oboClientSecret,
+  const tier = options.configuration ?? "client";
+  const clientSecret = options.clientSecret ?? env.oboClientSecret;
+  const tuning = {
     ...(options.scopeMatching !== undefined && { scopeMatching: options.scopeMatching }),
     ...(options.tokenStore !== undefined && options.tokenStore !== null && { tokenStore: options.tokenStore }),
     ...(options.organizationPolicy !== undefined && { organizationPolicy: options.organizationPolicy }),
     ...(options.organizationId !== undefined && { organizationId: options.organizationId }),
     ...(options.dpop !== undefined && { dpop: options.dpop }),
     ...(options.requestTimeoutMs !== undefined && { requestTimeoutMs: options.requestTimeoutMs }),
-  });
+  };
+  const connection = {
+    domain: env.domain,
+    audience,
+    clientId: env.oboClientId,
+    clientSecret,
+  };
   const deps: ToolDeps = {
     downstreamUrl: options.downstreamUrl,
     env,
     downstreams: options.downstreams ?? [],
   };
+
+  let client: McpClient | undefined;
+  let clientPart: Record<string, unknown>;
+  let handlerEnv: Record<string, string> = {};
+  if (tier === "client") {
+    client = createMcpClient({ ...connection, ...tuning });
+    clientPart = { client };
+  } else if (tier === "inline") {
+    clientPart = { ...connection, ...tuning };
+  } else {
+    clientPart = { ...tuning };
+    handlerEnv = {
+      AUTH0_DOMAIN: connection.domain,
+      AUTH0_AUDIENCE: connection.audience,
+      AUTH0_CLIENT_ID: connection.clientId,
+      AUTH0_CLIENT_SECRET: connection.clientSecret,
+    };
+  }
   return {
     client,
     audience,
+    handlerEnv,
     handlerOptions: {
-      client,
+      ...clientPart,
       ...(options.explicitEndpoints === true && {
         resource: audience,
         authorizationServers: [env.issuer],
@@ -271,7 +324,7 @@ function build(options: E2eMcpServerOptions): Built {
         options.registerTools?.(mcp, deps);
         return mcp;
       },
-    },
+    } as Parameters<typeof createMcpSdkHandler>[0],
   };
 }
 
@@ -359,8 +412,10 @@ function bridge(
  * `afterEach` or `afterAll`. Tools: `whoami`, `delegate`, `service`, and `multi-downstream` when `downstreams` is given.
  */
 export async function startMcpServer(options: E2eMcpServerOptions): Promise<E2eMcpServer> {
-  const { client, handlerOptions, audience } = build(options);
-  const server = await listen((req, res) => void createNodeMcpHandler(handlerOptions)(req, res), options.port);
+  const { client, handlerOptions, audience, handlerEnv } = build(options);
+  // Built once, like a real server: an environment-configured handler reads the variables here.
+  const listener = withEnvironment(handlerEnv, () => createNodeMcpHandler(handlerOptions));
+  const server = await listen((req, res) => void listener(req, res), options.port);
   return {
     url: new URL(`http://127.0.0.1:${server.port}/mcp`),
     htu: `${new URL(audience).origin}/mcp`,
@@ -375,8 +430,8 @@ export async function startMcpServer(options: E2eMcpServerOptions): Promise<E2eM
  * The bridge builds requests on the resource origin like the Node adapter, so `htu` matches.
  */
 export async function startWebMcpServer(options: E2eMcpServerOptions): Promise<E2eWebMcpServer> {
-  const { client, handlerOptions, audience } = build(options);
-  const handle = createMcpSdkHandler(handlerOptions);
+  const { client, handlerOptions, audience, handlerEnv } = build(options);
+  const handle = withEnvironment(handlerEnv, () => createMcpSdkHandler(handlerOptions));
   const origin = new URL(audience).origin;
   const server = await listen(bridge(handle, origin), options.port);
   const resourcePath = new URL(audience).pathname.replace(/\/$/, "");

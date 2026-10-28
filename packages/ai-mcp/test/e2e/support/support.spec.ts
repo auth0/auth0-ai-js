@@ -496,6 +496,54 @@ describe("evaluateClientPrerequisites", () => {
   });
 });
 
+describe("configuration tiers of the server helpers (no tenant needed)", () => {
+  const env = {
+    domain: "tenant.example.test",
+    issuer: "https://tenant.example.test/",
+    mcpAudience: "https://mcp.example.test/api",
+    downstreamAudience: "https://work.example.test",
+    downstreamScope: "work:read",
+    oboClientId: "client",
+    oboClientSecret: "not-a-real-secret",
+  } as unknown as E2eEnv;
+  const names = ["AUTH0_DOMAIN", "AUTH0_AUDIENCE", "AUTH0_CLIENT_ID", "AUTH0_CLIENT_SECRET"] as const;
+
+  it.each(["client", "inline", "env"] as const)("the %s tier serves both metadata routes", async (configuration) => {
+    const before = names.map((name) => process.env[name]);
+    const server = await startMcpServer({ env, downstreamUrl: "http://127.0.0.1:1/", configuration });
+    try {
+      const suffixed = await fetch(new URL("/.well-known/oauth-protected-resource/api", server.url.origin));
+      const root = await fetch(new URL("/.well-known/oauth-protected-resource", server.url.origin));
+      expect(suffixed.status).toBe(200);
+      const doc = (await suffixed.json()) as { resource: string; authorization_servers: string[] };
+      expect(doc).toMatchObject({ resource: env.mcpAudience, authorization_servers: [env.issuer] });
+      expect(await root.json()).toEqual(doc);
+      expect(server.client === undefined).toBe(configuration !== "client");
+    } finally {
+      await server.close();
+    }
+    expect(names.map((name) => process.env[name])).toEqual(before);
+  });
+
+  it("restores the environment when the env tier cannot construct a handler", async () => {
+    const before = names.map((name) => process.env[name]);
+    await expect(
+      startMcpServer({ env, downstreamUrl: "http://127.0.0.1:1/", configuration: "env", requestTimeoutMs: 0 }),
+    ).rejects.toThrow();
+    expect(names.map((name) => process.env[name])).toEqual(before);
+  });
+
+  it("the web handler follows the env tier too", async () => {
+    const server = await startWebMcpServer({ env, downstreamUrl: "http://127.0.0.1:1/", configuration: "env" });
+    try {
+      const doc = (await (await fetch(server.metadataUrl)).json()) as { resource: string };
+      expect(doc.resource).toBe(env.mcpAudience);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
 describe("default CI never runs the real-tenant specs", () => {
   const e2eDir = new URL("..", import.meta.url);
 
