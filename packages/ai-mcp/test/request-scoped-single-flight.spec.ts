@@ -236,7 +236,7 @@ describe('single flight on getTokenOnBehalfOf', () => {
   it('does not exchange a token with a non-string keyed claim together with another caller', async () => {
     useTenant();
     const client = makeClient();
-    const odd = await scoped(client, 'user|1', { org_id: 42 });
+    const odd = await scoped(client, 'user|1', { sid: 42 });
     const plain = await scoped(client, 'user|1');
 
     await Promise.all([
