@@ -56,10 +56,28 @@ export type HandlerDpopMode = McpClient["dpopMode"];
 export interface McpHandlerOptions {
   /** Verifies tokens and creates the request-scoped client. */
   client: McpClient;
-  /** Identifier of this MCP server. Absolute URL; used as the `resource` of the metadata document. */
-  resource: string;
-  /** Issuer URLs of the authorization servers that can issue tokens for this server. */
-  authorizationServers: string[];
+  /**
+   * Identifier of this MCP server: the absolute URL clients use to reach it,
+   * published as the `resource` of the RFC 9728 metadata document and sent back by
+   * clients as the RFC 8707 `resource` parameter.
+   *
+   * Defaults to `client.audience` when that is an absolute `http` or `https` URL
+   * without a fragment or credentials, which is the recommended setup. Set it
+   * yourself when the audience is not such a URL (for example a plain identifier
+   * or a URN) or when the public URL differs from the audience (a proxy, a
+   * different public host).
+   */
+  resource?: string;
+  /**
+   * Issuer URLs of the authorization servers that can issue tokens for this server.
+   * Each entry must match the `iss` value clients see.
+   *
+   * Defaults to `["https://<domain>/"]`, built from `client.domain` (the scheme is
+   * optional, the host is lower-cased). Set it yourself to advertise several
+   * authorization servers, an issuer that does not look like that, or when the
+   * client does not declare a single domain.
+   */
+  authorizationServers?: string[];
   /**
    * Serves the authenticated request. It runs inside the request context, so
    * `getCallerMcpClient()` and friends work in everything it starts.
@@ -320,6 +338,99 @@ function classifyDownstream(error: unknown, held: readonly string[]): Failure {
   return SERVER_FAILURE;
 }
 
+/**
+ * The audience as a resource URL, or `undefined` when it cannot be one: not a
+ * string, not an absolute http or https URL, or carrying a fragment or
+ * credentials. The value is returned unchanged so it keeps matching the API
+ * identifier byte for byte.
+ */
+function resourceFromAudience(audience: unknown): string | undefined {
+  if (typeof audience !== "string" || audience === "" || audience !== audience.trim()) {
+    return undefined;
+  }
+  let url: URL;
+  try {
+    url = new URL(audience);
+  } catch {
+    return undefined;
+  }
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.hostname === "" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    audience.includes("#")
+  ) {
+    return undefined;
+  }
+  return audience;
+}
+
+/**
+ * The issuer for a tenant domain, normalized the way the core client normalizes
+ * it: the scheme is optional and must be https, the host is lower-cased, and no
+ * path, query, fragment or credentials are allowed. Returns `undefined` for
+ * anything else.
+ */
+function issuerFromDomain(domain: unknown): string | undefined {
+  if (typeof domain !== "string") return undefined;
+  const trimmed = domain.trim();
+  if (trimmed === "" || /^http:\/\//i.test(trimmed)) return undefined;
+  const withScheme = /^https:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  let url: URL;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    return undefined;
+  }
+  if (
+    url.hostname === "" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    withScheme.includes("?") ||
+    withScheme.includes("#") ||
+    (url.pathname !== "/" && url.pathname !== "")
+  ) {
+    return undefined;
+  }
+  return `https://${url.host}/`;
+}
+
+/**
+ * Applies the defaults for `resource` and `authorizationServers`. Explicit values
+ * are returned unchanged. A missing value that cannot be derived from the client
+ * is a configuration error that names the option to set.
+ *
+ * @throws {InvalidConfigurationError} When a default is needed and the client does
+ * not provide a usable audience or domain.
+ */
+export function resolveHandlerEndpoints(
+  options: Pick<McpHandlerOptions, "client" | "resource" | "authorizationServers">,
+): { resource: string; authorizationServers: string[] } {
+  let resource = options.resource;
+  if (resource === undefined) {
+    resource = resourceFromAudience(options.client.audience);
+    if (resource === undefined) {
+      throw new InvalidConfigurationError(
+        'Invalid configuration: "resource" is required because the client audience is not an absolute http or https URL. Set "resource" to the public URL of this server.',
+      );
+    }
+  }
+  let authorizationServers = options.authorizationServers;
+  if (authorizationServers === undefined) {
+    const issuer = issuerFromDomain(options.client.domain);
+    if (issuer === undefined) {
+      throw new InvalidConfigurationError(
+        'Invalid configuration: "authorizationServers" is required because the client does not declare a single tenant domain. Set "authorizationServers" to the issuer URLs of your authorization servers.',
+      );
+    }
+    authorizationServers = [issuer];
+  }
+  return { resource, authorizationServers };
+}
+
 function validateMetadataPath(path: string, origin: string): void {
   let normalized: string | undefined;
   if (path.startsWith("/")) {
@@ -355,14 +466,20 @@ function validateMetadataPath(path: string, origin: string): void {
  * URL, pass a `Request` whose URL is the public one the client used; the handler
  * has no option to override it. The metadata route sends no CORS headers.
  *
- * @throws {TypeError} When `resource` is not an absolute URL.
- * @throws {InvalidConfigurationError} When `metadata.path` is not a normalized absolute path,
+ * `resource` and `authorizationServers` are optional. They default to the client's
+ * audience and to `https://<domain>/`; see {@link McpHandlerOptions}.
+ *
+ * @throws {TypeError} When an explicit `resource` is not an absolute URL.
+ * @throws {InvalidConfigurationError} When `resource` is omitted and the client
+ * audience is not an absolute http or https URL, when `authorizationServers` is omitted
+ * and the client does not declare a usable tenant domain, when `metadata.path` is not a normalized absolute path,
  * or `realm` is empty, whitespace-only or contains characters a challenge cannot carry.
  */
 export function createMcpHandler(
   options: McpHandlerOptions,
 ): (request: Request) => Promise<Response> {
-  const resourceUrl = new URL(options.resource);
+  const { resource, authorizationServers } = resolveHandlerEndpoints(options);
+  const resourceUrl = new URL(resource);
   if (
     options.realm !== undefined &&
     (typeof options.realm !== "string" ||
@@ -386,8 +503,8 @@ export function createMcpHandler(
   const requiredScopes = [...new Set(options.requiredScopes ?? [])];
 
   const builder = new ProtectedResourceMetadataBuilder(
-    options.resource,
-    options.authorizationServers,
+    resource,
+    authorizationServers,
   );
   builder.withBearerMethodsSupported([BearerMethod.HEADER]);
   if (dpop !== "disabled") builder.withDpopSigningAlgValuesSupported(["ES256"]);

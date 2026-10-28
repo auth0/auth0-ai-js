@@ -16,6 +16,7 @@ import {
 } from "jose";
 import { setupServer } from "msw/node";
 import {
+  ApiClient,
   AuthError,
   InvalidConfigurationError,
   InvalidDpopProofError,
@@ -1296,5 +1297,217 @@ describe("pre-verification responses never escape", () => {
 describe("configuration", () => {
   it("rejects a resource that is not an absolute URL", () => {
     expect(() => makeHandler({ resource: "not a url" })).toThrow(TypeError);
+  });
+});
+
+describe("resource and authorizationServers defaults", () => {
+  async function metadataFor(
+    client: McpClient,
+    options: Partial<McpHandlerOptions> = {},
+    url?: string,
+  ) {
+    const { handle } = makeHandler(
+      { resource: undefined, authorizationServers: undefined, ...options },
+      undefined,
+      client,
+    );
+    const response = await handle(
+      new Request(
+        url ?? "https://mcp.example.com/.well-known/oauth-protected-resource",
+      ),
+    );
+    return { response, body: await response.json() };
+  }
+
+  const bare = (overrides: ClientOverrides) => makeClient(overrides);
+
+  it("publishes the client audience and the tenant issuer when both are omitted", async () => {
+    const { response, body } = await metadataFor(makeClient());
+    expect(response.status).toBe(200);
+    expect(body.resource).toBe(AUDIENCE);
+    expect(body.authorization_servers).toEqual(["https://tenant.example.com/"]);
+  });
+
+  it("derives the metadata path and the challenge url from the audience path", async () => {
+    const { handle } = makeHandler(
+      { resource: undefined, authorizationServers: undefined },
+      undefined,
+      bare({ audience: "https://mcp.example.com/api/mcp" }),
+    );
+    const metadata = await handle(
+      new Request(
+        "https://mcp.example.com/.well-known/oauth-protected-resource/api/mcp",
+      ),
+    );
+    expect(metadata.status).toBe(200);
+    const challenge = await handle(
+      request({}, {}, "https://mcp.example.com/api/mcp"),
+    );
+    expect(challenge.status).toBe(401);
+    expect(challenge.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/api/mcp"',
+    );
+  });
+
+  it("uses an http audience as is for local development", async () => {
+    const { body } = await metadataFor(
+      bare({ audience: "http://localhost:3000/mcp" }),
+      {},
+      "http://localhost:3000/.well-known/oauth-protected-resource/mcp",
+    );
+    expect(body.resource).toBe("http://localhost:3000/mcp");
+  });
+
+  it("keeps a trailing slash of the audience", async () => {
+    const { body } = await metadataFor(
+      bare({ audience: "https://mcp.example.com/" }),
+    );
+    expect(body.resource).toBe("https://mcp.example.com/");
+  });
+
+  it.each([
+    ["a plain identifier", "my-mcp-server"],
+    ["a urn", "urn:acme:mcp"],
+    ["a non-http url", "ftp://mcp.example.com/mcp"],
+    ["a url with a fragment", "https://mcp.example.com/mcp#frag"],
+    ["a url with credentials", "https://user:pw@mcp.example.com/mcp"],
+    ["a url with surrounding whitespace", " https://mcp.example.com/mcp"],
+  ])("requires an explicit resource when the audience is %s", (_name, audience) => {
+    const client = bare({ audience });
+    expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
+      InvalidConfigurationError,
+    );
+    expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
+      /"resource" is required/,
+    );
+  });
+
+  it("accepts an explicit resource when the audience cannot be one", async () => {
+    const { body } = await metadataFor(bare({ audience: "my-mcp-server" }), {
+      resource: "https://mcp.example.com",
+    });
+    expect(body.resource).toBe("https://mcp.example.com");
+  });
+
+  it("lets an explicit resource win over a usable audience", async () => {
+    const { body } = await metadataFor(
+      makeClient(),
+      { resource: "https://public.example.org/mcp" },
+      "https://public.example.org/.well-known/oauth-protected-resource/mcp",
+    );
+    expect(body.resource).toBe("https://public.example.org/mcp");
+  });
+
+  it("requires an explicit resource when the client declares no audience", () => {
+    const client: McpClient = { ...makeClient(), audience: undefined };
+    expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
+      /"resource" is required/,
+    );
+  });
+
+  it.each([
+    ["a bare host", "tenant.example.com", "https://tenant.example.com/"],
+    ["an upper-case host", "Tenant.Example.COM", "https://tenant.example.com/"],
+    ["a custom domain", "login.example.org", "https://login.example.org/"],
+    ["a scheme and a slash", "https://tenant.example.com/", "https://tenant.example.com/"],
+    ["a scheme without a slash", "https://tenant.example.com", "https://tenant.example.com/"],
+    ["a port", "tenant.example.com:8443", "https://tenant.example.com:8443/"],
+  ])("derives the issuer from %s", async (_name, domain, expected) => {
+    const { body } = await metadataFor(bare({ domain }));
+    expect(body.authorization_servers).toEqual([expected]);
+  });
+
+  it.each([
+    ["an http url", "http://tenant.example.com"],
+    ["a path", "tenant.example.com/tenant"],
+    ["a query", "tenant.example.com?x=1"],
+    ["a fragment", "tenant.example.com#frag"],
+    ["credentials", "user:pw@tenant.example.com"],
+    ["whitespace inside", "tenant example.com"],
+    ["an empty value", ""],
+  ])("requires explicit authorizationServers when the domain is %s", (_name, domain) => {
+    const client: McpClient = {
+      ...makeClient(),
+      domain,
+    };
+    expect(() => makeHandler({ authorizationServers: undefined }, undefined, client)).toThrow(
+      InvalidConfigurationError,
+    );
+    expect(() => makeHandler({ authorizationServers: undefined }, undefined, client)).toThrow(
+      /"authorizationServers" is required/,
+    );
+  });
+
+  it("requires explicit authorizationServers when the client declares no domain", () => {
+    const client: McpClient = { ...makeClient(), domain: undefined };
+    expect(() => makeHandler({ authorizationServers: undefined }, undefined, client)).toThrow(
+      /"authorizationServers" is required/,
+    );
+  });
+
+  it("lets explicit authorizationServers win, including several of them", async () => {
+    const { body } = await metadataFor(makeClient(), {
+      authorizationServers: ["https://a.example.com/", "https://b.example.com"],
+    });
+    expect(body.authorization_servers).toEqual([
+      "https://a.example.com/",
+      "https://b.example.com",
+    ]);
+  });
+
+  it("works with a supplied apiClient that declares domain and audience next to it", async () => {
+    const apiClient = new ApiClient({
+      domain: "tenant.example.com",
+      audience: AUDIENCE,
+    });
+    const client = createMcpClient({
+      domain: "tenant.example.com",
+      audience: AUDIENCE,
+      apiClient,
+    });
+    const { body } = await metadataFor(client);
+    expect(body.resource).toBe(AUDIENCE);
+    expect(body.authorization_servers).toEqual(["https://tenant.example.com/"]);
+  });
+
+  it("still needs explicit values for a supplied apiClient that declares nothing usable", () => {
+    const apiClient = new ApiClient({
+      domains: ["tenant.example.com"],
+      audience: AUDIENCE,
+    });
+    const client = createMcpClient({
+      domain: "",
+      audience: "",
+      apiClient,
+    });
+    expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
+      /"resource" is required/,
+    );
+    expect(() => makeHandler({ authorizationServers: undefined }, undefined, client)).toThrow(
+      /"authorizationServers" is required/,
+    );
+    expect(() =>
+      makeHandler(
+        {
+          resource: AUDIENCE,
+          authorizationServers: ["https://tenant.example.com/"],
+        },
+        undefined,
+        client,
+      ),
+    ).not.toThrow();
+  });
+
+  it("serves a working challenge with the defaults", async () => {
+    const { handle } = makeHandler(
+      { resource: undefined, authorizationServers: undefined },
+      undefined,
+      makeClient(),
+    );
+    const response = await handle(request());
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain(
+      `resource_metadata="${PRM}"`,
+    );
   });
 });
