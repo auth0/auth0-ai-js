@@ -178,7 +178,7 @@ describe.each(WIRINGS)("cache and exchange isolation (%s wiring)", (wiring) => {
       createServer: serverFor(tenant),
     });
     try {
-      await expect(delegateOnce(app, await rig().token({ tenant: other }))).rejects.toMatchObject({ code: 401 });
+      await expect(delegateOnce(app, await rig().token({ tenant: other }))).rejects.toMatchObject({ status: 401 });
       expect(tenant.auth0.state.exchangeCount).toBe(0);
     } finally {
       await app.stop();

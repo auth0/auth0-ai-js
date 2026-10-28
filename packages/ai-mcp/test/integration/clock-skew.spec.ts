@@ -81,7 +81,7 @@ describe.each(WIRINGS)("expiry handling (%s wiring)", (wiring) => {
     try {
       const expired = await rig().token({ exp: nowSeconds() - 120 });
 
-      await expect(connectClient(app, expired)).rejects.toMatchObject({ code: 401 });
+      await expect(connectClient(app, expired)).rejects.toMatchObject({ status: 401 });
       expect(rig().tenant.auth0.state.exchangeCount).toBe(0);
     } finally {
       await app.stop();

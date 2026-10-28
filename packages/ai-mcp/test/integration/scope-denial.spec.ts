@@ -59,10 +59,12 @@ describe.each(WIRINGS)("scope enforcement (%s wiring)", (wiring) => {
     await withApp(wiring, tenant, handler, async (app) => {
       const error = await connectClient(app, await rig().token({ scope: "read" })).then(
         () => undefined,
-        (e: unknown) => e as { code: number; seen: Array<{ wwwAuthenticate: string | null }> },
+        (e: unknown) => e as { seen: Array<{ status: number; wwwAuthenticate: string | null }> },
       );
 
-      expect(error?.code).toBe(403);
+      // The v2 client turns a 403 insufficient_scope reply into its own step-up error, which
+      // carries the challenge values instead of an HTTP status, so read the status off the wire.
+      expect(error?.seen[0]!.status).toBe(403);
       const challenge = error!.seen[0]!.wwwAuthenticate!;
       expect(challenge).toContain('error="insufficient_scope"');
       expect(challenge).toContain('scope="admin"');

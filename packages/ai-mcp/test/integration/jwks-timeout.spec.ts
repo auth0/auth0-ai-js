@@ -33,8 +33,8 @@ describe.each(WIRINGS)("a hung discovery or JWKS endpoint at ingress (%s wiring)
             throw new Error("The connection was expected to be refused.");
           },
           (e: unknown) => e,
-        )) as { code?: number; seen: { wwwAuthenticate?: string }[] };
-        return { code: error.code, challenge: error.seen[0]?.wwwAuthenticate, elapsed: Date.now() - started };
+        )) as { status?: number; seen: { wwwAuthenticate?: string }[] };
+        return { status: error.status, challenge: error.seen[0]?.wwwAuthenticate, elapsed: Date.now() - started };
       },
     );
   }
@@ -42,10 +42,10 @@ describe.each(WIRINGS)("a hung discovery or JWKS endpoint at ingress (%s wiring)
   it.each(["jwks", "discovery"] as const)(
     "currently answers 401 invalid_token, not 500, when %s never responds",
     async (endpoint) => {
-      const { code, challenge, elapsed } = await refusedWith(endpoint);
+      const { status, challenge, elapsed } = await refusedWith(endpoint);
 
       expect(elapsed).toBeLessThan(TIMEOUT_MS * 10);
-      expect(code).toBe(401);
+      expect(status).toBe(401);
       expect(challenge).toContain('error="invalid_token"');
     },
   );

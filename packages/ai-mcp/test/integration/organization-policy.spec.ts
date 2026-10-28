@@ -29,7 +29,7 @@ describe.each(WIRINGS)("organization policy at ingress (%s wiring)", (wiring) =>
   it("rejects a token without an organization when one is required", async () => {
     const app = await serve(allowList);
     try {
-      await expect(connectClient(app, await rig().token())).rejects.toMatchObject({ code: 401 });
+      await expect(connectClient(app, await rig().token())).rejects.toMatchObject({ status: 401 });
       expect(rig().tenant.auth0.state.exchangeCount).toBe(0);
     } finally {
       await app.stop();
@@ -43,10 +43,10 @@ describe.each(WIRINGS)("organization policy at ingress (%s wiring)", (wiring) =>
 
       const error = await connectClient(app, bearer).then(
         () => undefined,
-        (e: unknown) => e as { code: number; seen: Array<{ wwwAuthenticate: string | null }> },
+        (e: unknown) => e as { status: number; seen: Array<{ wwwAuthenticate: string | null }> },
       );
 
-      expect(error?.code).toBe(401);
+      expect(error?.status).toBe(401);
       expect(error?.seen[0]!.wwwAuthenticate).toContain('error="invalid_token"');
       expect(rig().tenant.auth0.state.exchangeCount).toBe(0);
     } finally {
@@ -81,7 +81,7 @@ describe.each(WIRINGS)("organization policy at ingress (%s wiring)", (wiring) =>
       const bearer = await rig().token({ claims: { client_id: "client-a", org_id: "org_any" } });
 
       expect((await delegateOnce(app, bearer)).body.orgId).toBe("org_any");
-      await expect(connectClient(app, await rig().token())).rejects.toMatchObject({ code: 401 });
+      await expect(connectClient(app, await rig().token())).rejects.toMatchObject({ status: 401 });
     } finally {
       await app.stop();
     }
