@@ -30,8 +30,6 @@ const client = createMcpClient({
 
 export const handle = createMcpHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   requiredScopes: ['mcp:access'],
   realm: 'mcp',
   metadata: {
@@ -61,8 +59,8 @@ export const handle = createMcpHandler({
 | Option | Description |
 | --- | --- |
 | `client` | The `McpClient` from `createMcpClient`. Verifies tokens and creates the request-scoped client. |
-| `resource` | Absolute URL that identifies this server. It is the `resource` of the metadata document. |
-| `authorizationServers` | Issuer URLs of the authorization servers that issue tokens for this server. |
+| `resource` | Absolute URL that identifies this server. It is the `resource` of the metadata document. Optional: defaults to the `audience` of the client when that is an absolute `http` or `https` URL. |
+| `authorizationServers` | Issuer URLs of the authorization servers that issue tokens for this server. Optional: defaults to `https://<domain>/`, built from the `domain` of the client. |
 | `handler` | Serves the authenticated request. It runs inside the request context. |
 | `requiredScopes` | Scopes every request must carry. The token needs all of them. |
 | `realm` | Protection space reported as `realm` in challenges. Must be a non-empty string without quotes, backslashes or control characters. |
@@ -70,7 +68,34 @@ export const handle = createMcpHandler({
 | `metadata.scopesSupported`, `metadata.resourceName`, `metadata.resourceDocumentation` | Extra fields published in the metadata document. |
 | `onError` | Observer for internal errors. The handler ignores a hook that throws. |
 
-`createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, and a `TypeError` when `resource` is not an absolute URL.
+`createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, and a `TypeError` when an explicit `resource` is not an absolute URL. It also throws `InvalidConfigurationError`, naming the option, when you omit `resource` or `authorizationServers` and the client cannot supply a usable default (see below).
+
+### When to set `resource` and `authorizationServers` yourself
+
+Both options default from the client, so the examples above leave them out. `resource` is the URL clients use to reach your MCP server, and clients send it back as the RFC 8707 `resource` parameter. `audience` is the Auth0 API identifier that must appear as `aud` in access tokens. In the recommended setup they are the same URL, and the default relies on that. Set the option yourself when:
+
+- The audience is not an absolute `http` or `https` URL, for example `my-mcp-server` or `urn:acme:mcp`, or it carries a fragment or credentials. Without `resource` the handler throws `InvalidConfigurationError`.
+- The public URL differs from the audience. This happens behind a reverse proxy or a gateway that serves the server under another host or path. The `resource` must be the URL clients actually call.
+- You advertise more than one authorization server, or an issuer that is not `https://<domain>/`. Each entry must match the `iss` value clients see. The default uses the tenant domain with the scheme `https` and a trailing slash, which is the issuer of an Auth0 tenant or custom domain.
+- The client does not declare a single `domain`, for example when you pass an `apiClient` that verifies tokens against a list or a resolver of domains. Without `authorizationServers` the handler throws `InvalidConfigurationError`.
+
+```ts
+import { createMcpClient, createMcpHandler } from '@auth0/ai-mcp';
+
+const client = createMcpClient({
+  domain: 'your-tenant.us.auth0.com',
+  audience: 'urn:acme:mcp',
+});
+
+export const handle = createMcpHandler({
+  client,
+  resource: 'https://mcp.example.com/mcp',
+  authorizationServers: ['https://your-tenant.us.auth0.com/', 'https://login.example.com/'],
+  handler: async () => Response.json({ ok: true }),
+});
+```
+
+When you pass your own `apiClient` to `createMcpClient`, the `domain` and `audience` you declare next to it feed the defaults. Keep them equal to the values of that client.
 
 ### What the handler answers
 
@@ -117,8 +142,6 @@ const client = createMcpClient({
 
 export const handle = createMcpSdkHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   requiredScopes: ['mcp:access'],
   createServer: () => {
     const server = new McpServer({ name: 'reports', version: '1.0.0' });
@@ -165,8 +188,6 @@ const client = createMcpClient({
 
 const web = createMcpHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   handler: async () => Response.json({ ok: true }),
 });
 
@@ -178,7 +199,7 @@ const listener = toNodeHandler(web, {
 createServer((req, res) => void listener(req, res)).listen(3000);
 ```
 
-`toNodeHandler` only converts messages. All authentication stays in the web handler.
+`toNodeHandler` only converts messages. All authentication stays in the web handler. It has no client to take defaults from, so its `resource` is required. `createNodeMcpHandler` applies the same defaults as `createMcpHandler` and uses the resulting `resource` for the origin.
 
 - It rebuilds the absolute request URL from the origin of `resource`, so the `Host` header of the incoming request is never trusted.
 - Headers, including `Authorization` and `DPoP`, pass through unchanged.

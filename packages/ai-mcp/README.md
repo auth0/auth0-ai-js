@@ -86,8 +86,6 @@ function buildServer(): McpServer {
 
 const handler = createNodeMcpHandler({
   client,
-  resource: 'https://mcp.example.com/mcp',
-  authorizationServers: ['https://your-tenant.us.auth0.com/'],
   requiredScopes: ['mcp:access'],
   createServer: buildServer,
 });
@@ -101,6 +99,8 @@ What this gives you:
 - `GET /.well-known/oauth-protected-resource/mcp` serves the protected resource metadata, so MCP clients can discover your authorization server. Some clients, such as Claude Code, also need tenant settings: see [MCP clients and tenant settings](./docs/McpClients.md).
 - `list_reports` runs only for callers whose token carries `tool:list_reports`. Other callers get a tool result with `isError: true`.
 - The token exchange always acts for the caller of the current request.
+
+The handler needs no `resource` or `authorizationServers` here. `resource` defaults to the `audience` of the client (which must then be the public URL of your server) and `authorizationServers` defaults to `https://<domain>/`. See [when to set them yourself](./docs/Handler.md#when-to-set-resource-and-authorizationservers-yourself).
 
 `createNodeMcpHandler` mounts on `http.createServer` as shown above. On Express, route both the MCP path and the protected resource metadata path to the handler, or MCP clients cannot discover your authorization server:
 
