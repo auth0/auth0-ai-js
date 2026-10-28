@@ -52,6 +52,11 @@ export interface E2eMcpServerOptions {
    * non-empty.
    */
   downstreams?: readonly DownstreamTarget[];
+  /**
+   * Passes `resource` and `authorizationServers` to the handler instead of letting it default
+   * them from the client. Off by default, so the suites run on the defaults users get.
+   */
+  explicitEndpoints?: boolean;
   /** Registers more tools. Each tool must read the caller from `getRequestContext()`. */
   registerTools?: (mcp: McpServer, deps: { downstreamUrl: string; env: E2eEnv }) => void;
 }
@@ -256,8 +261,10 @@ function build(options: E2eMcpServerOptions): Built {
     audience,
     handlerOptions: {
       client,
-      resource: audience,
-      authorizationServers: [env.issuer],
+      ...(options.explicitEndpoints === true && {
+        resource: audience,
+        authorizationServers: [env.issuer],
+      }),
       ...(options.requiredScopes !== undefined && { requiredScopes: options.requiredScopes }),
       createServer: () => {
         const mcp = buildTools(deps);

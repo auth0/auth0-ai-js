@@ -170,6 +170,36 @@ describe("startWebMcpServer (no tenant needed for unauthenticated routes)", () =
   });
 });
 
+describe("startWebMcpServer with explicit endpoints (no tenant needed)", () => {
+  const env = {
+    domain: "tenant.example.test",
+    issuer: "https://tenant.example.test/",
+    mcpAudience: "https://mcp.example.test/api",
+    downstreamAudience: "https://work.example.test",
+    downstreamScope: "work:read",
+    oboClientId: "client",
+    oboClientSecret: "not-a-real-secret",
+  } as unknown as E2eEnv;
+
+  it("publishes the same metadata as the defaults", async () => {
+    const server = await startWebMcpServer({
+      env,
+      downstreamUrl: "http://127.0.0.1:1/",
+      explicitEndpoints: true,
+    });
+    try {
+      const doc = (await (await fetch(server.metadataUrl)).json()) as {
+        resource: string;
+        authorization_servers: string[];
+      };
+      expect(doc.resource).toBe(env.mcpAudience);
+      expect(doc.authorization_servers).toEqual([env.issuer]);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
 describe("startMcpServer options (no tenant needed)", () => {
   const env = {
     domain: "tenant.example.test",
