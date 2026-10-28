@@ -48,6 +48,19 @@ export class ForeignCallerError extends Error {
 /** Verifies incoming access tokens and creates clients bound to the verified caller. */
 export interface McpClient {
   /**
+   * The tenant domain this client was created with, exactly as given to
+   * {@link createMcpClient}, or `undefined` when none was declared. Ingress code
+   * reads it to derive the issuer it advertises. With a supplied `apiClient` it is
+   * the value declared next to it; it cannot be checked against that client.
+   */
+  readonly domain?: string;
+  /**
+   * The API identifier this client requires as `aud`, exactly as given to
+   * {@link createMcpClient}, or `undefined` when none was declared. Ingress code
+   * reads it to default the resource it advertises.
+   */
+  readonly audience?: string;
+  /**
    * The DPoP mode this client enforces: the `dpop.mode` it was created with, or
    * `'allowed'` when none was given. Ingress code reads it to decide which schemes
    * to accept and advertise. When you pass your own `apiClient` its mode cannot be
@@ -82,6 +95,10 @@ export interface McpClient {
 function isIndexedStore(store: TokenStore | undefined): store is IndexedTokenStore {
   const candidate = store as Partial<IndexedTokenStore> | undefined;
   return typeof candidate?.addIndexMember === 'function' && typeof candidate.listIndexMembers === 'function';
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
 }
 
 const CORE_CLIENT_OPTIONS = [
@@ -162,6 +179,8 @@ export function createMcpClient(options: McpClientOptions): McpClient {
   const issued = new WeakMap<VerifiedCaller, VerifiedToken>();
 
   return {
+    domain: nonEmptyString(options.domain),
+    audience: nonEmptyString(options.audience),
     dpopMode: options.apiClient === undefined ? (options.dpop?.mode ?? 'allowed') : 'allowed',
 
     async verifyAccessToken(verifyOptions) {
