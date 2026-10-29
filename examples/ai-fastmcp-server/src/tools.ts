@@ -65,11 +65,11 @@ export function registerTools(server: FastMCP<Auth0Session>, config: AppConfig):
     parameters: z.object({}),
     annotations: { readOnlyHint: true },
     execute: withAuth0Execute(async (_args, { session }) => {
-      const principal = session?.principal;
+      const { principal } = session;
       return [
-        `Signed in as ${principal?.sub ?? "unknown"}`,
-        `Client: ${principal?.clientId ?? "unknown"}`,
-        `Scopes: ${principal?.scopes.join(" ") || "none"}`,
+        `Signed in as ${principal.sub}`,
+        `Client: ${principal.clientId ?? "unknown"}`,
+        `Scopes: ${principal.scopes.join(" ") || "none"}`,
       ].join("\n");
     }),
   });
@@ -105,7 +105,7 @@ export function registerTools(server: FastMCP<Auth0Session>, config: AppConfig):
     annotations: { destructiveHint: true },
     execute: withAuth0Execute(
       async ({ order_id: orderId }, { session }) => {
-        const token = await session!.mcpClient.getTokenOnBehalfOf({
+        const token = await session.mcpClient.getTokenOnBehalfOf({
           audience: config.ordersAudience,
           scope: WRITE_ORDERS,
         });
