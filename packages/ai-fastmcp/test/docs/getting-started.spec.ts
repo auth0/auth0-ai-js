@@ -57,6 +57,7 @@ describe("GettingStarted.md", () => {
   it("keeps the server in the guide under 20 lines", () => {
     expect(snippetCode("GettingStarted.md", 1).trim().split("\n").length).toBeLessThan(20);
     documented("GettingStarted.md", "# Getting started", "Create `server.ts`:");
+    documented("README.md", "a server in under 20 lines");
   });
 
   it("answers a request without a token with 401, a Bearer challenge that names the metadata, and the documented body", async () => {

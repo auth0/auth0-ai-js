@@ -85,6 +85,7 @@ describe("Compatibility.md: FastMCP", () => {
       expect(text).toContain(row);
     }
     expect(text).toContain("These are samples, not every patch release. 4.1 and 4.2 were not run.");
+    documented("README.md", "FastMCP 4.7.0, the oldest release supported, and 4.23.8, the newest tested");
   });
 });
 

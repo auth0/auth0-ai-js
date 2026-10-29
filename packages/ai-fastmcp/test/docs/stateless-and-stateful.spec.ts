@@ -240,6 +240,7 @@ describe("StatelessAndStateful.md: the limits of the binding", () => {
     expect((await over.authenticate(as("bob", "s0"))).principal.sub).toBe("bob");
     expect(((await thrown(over.authenticate(as("bob", "s10000")))) as Response).status).toBe(403);
     documented(GUIDE, "The defaults are 10000 session ids");
+    documented("README.md", "10000 ids and one hour of idle time by default");
   });
 
   it("evicts the least recently used id first when the table is full", async () => {
