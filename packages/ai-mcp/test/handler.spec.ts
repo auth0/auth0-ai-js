@@ -1382,13 +1382,16 @@ describe("resource and authorizationServers defaults", () => {
     ["a url with a fragment", "https://mcp.example.com/mcp#frag"],
     ["a url with credentials", "https://user:pw@mcp.example.com/mcp"],
     ["a url with surrounding whitespace", " https://mcp.example.com/mcp"],
-  ])("requires an explicit resource when the audience is %s", (_name, audience) => {
+  ])("throws when the audience is %s and no resource is given", (_name, audience) => {
     const client = bare({ audience });
     expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
       InvalidConfigurationError,
     );
     expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
-      /"resource" is required/,
+      /the client audience is missing or is not an absolute http or https URL/,
+    );
+    expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
+      /Set the audience to that URL/,
     );
   });
 
@@ -1406,7 +1409,7 @@ describe("resource and authorizationServers defaults", () => {
   it("requires an explicit resource when the client declares no audience", () => {
     const client: McpClient = { ...makeClient(), audience: undefined };
     expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
-      /"resource" is required/,
+      /the client audience is missing or is not an absolute http or https URL/,
     );
   });
 
@@ -1486,7 +1489,7 @@ describe("resource and authorizationServers defaults", () => {
       apiClient,
     });
     expect(() => makeHandler({ resource: undefined }, undefined, client)).toThrow(
-      /"resource" is required/,
+      /the client audience is missing or is not an absolute http or https URL/,
     );
     expect(() => makeHandler({ authorizationServers: undefined }, undefined, client)).toThrow(
       /"authorizationServers" is required/,

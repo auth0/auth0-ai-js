@@ -336,7 +336,7 @@ export function resolveResource(client: McpClient, resource: string | undefined)
     const derived = resourceFromAudience(client.audience);
     if (derived === undefined) {
       throw new InvalidConfigurationError(
-        'Invalid configuration: "resource" is required because the client audience is not an absolute http or https URL. Set "resource" to the public URL of this server.',
+        'Invalid configuration: the handler needs the public URL of this MCP server as its resource identifier, but the client audience is missing or is not an absolute http or https URL without a fragment or credentials. Set the audience to that URL, or pass it as "resource" when the client declares no audience.',
       );
     }
     return derived;

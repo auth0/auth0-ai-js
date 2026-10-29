@@ -558,7 +558,7 @@ describe("Node adapter", () => {
         client: makeClient({ audience: "my-mcp-server" }),
         createServer: () => buildMcpServer([]),
       }),
-    ).toThrow(/"resource" is required/);
+    ).toThrow(/the client audience is missing or is not an absolute http or https URL/);
     expect(() =>
       createMcpSdkHandler({
         client: { ...makeClient(), domain: undefined },
