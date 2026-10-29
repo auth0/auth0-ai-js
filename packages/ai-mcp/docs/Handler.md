@@ -79,7 +79,7 @@ export const handle = createMcpHandler({
 - If you set `resource`, it must equal the audience. The comparison is an exact string match after lower-casing the scheme and the host only. The path, the query and a trailing slash are significant, so `https://mcp.example.com/mcp/` is not `https://mcp.example.com/mcp`.
 - A mismatch throws `InvalidConfigurationError` when you create the handler. The message contains neither value. When the only difference is a trailing slash it adds `The two differ only by a trailing slash, which counts as a difference.`
 
-Two setups that older versions allowed no longer work. A public URL that differs from the audience (behind a reverse proxy or a gateway) is a mismatch, so make the audience the public URL. A non-URL audience such as `my-mcp-server` or `urn:acme:mcp` cannot be served by the handler at all: without `resource` it throws that `resource` is required, and an explicit URL `resource` is a mismatch. Name your Auth0 API with the public URL of the server.
+Two setups that older versions allowed no longer work. A public URL that differs from the audience (behind a reverse proxy or a gateway) is a mismatch, so make the audience the public URL. A non-URL audience such as `my-mcp-server` or `urn:acme:mcp` cannot be served by the handler at all: without `resource` it throws an `InvalidConfigurationError` that asks for an audience set to the public URL of the server, and an explicit URL `resource` is a mismatch. Name your Auth0 API with the public URL of the server.
 
 `authorizationServers` still has its own rules. Set it yourself when:
 
