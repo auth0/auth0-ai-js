@@ -9,3 +9,4 @@ export * from "./fastmcp-server.js";
 export * from "./clients.js";
 export * from "./leak.js";
 export * from "./forge.js";
+export * from "./dpop.js";
