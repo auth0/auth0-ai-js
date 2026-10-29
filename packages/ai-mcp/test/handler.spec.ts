@@ -1396,9 +1396,12 @@ describe("resource and authorizationServers defaults", () => {
   });
 
   it("rejects an explicit resource when the audience cannot be one", () => {
-    expect(() =>
-      makeHandler({ resource: "https://mcp.example.com" }, undefined, bare({ audience: "my-mcp-server" })),
-    ).toThrow(InvalidConfigurationError);
+    const create = () =>
+      makeHandler({ resource: "https://mcp.example.com" }, undefined, bare({ audience: "my-mcp-server" }));
+    expect(create).toThrow(InvalidConfigurationError);
+    expect(create).toThrow(/Set the audience to the public URL of this MCP server/);
+    // Omitting `resource` would only hit the "audience is not a URL" error, so the message must not suggest it.
+    expect(create).not.toThrow(/Omit "resource"/);
   });
 
   it("accepts an explicit resource that equals the audience", async () => {
