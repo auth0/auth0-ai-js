@@ -2,7 +2,7 @@
  * Shared helpers of the documentation suites: where the documents live, how their code blocks
  * are read, and a check that a guide says what a test has just verified.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { expect } from "vitest";
@@ -95,19 +95,26 @@ export async function loadSnippet(
   options: { rewrites?: Array<[string, string]>; exportNames: string[] },
 ): Promise<LoadedSnippet> {
   let code = snippetCode(name, index);
-  code = code.replaceAll('"@auth0/ai-fastmcp"', JSON.stringify("../../../src/index.js"));
   for (const [from, to] of options.rewrites ?? []) {
     if (!code.includes(from)) throw new Error(`The block does not contain ${from}.`);
     code = code.replaceAll(from, to);
   }
   const missing = options.exportNames.filter((name) => !new RegExp(`export\\s+(?:const|let|var|function|class)\\s+${name}\\b`).test(code));
   if (missing.length > 0) code += `\nexport { ${missing.join(", ")} };\n`;
-  mkdirSync(generatedDir, { recursive: true });
-  const file = path.join(generatedDir, `${name.replace(/\W+/g, "_")}_${index}_${process.pid}_${Date.now()}.ts`);
+  // Each run gets its own directory, because spec files run in parallel workers.
+  const runDir = path.join(generatedDir, `${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  mkdirSync(runDir, { recursive: true });
+  const file = path.join(runDir, `${name.replace(/\W+/g, "_")}_${index}.ts`);
+  const source = path.relative(runDir, path.join(packageDir, "src", "index.js")).split(path.sep).join("/");
+  code = code.replaceAll('"@auth0/ai-fastmcp"', JSON.stringify(source));
   writeFileSync(file, code);
   const dispose = () => {
-    rmSync(file, { force: true });
-    if (existsSync(generatedDir) && readdirSync(generatedDir).length === 0) rmSync(generatedDir, { recursive: true });
+    rmSync(runDir, { recursive: true, force: true });
+    try {
+      rmdirSync(generatedDir);
+    } catch {
+      // Another run still uses the directory, or it is already gone.
+    }
   };
   try {
     const exports = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as Record<string, unknown>;
