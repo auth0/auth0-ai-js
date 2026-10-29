@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { CachedToken, IndexedTokenStore, TokenStore } from "@auth0/ai-mcp";
-import { InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { MemoryIndexedTokenStore, createEncryptedTokenStore, createMcpClient } from "@auth0/ai-mcp";
+import { InvalidConfigurationError, MemoryIndexedTokenStore, createEncryptedTokenStore, createMcpClient } from "@auth0/ai-mcp";
 import type { FastMcpAuth } from "../../src/index.js";
 import { createFastMcpAuth } from "../../src/index.js";
 import { DOMAIN, createRig } from "../integration/harness.js";

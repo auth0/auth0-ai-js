@@ -33,7 +33,7 @@ server.addTool({
 
 The session is frozen and holds no credential. The access token is not a property of the session, and serializing the session does not reveal it. The `scope` claim is the only source of `scopes`: `principal.permissions` carries the `permissions` claim, but no scope check uses it.
 
-A request without a valid token never reaches a tool, because `authenticate` answers it first. FastMCP still types `session` as possibly `undefined`, so read it with `session?.` or let `withAuth0Execute` handle the case: when it finds no session, it returns the tool result `Authentication is required.` and does not run your function.
+A request without a valid token never reaches a tool, because `authenticate` answers it first. FastMCP types `session` as possibly `undefined` in a tool that is not wrapped, so read it with `session?.` there. `withAuth0Execute` types it as present: when it finds no session, it returns the tool result `Authentication is required.` and does not run your function, so the wrapped function reads `session.principal` without `?.` or a non-null assertion.
 
 ## withAuth0Execute
 
@@ -132,7 +132,7 @@ server.addTool({
   name: "invoices",
   parameters: z.object({ id: z.string() }),
   execute: withAuth0Execute(async ({ id }, { session }) => {
-    const { accessToken } = await session!.mcpClient.getTokenOnBehalfOf({
+    const { accessToken } = await session.mcpClient.getTokenOnBehalfOf({
       audience: "https://api.example.com",
       scope: "read:invoices",
     });

@@ -134,6 +134,11 @@ describe("documentation structure", () => {
     },
   );
 
+  it("shows no non-null assertion on the session of a wrapped tool in any code block", () => {
+    const offenders = snippets.filter((s) => /\bsession!/.test(s.code)).map((s) => s.fileName);
+    expect(offenders).toEqual([]);
+  });
+
   it("links every guide from the README", () => {
     const readme = readFileSync(path.join(packageDir, "README.md"), "utf8");
     const unlinked = guideNames().filter((name) => !readme.includes(`(./docs/${name}`));

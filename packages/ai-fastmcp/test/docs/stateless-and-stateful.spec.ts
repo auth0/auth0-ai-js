@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastMCP } from "fastmcp";
-import { InvalidConfigurationError } from "@auth0/auth0-api-js";
+import { InvalidConfigurationError } from "@auth0/ai-mcp";
 import { createFastMcpAuth } from "../../src/index.js";
 import {
   DOMAIN,
