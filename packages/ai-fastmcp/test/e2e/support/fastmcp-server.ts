@@ -170,7 +170,7 @@ function registerTools(server: FastMCP<Auth0Session>, deps: ToolDeps): void {
     description: "Exchanges the caller's token for the downstream API and calls it.",
     parameters: z.object({ scope: z.string().optional(), audience: z.string().optional() }),
     execute: withAuth0Execute(async (args, ctx) => {
-      const exchanged = await ctx.session!.mcpClient.getTokenOnBehalfOf({
+      const exchanged = await ctx.session.mcpClient.getTokenOnBehalfOf({
         audience: args.audience ?? deps.env.downstreamAudience,
         scope: args.scope ?? deps.env.downstreamScope,
       });
