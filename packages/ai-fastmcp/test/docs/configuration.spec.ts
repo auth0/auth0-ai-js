@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { FastMCP } from "fastmcp";
-import { ApiClient, InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { MemoryIndexedTokenStore, createMcpClient } from "@auth0/ai-mcp";
+import { ApiClient } from "@auth0/auth0-api-js";
+import { InvalidConfigurationError, MemoryIndexedTokenStore, createMcpClient } from "@auth0/ai-mcp";
 import { createFastMcpAuth, withAuth0Execute } from "../../src/index.js";
 import type { FastMcpAuthBaseOptions } from "../../src/index.js";
 import {
@@ -59,7 +59,7 @@ describe("Configuration.md: the three ways to configure the client", () => {
             name: "exchange",
             parameters: z.object({}),
             execute: withAuth0Execute(async (_args, { session }) => {
-              await session!.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
+              await session.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
               calls.push("done");
               return "ok";
             }),

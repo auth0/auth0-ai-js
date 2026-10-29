@@ -38,7 +38,7 @@ server.addTool({
   name: "whoami",
   description: "Returns the subject of the caller.",
   parameters: z.object({}),
-  execute: withAuth0Execute(async (_args, { session }) => session?.principal.sub ?? "unknown"),
+  execute: withAuth0Execute(async (_args, { session }) => session.principal.sub),
 });
 
 await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });

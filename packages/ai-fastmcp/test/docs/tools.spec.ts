@@ -167,7 +167,11 @@ describe("Tools.md: the session", () => {
       _meta: { error: "invalid_token" },
     });
     expect(ran).toBe(false);
-    documented("Tools.md", "when it finds no session, it returns the tool result `Authentication is required.` and does not run your function");
+    documented(
+      "Tools.md",
+      "`withAuth0Execute` types it as present: when it finds no session, it returns the tool result `Authentication is required.` and does not run your function",
+      "the wrapped function reads `session.principal` without `?.` or a non-null assertion",
+    );
   });
 });
 
@@ -400,7 +404,7 @@ describe("Tools.md: calling downstream APIs for the caller", () => {
     documented(
       "Tools.md",
       "and never forward the access token it received",
-      "const { accessToken } = await session!.mcpClient.getTokenOnBehalfOf({",
+      "const { accessToken } = await session.mcpClient.getTokenOnBehalfOf({",
     );
   });
 
@@ -414,7 +418,7 @@ describe("Tools.md: calling downstream APIs for the caller", () => {
           parameters: z.object({}),
           execute: withAuth0Execute(
             async (_args, { session }) => {
-              await session!.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com" });
+              await session.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com" });
               return "ok";
             },
             { onError: (error) => void errors.push(error) },

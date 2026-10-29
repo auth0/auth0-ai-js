@@ -50,7 +50,7 @@ FastMCP copies the message of an error thrown by a tool into the tool result. A 
 | `Missing required scope: refund:orders` | `insufficient_scope` | The caller lacks a scope of the tool's `requiredScopes`, or `requireScopes` from `@auth0/ai-mcp` inside the function failed. Several missing scopes read `Missing required scopes: a, b`. |
 | `The token exchange did not grant the requested scopes.` | `insufficient_scope` | A token exchange succeeded but the tenant granted fewer scopes than the tool asked for. |
 | `Authentication is required.` | `invalid_token` | The wrapper found no session, or an `UnauthenticatedError` of `@auth0/ai-mcp` escaped. |
-| `The token operation failed.` | `server_error` | An `AuthError` from `@auth0/auth0-api-js` escaped the function. |
+| `The token operation failed.` | `server_error` | An `AuthError`, the class `@auth0/ai-mcp` exports, escaped the function. |
 | `Tool execution failed.` | `server_error` | Any other error, including an exchange that the tenant refused or that could not be reached. |
 
 All of these results have `isError: true` and the HTTP status 200. The error `_meta` is what a program can read; the text is for a person.
@@ -71,7 +71,7 @@ server.addTool({
   parameters: z.object({}),
   execute: withAuth0Execute(
     async (_args, { session }) => {
-      const { accessToken } = await session!.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com" });
+      const { accessToken } = await session.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com" });
       return accessToken.length > 0 ? "ok" : "empty";
     },
     { onError: (error) => console.error("invoices failed", error instanceof Error ? error.name : "unknown") },

@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { createMcpClient } from "@auth0/ai-mcp";
+import { InvalidConfigurationError, createMcpClient } from "@auth0/ai-mcp";
 import { createFastMcpAuth } from "../../src/index.js";
 import { DOMAIN, INITIALIZE_BODY, createRig, parseChallenge, rawRequest, socketFetch, withServer } from "../integration/harness.js";
 import { documented } from "./guides.js";

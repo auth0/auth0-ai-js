@@ -1,8 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { HttpResponse, delay, http } from "msw";
-import { InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { createMcpClient } from "@auth0/ai-mcp";
+import { InvalidConfigurationError, createMcpClient } from "@auth0/ai-mcp";
 import { createFastMcpAuth, withAuth0Execute } from "../../src/index.js";
 import {
   DOMAIN,
@@ -446,8 +445,8 @@ function exchangeTool(s: { addTool(tool: never): void }, errors: unknown[]) {
     name: "exchange",
     parameters: z.object({}),
     execute: withAuth0Execute(
-      async (_args: unknown, { session }: { session?: { mcpClient: { getTokenOnBehalfOf(o: object): Promise<unknown> } } }) => {
-        await session!.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
+      async (_args: unknown, { session }: { session: { mcpClient: { getTokenOnBehalfOf(o: object): Promise<unknown> } } }) => {
+        await session.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
         return "ok";
       },
       { onError: (error) => void errors.push(error) },

@@ -295,8 +295,8 @@ describe("Errors.md: errors inside tools", () => {
           s.addTool({ name, parameters: z.object({}), execute: withAuth0Execute(execute as never, { onError, ...options }) as never });
         add("scope_one", async () => "ran", { requiredScopes: "need:one" });
         add("scope_two", async () => "ran", { requiredScopes: ["need:one", "need:two"] });
-        add("downscoped", async (_args: unknown, { session }: { session?: { mcpClient: { getTokenOnBehalfOf(o: object): Promise<unknown> } } }) => {
-          await session!.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
+        add("downscoped", async (_args: unknown, { session }: { session: { mcpClient: { getTokenOnBehalfOf(o: object): Promise<unknown> } } }) => {
+          await session.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
           return "ran";
         });
         add("unauthenticated", async () => {
@@ -308,8 +308,8 @@ describe("Errors.md: errors inside tools", () => {
         add("other", async () => {
           throw new Error("db password is hunter2");
         });
-        add("exchange", async (_args: unknown, { session }: { session?: { mcpClient: { getTokenOnBehalfOf(o: object): Promise<unknown> } } }) => {
-          await session!.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
+        add("exchange", async (_args: unknown, { session }: { session: { mcpClient: { getTokenOnBehalfOf(o: object): Promise<unknown> } } }) => {
+          await session.mcpClient.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "api:read" });
           return "ran";
         });
         add("user_error", async () => {
