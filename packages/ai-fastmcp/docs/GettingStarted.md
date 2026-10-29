@@ -110,4 +110,5 @@ curl -s http://localhost:3000/.well-known/oauth-protected-resource/mcp
 - [Configuration](./Configuration.md): the three ways to pass settings, the `resource` and `endpoint` rule, metadata, required scopes.
 - [Tools](./Tools.md): the session, per-tool scopes, and calling downstream APIs on behalf of the caller.
 - [Token caching](./TokenCaching.md): reuse exchanged tokens.
+- [The example server](../../../examples/ai-fastmcp-server): three tools, a downstream API and tests against a mocked tenant.
 - [Troubleshooting](./Troubleshooting.md): the messages you may see and what they mean.

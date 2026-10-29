@@ -4,7 +4,7 @@
 
 FastMCP stays the server. This package only fills two of its options.
 
-[Quickstart](#quickstart) | [Documentation](#documentation) | [Feedback](#feedback)
+[Quickstart](#quickstart) | [Documentation](#documentation) | [Example](#example) | [Feedback](#feedback)
 
 ## Install
 
@@ -54,6 +54,10 @@ This serves `POST /mcp`, requires a valid Auth0 access token for the audience, a
 | [Security notes](./docs/Security.md) | What the adapter enforces, what stays your job, and the limits. |
 | [Troubleshooting](./docs/Troubleshooting.md) | The messages you may see, with causes and fixes. |
 | [Compatibility](./docs/Compatibility.md) | The tested FastMCP versions and protocol revisions. |
+
+## Example
+
+[`examples/ai-fastmcp-server`](../../examples/ai-fastmcp-server) is a runnable server with three tools: one that needs no scope, one that exchanges the caller's token for a read token to a downstream API, and one that needs a scope of its own and exchanges for a write token. Its tests run it against a mocked tenant.
 
 ## How it works
 
