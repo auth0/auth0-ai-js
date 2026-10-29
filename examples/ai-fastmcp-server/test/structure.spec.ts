@@ -28,7 +28,11 @@ describe("example structure", () => {
   it("exchanges tokens through both access paths of the package", () => {
     const tools = source("tools.ts");
     expect(tools).toContain("getCallerMcpClientOrThrow().getTokenOnBehalfOf(");
-    expect(tools).toContain("session!.mcpClient.getTokenOnBehalfOf(");
+    expect(tools).toContain("session.mcpClient.getTokenOnBehalfOf(");
+  });
+
+  it("reads the session of a wrapped tool without a non-null assertion", () => {
+    expect(source("tools.ts")).not.toMatch(/\bsession!/);
   });
 
   it("serves in the stateless HTTP mode", () => {
