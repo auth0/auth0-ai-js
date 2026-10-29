@@ -53,7 +53,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       await server?.stop();
     });
 
-    it("FM-08 a tool wrapper names the missing scope in a tool error and the tool stays listed", async () => {
+    it("E-S-01 a tool wrapper names the missing scope in a tool error and the tool stays listed", async () => {
       const session = await connect(server, limitedToken);
       try {
         expect(await listToolNames(session)).toContain("needs_delegate");
@@ -66,7 +66,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       }
     });
 
-    it("FM-08 the same tool runs for a caller who holds the scope", async () => {
+    it("E-S-01 the same tool runs for a caller who holds the scope", async () => {
       const session = await connect(server, userToken);
       try {
         const outcome = await callTool(session, "needs_delegate");
@@ -77,7 +77,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       }
     });
 
-    it("FM-08 a scope that no caller holds is denied for the user too, and the text carries only the scope name", async () => {
+    it("E-S-01 a scope that no caller holds is denied for the user too, and the text carries only the scope name", async () => {
       const session = await connect(server, userToken);
       try {
         const outcome = await callTool(session, "needs_never");
@@ -89,7 +89,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       }
     });
 
-    it("FM-08 canAccess hides a tool from a caller without the scope and lists it for a caller with it", async () => {
+    it("E-S-01 canAccess hides a tool from a caller without the scope and lists it for a caller with it", async () => {
       const without = await connect(server, limitedToken);
       const withScope = await connect(server, userToken);
       try {
@@ -113,7 +113,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       }
     });
 
-    it("FM-08 the session scopes of each caller are exactly the scopes of its token", async () => {
+    it("E-S-01 the session scopes of each caller are exactly the scopes of its token", async () => {
       const limitedSession = await connect(server, limitedToken);
       const userSession = await connect(server, userToken);
       try {
@@ -144,7 +144,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       await server?.stop();
     });
 
-    it("FM-08 a caller without the scope is refused with 403 insufficient_scope, a scope parameter and a metadata URL", async () => {
+    it("E-S-01 a caller without the scope is refused with 403 insufficient_scope, a scope parameter and a metadata URL", async () => {
       const res = await postInitialize(server, `Bearer ${limitedToken}`);
       expect(res.status).toBe(403);
       expect(res.challenge?.scheme).toBe("Bearer");
@@ -154,7 +154,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       expectNoTokens("the response", res.body, [limitedToken]);
     });
 
-    it("FM-08 a real client sees the 403 and no session is created", async () => {
+    it("E-S-01 a real client sees the 403 and no session is created", async () => {
       const failure = await connect(server, limitedToken).then(
         () => undefined,
         (error: Error & { seen: Array<{ status: number }> }) => error,
@@ -163,7 +163,7 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       expect(failure!.seen[0]!.status).toBe(403);
     });
 
-    it("FM-08 a caller with the scope is served", async () => {
+    it("E-S-01 a caller with the scope is served", async () => {
       const session = await connect(server, userToken);
       try {
         const outcome = await callTool<{ sessionSub: string }>(session, "whoami");

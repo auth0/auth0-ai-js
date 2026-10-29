@@ -15,7 +15,9 @@ export function parseChallenge(header: string | null): ParsedChallenge {
   if (match === null) throw new Error("The WWW-Authenticate header is not a single challenge.");
   const params: Record<string, string> = {};
   const rest = match[2] ?? "";
-  const pattern = /([a-z_]+)="([^"]*)"(?:, |$)/g;
+  // Sticky, so each parameter must start where the previous one ended: a second challenge in the
+  // same header cannot hide between two parameters.
+  const pattern = /([a-z_]+)="([^"]*)"(?:, |$)/y;
   let consumed = 0;
   for (let found = pattern.exec(rest); found !== null; found = pattern.exec(rest)) {
     params[found[1]!] = found[2]!;

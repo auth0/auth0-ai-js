@@ -121,6 +121,7 @@ async function main() {
 
   const folded = foldRows(rows);
   const counts = countRows(folded);
+  const tests = countRows(rows);
   // A green run that executed nothing is not a pass.
   if (exitCode === 0 && counts.pass === 0) exitCode = 3;
   const skippedGroups = unsetGroups(env);
@@ -128,6 +129,7 @@ async function main() {
     reportFile,
     renderReport({
       rows: folded,
+      tests,
       skippedGroups,
       skippedFiles,
       tiers,
@@ -140,7 +142,8 @@ async function main() {
   process.stdout.write(
     [
       "",
-      `e2e ${exitCode === 0 ? "PASS" : "FAIL"}: ${counts.pass} passed, ${counts.fail} failed, ${counts.skip} skipped (${tiers.join(" + ")}; scenarios, not tests)`,
+      `e2e ${exitCode === 0 ? "PASS" : "FAIL"}: ${counts.pass} passed, ${counts.fail} failed, ${counts.skip} skipped (${tiers.join(" + ")})`,
+      `tests: ${tests.pass} passed, ${tests.fail} failed, ${tests.skip} skipped`,
       `fastmcp ${fastmcpVersion()}; skipped groups: ${skippedGroups.length > 0 ? skippedGroups.join(", ") : "none"}`,
       `report: ${reportFile}`,
       "",

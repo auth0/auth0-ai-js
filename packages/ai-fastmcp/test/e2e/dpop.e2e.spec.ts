@@ -63,7 +63,7 @@ describeLive("fastmcp DPoP", [], (e2e) => {
       counter = undefined;
     });
 
-    it("FM-06 a valid Bearer token with a DPoP header is refused with a Bearer challenge, before any tenant traffic", async () => {
+    it("E-P-01 a valid Bearer token with a DPoP header is refused with a Bearer challenge, before any tenant traffic", async () => {
       const proof = await buildDpopProof(keys, { htm: "POST", htu: server.audience, accessToken: userToken });
       const res = await postInitialize(server, `Bearer ${userToken}`, { dpop: proof });
       expect(res.status).toBe(401);
@@ -78,7 +78,7 @@ describeLive("fastmcp DPoP", [], (e2e) => {
       expect(tenantRequests()).toEqual([]);
     });
 
-    it("FM-06 a DPoP header without any Authorization header is refused the same way", async () => {
+    it("E-P-01 a DPoP header without any Authorization header is refused the same way", async () => {
       const proof = await buildDpopProof(keys, { htm: "POST", htu: server.audience });
       const res = await postInitialize(server, undefined, { dpop: proof });
       expect(res.status).toBe(401);
@@ -87,14 +87,14 @@ describeLive("fastmcp DPoP", [], (e2e) => {
       expect(tenantRequests()).toEqual([]);
     });
 
-    it("FM-06 an empty DPoP header counts as a DPoP header", async () => {
+    it("E-P-01 an empty DPoP header counts as a DPoP header", async () => {
       const res = await postInitialize(server, `Bearer ${userToken}`, { dpop: "" });
       expect(res.status).toBe(401);
       expect(res.challenge?.params["error"]).toBe("invalid_token");
       expect(tenantRequests()).toEqual([]);
     });
 
-    it("FM-06 the DPoP scheme is not a credential this server accepts: 401 and a Bearer-only challenge", async () => {
+    it("E-P-01 the DPoP scheme is not a credential this server accepts: 401 and a Bearer-only challenge", async () => {
       const proof = await buildDpopProof(keys, { htm: "POST", htu: server.audience, accessToken: userToken });
       const res = await postInitialize(server, `DPoP ${userToken}`, { dpop: proof });
       expect(res.status).toBe(401);
@@ -103,7 +103,7 @@ describeLive("fastmcp DPoP", [], (e2e) => {
       expect(tenantRequests()).toEqual([]);
     });
 
-    it("FM-06 a real client that adds a DPoP header is refused with 401 and gets no session", async () => {
+    it("E-P-01 a real client that adds a DPoP header is refused with 401 and gets no session", async () => {
       const proof = await buildDpopProof(keys, { htm: "POST", htu: server.audience });
       const failure = await connect(server, userToken, { dpop: proof }).then(
         () => undefined,
@@ -114,7 +114,7 @@ describeLive("fastmcp DPoP", [], (e2e) => {
       expect(tenantRequests()).toEqual([]);
     });
 
-    it("FM-06 control: the same token without the header is served, and that does reach the tenant", async () => {
+    it("E-P-01 control: the same token without the header is served, and that does reach the tenant", async () => {
       const res = await postInitialize(server, `Bearer ${userToken}`);
       expect(res.status).toBe(200);
       expect(tenantRequests().length).toBeGreaterThan(0);
@@ -122,7 +122,7 @@ describeLive("fastmcp DPoP", [], (e2e) => {
   });
 
   describe("a token bound to a DPoP key", () => {
-    it("FM-06 is refused when presented as Bearer, or as DPoP with a valid proof", async (context) => {
+    it("E-P-01 is refused when presented as Bearer, or as DPoP with a valid proof", async (context) => {
       const bound = await requestDpopBoundUserToken(e2e, e2e.mcpAudience);
       if (bound === undefined) {
         context.skip(

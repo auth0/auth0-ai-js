@@ -108,12 +108,12 @@ describeLive(
         downstream.calls.length = 0;
       });
 
-      it("FM-04 the four callers have four distinct subjects", () => {
+      it("E-I-01 the four callers have four distinct subjects", () => {
         const subs = tokens.map(subjectOf);
         expect(new Set(subs).size).toBe(4);
       });
 
-      it("FM-04 four callers at once: every call sees its own caller, scopes and client", async () => {
+      it("E-I-01 four callers at once: every call sees its own caller, scopes and client", async () => {
         await boot();
         const results = await Promise.all(
           live.flatMap((entry) =>
@@ -137,7 +137,7 @@ describeLive(
         }
       });
 
-      it("FM-04 two users exchange at the same time: each downstream call carries its own subject, each is cached under its own user", async () => {
+      it("E-I-01 two users exchange at the same time: each downstream call carries its own subject, each is cached under its own user", async () => {
         await boot();
         counter!.reset();
         const users = live.filter((entry) => entry.caller.kind === "user");
@@ -164,7 +164,16 @@ describeLive(
         expect(store.size).toBe(2);
       });
 
-      it("FM-12 sixty calls with random delays: the session, the accessor and the bound client agree on the caller every time", async () => {
+      it("E-I-02 control: without the wrapper the session is still the caller's, and the accessors are not bound", async () => {
+        await boot();
+        for (const entry of live) {
+          const outcome = await callTool<{ sessionSub: string; accessorBound: boolean }>(entry.session, "whoami_raw");
+          expect(outcome.value.sessionSub, entry.caller.name).toBe(entry.sub);
+          expect(outcome.value.accessorBound, entry.caller.name).toBe(false);
+        }
+      });
+
+      it("E-I-02 sixty calls with random delays: the session, the accessor and the bound client agree on the caller every time", async () => {
         await boot();
         const seed = Date.now() % 100000;
         const random = seeded(seed);

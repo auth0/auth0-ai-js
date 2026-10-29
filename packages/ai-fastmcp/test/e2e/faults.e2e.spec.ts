@@ -63,7 +63,7 @@ describeLive("fastmcp dependency failure on first verification", [], (e2e) => {
   describe.each(MODES)("$label server", ({ stateless }) => {
     // The core caches discovery metadata and the key set per client after the first success, so each
     // case starts a fresh server with a fresh client, with the fault installed before its first call.
-    it.each(CASES)("FM-10 (pinned behavior) $name: 401 invalid_token with fixed text, then the same token verifies", async (spec) => {
+    it.each(CASES)("E-F-01 (pinned behavior) $name: 401 invalid_token with fixed text, then the same token verifies", async (spec) => {
       fault = installFetchFault({ urlIncludes: spec.urlIncludes, method: "GET" }, spec.fault, { times: 1 });
       server = await startFastMcpServer({ env: e2e, downstreamUrl: downstream.url, stateless });
 

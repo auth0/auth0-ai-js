@@ -90,7 +90,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       downstream.calls.length = 0;
     });
 
-    it("FM-03 the exchanged token reaches the downstream API for the caller, with the exchange client as actor", async () => {
+    it("E-B-01 the exchanged token reaches the downstream API for the caller, with the exchange client as actor", async () => {
       const active = await boot(true);
       const { isError, value, text } = await callTool<DelegateResult>(active, "delegate", { scope: "work:read" });
       expect(isError).toBe(false);
@@ -107,7 +107,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expectNoTokens("the tool result", text, [userToken]);
     });
 
-    it("FM-03 the accessor reaches the same client as the session does", async () => {
+    it("E-B-01 the accessor reaches the same client as the session does", async () => {
       const active = await boot(true);
       const { isError, value } = await callTool<{ bound: boolean; hasToken?: boolean }>(active, "delegate_via_accessor");
       expect(isError).toBe(false);
@@ -115,7 +115,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(counter!.exchanges).toBe(1);
     });
 
-    it("FM-03 a second call is answered from the store: one exchange, two downstream calls", async () => {
+    it("E-B-01 a second call is answered from the store: one exchange, two downstream calls", async () => {
       const active = await boot(true);
       for (let i = 0; i < 2; i += 1) {
         const { isError, value } = await callTool<DelegateResult>(active, "delegate", { scope: "work:read" });
@@ -127,7 +127,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(store.size).toBe(1);
     });
 
-    it("FM-03 another scope set is another exchange and another store entry", async () => {
+    it("E-B-01 another scope set is another exchange and another store entry", async () => {
       const active = await boot(true);
       await callTool(active, "delegate", { scope: "work:read" });
       const wider = await callTool<DelegateResult>(active, "delegate", { scope: "work:read work:write" });
@@ -137,7 +137,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(store.size).toBe(2);
     });
 
-    it("FM-13 ten concurrent identical calls collapse into one exchange", async () => {
+    it("E-B-03 ten concurrent identical calls collapse into one exchange", async () => {
       const active = await boot(true);
       const results = await Promise.all(
         Array.from({ length: 10 }, () => callTool<DelegateResult>(active, "delegate", { scope: "work:read" })),
@@ -151,7 +151,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(store.size).toBe(1);
     });
 
-    it("FM-13 without a store nothing is cached: concurrent calls share one exchange, a later call exchanges again", async () => {
+    it("E-B-03 without a store nothing is cached: concurrent calls share one exchange, a later call exchanges again", async () => {
       const active = await boot(false);
       const results = await Promise.all(
         Array.from({ length: 10 }, () => callTool<DelegateResult>(active, "delegate", { scope: "work:read" })),
@@ -163,7 +163,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(counter!.exchanges).toBe(2);
     });
 
-    it("FM-07 an audience the tenant does not know is refused by the tenant: a fixed tool error, nothing cached, the next call works", async () => {
+    it("E-B-02 an audience the tenant does not know is refused by the tenant: a fixed tool error, nothing cached, the next call works", async () => {
       const active = await boot(true);
       const refused = await callTool(active, "delegate", { audience: "https://unknown.invalid/e2e-no-such-api" });
       expect(refused.isError).toBe(true);
@@ -179,7 +179,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(next.value.status).toBe(200);
     });
 
-    it("FM-07 an error with a secret in its message reaches the client as fixed text", async () => {
+    it("E-B-02 an error with a secret in its message reaches the client as fixed text", async () => {
       const active = await boot(true);
       const outcome = await callTool(active, "throws_canary");
       expect(outcome.isError).toBe(true);
@@ -189,7 +189,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
       expect(String((server!.errors[0] as Error).message)).toContain(ERROR_CANARY);
     });
 
-    it("FM-07 a FastMCP UserError passes through with its own text", async () => {
+    it("E-B-02 a FastMCP UserError passes through with its own text", async () => {
       const active = await boot(true);
       const outcome = await callTool(active, "user_error");
       expect(outcome.isError).toBe(true);
@@ -197,7 +197,7 @@ describeLive("fastmcp on-behalf-of exchange", [], (e2e) => {
     });
 
     it.skipIf(!hasLimited)(
-      "FM-07 pinned-tenant: a client credentials caller cannot be exchanged on behalf of a user; the tool error is fixed text",
+      "E-B-02 pinned-tenant: a client credentials caller cannot be exchanged on behalf of a user; the tool error is fixed text",
       async () => {
         server = await startFastMcpServer({ env: e2e, downstreamUrl: downstream.url, stateless, clientOptions: { tokenStore: store } });
         const machine = await connect(server, limitedToken);
