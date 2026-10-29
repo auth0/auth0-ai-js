@@ -186,7 +186,7 @@ describe("handler responses (Handler.md, ScopeEnforcement.md, Errors.md)", () =>
     });
   });
 
-  it("asks for an explicit resource when the audience is not a url (Handler.md)", () => {
+  it("throws when the audience is not a url and no resource is given (Handler.md)", () => {
     const client: McpClient = {
       ...stubClient(async () => ({ principal: principalWith([]) })),
       domain: "your-tenant.us.auth0.com",
@@ -194,7 +194,7 @@ describe("handler responses (Handler.md, ScopeEnforcement.md, Errors.md)", () =>
     };
     expect(() =>
       createMcpHandler({ client, handler: async () => new Response("ok") }),
-    ).toThrow(/"resource" is required/);
+    ).toThrow(/the client audience is missing or is not an absolute http or https URL/);
   });
 
   it("maps this package's errors to statuses and turns other errors into a generic 500", async () => {
