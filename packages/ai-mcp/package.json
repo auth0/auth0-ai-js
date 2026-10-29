@@ -21,7 +21,8 @@
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:smoke": "vitest run test/smoke"
   },
   "files": [
     "dist/**/*.{*js,*js.map,d.ts,d.ts.map}",
@@ -29,6 +30,16 @@
   ],
   "exports": {
     "./package.json": "./package.json",
+    "./mcp-sdk": {
+      "import": {
+        "types": "./dist/esm/mcp-sdk.d.ts",
+        "default": "./dist/esm/mcp-sdk.js"
+      },
+      "require": {
+        "types": "./dist/cjs/mcp-sdk.d.ts",
+        "default": "./dist/cjs/mcp-sdk.js"
+      }
+    },
     ".": {
       "import": {
         "types": "./dist/esm/index.d.ts",
@@ -49,18 +60,31 @@
     "@auth0/auth0-api-js": "^1.7.0",
     "jose": "^6.0.0"
   },
+  "peerDependencies": {
+    "@modelcontextprotocol/server": "^2.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/server": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",
     "@eslint/js": "^9.18.0",
+    "@modelcontextprotocol/client": "^2.3.0",
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/server": "^2.3.0",
     "@types/node": "^22.10.6",
     "@vitest/coverage-v8": "^3.0.9",
     "eslint": "^9.22.0",
+    "express": "^5.2.1",
     "globals": "^15.11.0",
     "msw": "^2.0.0",
     "typedoc": "^0.27.6",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0",
-    "vitest": "^3.0.9"
+    "vitest": "^3.0.9",
+    "zod": "^4.2.0"
   },
   "publishConfig": {
     "access": "public"

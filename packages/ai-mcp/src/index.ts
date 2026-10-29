@@ -17,6 +17,25 @@ export { buildPrincipal } from './principal.js';
 export { mcpClientOptionsFromEnv, resolveMcpClientOptions } from './env.js';
 export { createMcpClient, ForeignCallerError } from './client.js';
 export type { McpClient, VerifiedCaller } from './client.js';
+export { createMcpHandler } from './handler.js';
+export type {
+  McpHandlerOptions,
+  McpHandlerBaseOptions,
+  McpHandlerClientConfig,
+  AuthInfo,
+  HandlerDpopMode,
+} from './handler.js';
+export { authenticateRequest } from './authenticate.js';
+export type {
+  AuthenticateRequestOptions,
+  AuthenticateResult,
+  AuthenticatedRequest,
+  RejectedRequest,
+} from './authenticate.js';
+export { buildWwwAuthenticate } from './challenge.js';
+export type { ChallengeOptions, ChallengeScheme, ChallengeErrorCode } from './challenge.js';
+export { buildProtectedResourceMetadata } from './metadata.js';
+export type { ProtectedResourceMetadataOptions, ProtectedResourceMetadataDocument } from './metadata.js';
 export {
   runWithRequestContext,
   getRequestContext,
