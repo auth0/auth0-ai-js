@@ -18,7 +18,12 @@ import type { E2eEnv } from "./env.js";
 /** The canary the `throws_canary` tool puts into its error message. No response may carry it. */
 export const ERROR_CANARY = "e2e-canary-secret-9f3a";
 
-export type E2eConfigurationTier = "client" | "inline" | "env";
+/**
+ * How the adapter gets its client: a client built and passed in, every connection setting passed
+ * inline, none passed (read from the four `AUTH0_` variables), or the client id and secret passed
+ * with the domain and audience read from the environment.
+ */
+export type E2eConfigurationTier = "client" | "inline" | "env" | "partial";
 
 export interface FastMcpServerOptions {
   env: E2eEnv;
@@ -255,6 +260,18 @@ export async function startFastMcpServer(options: FastMcpServerOptions): Promise
     auth = createFastMcpAuth({ client, endpoint, ...options.auth });
   } else if (configuration === "inline") {
     auth = createFastMcpAuth({ ...connection, ...tuning, endpoint, ...options.auth });
+  } else if (configuration === "partial") {
+    auth = withEnv(
+      { AUTH0_DOMAIN: connection.domain, AUTH0_AUDIENCE: connection.audience },
+      () =>
+        createFastMcpAuth({
+          clientId: connection.clientId,
+          clientSecret: connection.clientSecret,
+          ...tuning,
+          endpoint,
+          ...options.auth,
+        }),
+    );
   } else {
     // No connection settings are passed: the four AUTH0_ variables exist only while the adapter is built.
     auth = withEnv(
