@@ -1,5 +1,6 @@
 {
   "name": "@auth0/ai-fastmcp",
+  "version": "0.0.0",
   "private": true,
   "description": "Auth0 authentication and token delegation for FastMCP servers",
   "repository": {
