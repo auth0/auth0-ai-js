@@ -1,5 +1,4 @@
-import { InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { createMcpClient } from "@auth0/ai-mcp";
+import { InvalidConfigurationError, createMcpClient } from "@auth0/ai-mcp";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createFastMcpAuth } from "../../src/index.js";
 import { withEnv } from "../support/stubs.js";

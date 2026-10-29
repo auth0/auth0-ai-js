@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "node:http";
-import { AuthError, InvalidConfigurationError, VerifyAccessTokenError } from "@auth0/auth0-api-js";
-import { authenticateRequest } from "@auth0/ai-mcp";
+import { VerifyAccessTokenError } from "@auth0/auth0-api-js";
+import { AuthError, InvalidConfigurationError, authenticateRequest } from "@auth0/ai-mcp";
 import type { RejectedRequest } from "@auth0/ai-mcp";
 import { describe, expect, it, vi } from "vitest";
 import { createFastMcpAuth } from "../src/create.js";
