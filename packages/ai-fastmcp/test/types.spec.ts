@@ -28,12 +28,33 @@ describe("types", () => {
       parameters: z.object({ id: z.string(), limit: z.number().optional() }),
       execute: withAuth0Execute(async (args, ctx) => {
         expectTypeOf(args).toEqualTypeOf<{ id: string; limit?: number | undefined }>();
-        expectTypeOf(ctx.session).toEqualTypeOf<Auth0Session | undefined>();
-        const sub: string | undefined = ctx.session?.principal.sub;
+        expectTypeOf(ctx.session).toEqualTypeOf<Auth0Session>();
+        const sub: string = ctx.session.principal.sub;
         return `${args.id}:${sub}`;
       }),
     });
     expect(server).toBeDefined();
+  });
+
+  it("gives the wrapped function a session that is not optional, without a non-null assertion", () => {
+    const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
+    server.addTool({
+      name: "who",
+      parameters: z.object({}),
+      execute: withAuth0Execute(async (_args, { session }) => {
+        expectTypeOf(session).toEqualTypeOf<Auth0Session>();
+        const sub: string = session.principal.sub;
+        const scopes: readonly string[] = session.scopes;
+        return `${sub}:${scopes.length}`;
+      }),
+    });
+    expect(server).toBeDefined();
+  });
+
+  it("keeps the session optional in the context the outer function accepts", () => {
+    const wrapped = withAuth0Execute<{ id: string }, { session?: Auth0Session }, Promise<number>>(async () => 42);
+    expectTypeOf(wrapped).parameter(1).toEqualTypeOf<{ session?: Auth0Session }>();
+    expect(wrapped).toBeDefined();
   });
 
   it("compiles the shapes the README shows", () => {
@@ -42,7 +63,7 @@ describe("types", () => {
       name: "list_orders",
       description: "Lists the caller's orders.",
       parameters: z.object({}),
-      execute: withAuth0Execute(async (_args, { session }) => `Orders of ${session?.principal.sub}`, {
+      execute: withAuth0Execute(async (_args, { session }) => `Orders of ${session.principal.sub}`, {
         requiredScopes: "read:orders",
       }),
     });
@@ -65,9 +86,9 @@ describe("types", () => {
       execute: withAuth0Execute(async (args, ctx) => {
         // @ts-expect-error id is a string, not a number
         const id: number = args.id;
-        // @ts-expect-error the session is optional in FastMCP's context
-        const sub: string = ctx.session.principal.sub;
-        return `${id}${sub}`;
+        // @ts-expect-error the session has no such property
+        const email: string = ctx.session.email;
+        return `${id}${email}`;
       }),
     });
     expect(server).toBeDefined();

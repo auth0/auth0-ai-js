@@ -28,7 +28,7 @@ server.addTool({
   name: "list_orders",
   description: "Lists the caller's orders.",
   parameters: z.object({}),
-  execute: withAuth0Execute(async (_args, { session }) => `Orders of ${session?.principal.sub}`, {
+  execute: withAuth0Execute(async (_args, { session }) => `Orders of ${session.principal.sub}`, {
     requiredScopes: "read:orders",
   }),
 });
@@ -49,7 +49,7 @@ This serves `POST /mcp`, requires a valid Auth0 access token for the audience, a
 
 A tool receives the session as `context.session`. It holds `principal` (the verified caller), `scopes` (a plain array, so FastMCP's own `requireScopes` and `canAccess` work on it) and `mcpClient` (a client bound to this caller). It never holds the access token.
 
-`withAuth0Execute(execute, options?)` wraps a tool's `execute`. Inside the wrapped body the accessors of `@auth0/ai-mcp` work, for example `getCallerMcpClientOrThrow()` and `getCallerPrincipal()`. FastMCP has no outer layer where the request context could be bound, so without the wrapper the accessors return `undefined` and you read the session instead. The wrapper changes nothing about argument types: the types FastMCP infers from `parameters` are kept.
+`withAuth0Execute(execute, options?)` wraps a tool's `execute`. Inside the wrapped body the accessors of `@auth0/ai-mcp` work, for example `getCallerMcpClientOrThrow()` and `getCallerPrincipal()`. FastMCP has no outer layer where the request context could be bound, so without the wrapper the accessors return `undefined` and you read the session instead. The wrapper changes nothing about argument types: the types FastMCP infers from `parameters` are kept. Inside the wrapped function `context.session` is typed as always present, so you read `session.principal` without a non-null assertion. FastMCP types the session as optional, but when a call arrives without one the wrapper answers it and never runs your function.
 
 ```ts
 import { getCallerMcpClientOrThrow } from "@auth0/ai-mcp";
