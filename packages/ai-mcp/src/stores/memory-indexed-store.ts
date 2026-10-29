@@ -23,11 +23,11 @@ export interface MemoryIndexedTokenStoreOptions {
  * An in-memory {@link IndexedTokenStore} with a hard size bound and least-recently-used
  * eviction.
  *
- * Suitable for a single process, for tests, and as the default cache for a server that
- * does not need tokens to survive a restart. The contents live in the memory of one
- * process only: they are not shared between processes or workers and are lost on exit. Use
- * a store backed by shared storage, wrapped with `createEncryptedTokenStore`, when
- * several instances must see the same tokens.
+ * A reference store for a single process and for tests, which a server can opt into by
+ * passing it as the `tokenStore`. It is not the default: no store is used unless one is
+ * passed. The contents live in the memory of one process only: they are not shared between
+ * processes or workers and are lost on exit. Use a store backed by shared storage, wrapped
+ * with `createEncryptedTokenStore`, when several instances must see the same tokens.
  *
  * Values are copied when they are written and again when they are read, so neither the
  * caller that stored a value nor the caller that received one can change what the store
