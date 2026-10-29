@@ -10,7 +10,7 @@ FastMCP stays the server. This package only fills two of its options.
 npm install @auth0/ai-fastmcp @auth0/ai-mcp fastmcp
 ```
 
-`@auth0/ai-mcp` and `fastmcp` are peer dependencies, so your app and this package share one copy of each. The tests run against FastMCP 4.7.0 and the later 4.x releases up to 4.23.8.
+`@auth0/ai-mcp` and `fastmcp` are peer dependencies, so your app and this package share one copy of each. The test suite passes against FastMCP 4.7.0, the oldest release supported, and 4.23.8, the newest tested, and against a sample of the releases in between.
 
 ## Quickstart
 
