@@ -94,7 +94,6 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
 
   const protectedResource = buildProtectedResource(bearerClient, rest);
   const resource = protectedResource.resource;
-  const origin = new URL(resource).origin;
   const metadataUrl = resolveMetadataUrl(resource, endpoint);
 
   const authOptions: AuthenticateRequestOptions = {
@@ -124,7 +123,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
     try {
       const headers = new Headers();
       if (authorization !== undefined) headers.set("authorization", authorization);
-      request = new Request(new URL(req.url ?? "/", origin), { headers });
+      request = new Request(resource, { headers });
     } catch {
       throw jsonResponse(400, { error: "invalid_request", error_description: "The request is malformed." });
     }
