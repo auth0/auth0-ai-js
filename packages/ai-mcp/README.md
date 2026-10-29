@@ -75,7 +75,7 @@ The rest of this page explains the pieces.
 npm install @auth0/ai-mcp @modelcontextprotocol/server
 ```
 
-`@auth0/auth0-api-js` is a regular dependency, so npm installs it with the package. Your application does not need to depend on it directly, because the token store types are re-exported from `@auth0/ai-mcp`.
+`@auth0/auth0-api-js` is a regular dependency, so npm installs it with the package. Your application does not need to depend on it directly, because the token store types and the `AuthError` and `InvalidConfigurationError` classes are re-exported from `@auth0/ai-mcp`. Import the two classes from `@auth0/ai-mcp` for `instanceof` checks, so they match the classes the package throws even when your application resolves more than one copy of the core package.
 
 `@modelcontextprotocol/server` (version 2.3 or later, from the MCP TypeScript SDK v2) is an optional peer dependency. Only the `@auth0/ai-mcp/mcp-sdk` entry point imports it, so install it when you use that entry point. The main entry point `@auth0/ai-mcp` never loads it.
 

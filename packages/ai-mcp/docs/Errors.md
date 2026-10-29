@@ -2,7 +2,7 @@
 
 Errors fall into three groups: the classes this package exports, errors from the core client that pass through it, and configuration errors thrown when you create a client or handler.
 
-All authentication errors extend `AuthError` from `@auth0/auth0-api-js`, which carries a `code`, an optional `statusCode` and optional `headers`.
+All authentication errors extend `AuthError`, which carries a `code`, an optional `statusCode` and optional `headers`. `@auth0/ai-mcp` re-exports `AuthError` and `InvalidConfigurationError` from `@auth0/auth0-api-js`. Import them from `@auth0/ai-mcp` for `instanceof` checks, because a class imported from a second copy of the core package does not match the errors this package throws.
 
 ## Errors exported by `@auth0/ai-mcp`
 
@@ -61,7 +61,7 @@ A request-scoped client method sanitizes the errors it throws: it replaces the m
 
 ## Configuration errors
 
-`InvalidConfigurationError` (from `@auth0/auth0-api-js`) is thrown at construction time when:
+`InvalidConfigurationError` (re-exported from `@auth0/ai-mcp`) is thrown at construction time when:
 
 - `scopeMatching` is `'non_strict'` and `tokenStore` is missing or not an indexed store,
 - you pass `apiClient` together with `clientId`, `clientSecret`, `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop` or `requestTimeoutMs`,
