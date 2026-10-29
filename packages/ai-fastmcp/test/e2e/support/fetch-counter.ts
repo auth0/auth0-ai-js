@@ -1,11 +1,8 @@
 /**
- * Counts POSTs to `/oauth/token` by `grant_type` by wrapping `globalThis.fetch`. The core client
- * accepts no custom fetch, so the global is the only seam. Install it before creating the server
- * under test and call `restore()` in `afterEach`.
- *
- * Ordering with `installFetchFault`: the later install is the outer wrapper. Install the counter
- * AFTER the fault to count every attempt, including faulted ones. Install it BEFORE the fault to
- * count only requests that reach the network. Restore in reverse order of installation.
+ * Counts POSTs to `/oauth/token` by `grant_type`, and lists every request, by wrapping
+ * `globalThis.fetch`. The core client accepts no custom fetch, so the global is the only seam.
+ * Install it before the calls to observe and call `restore()` in `afterEach`. Mint tokens outside
+ * the window, so retries of the token helpers never move a count.
  */
 
 export const TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -17,7 +14,9 @@ export interface FetchCounter {
   readonly exchanges: number;
   /** All counted grant types and their counts. */
   readonly byGrant: Readonly<Record<string, number>>;
-  /** Zeroes the counts. */
+  /** Every request seen, as `METHOD origin+path`, in order. Query strings and bodies are not kept. */
+  readonly requests: string[];
+  /** Zeroes the counts and forgets the requests. */
   reset(): void;
   /** Puts the original `fetch` back. Safe to call twice. */
   restore(): void;
@@ -48,11 +47,13 @@ export async function describeRequest(input: RequestInfo | URL, init?: RequestIn
 export function installFetchCounter(): FetchCounter {
   const original = globalThis.fetch;
   const byGrant: Record<string, number> = {};
+  const requests: string[] = [];
   let installed = true;
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const { grantType: grant } = await describeRequest(input, init);
+    const { grantType: grant, url, method } = await describeRequest(input, init);
     if (grant !== null) byGrant[grant] = (byGrant[grant] ?? 0) + 1;
+    requests.push(`${method} ${url.origin}${url.pathname}`);
     return original(input, init);
   }) as typeof fetch;
   const wrapper = globalThis.fetch;
@@ -63,8 +64,10 @@ export function installFetchCounter(): FetchCounter {
       return byGrant[TOKEN_EXCHANGE_GRANT] ?? 0;
     },
     byGrant,
+    requests,
     reset() {
       for (const key of Object.keys(byGrant)) delete byGrant[key];
+      requests.length = 0;
     },
     restore() {
       if (installed && globalThis.fetch === wrapper) globalThis.fetch = original;
