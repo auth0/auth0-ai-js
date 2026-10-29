@@ -100,7 +100,8 @@ export async function loadSnippet(
     if (!code.includes(from)) throw new Error(`The block does not contain ${from}.`);
     code = code.replaceAll(from, to);
   }
-  code += `\nexport { ${options.exportNames.join(", ")} };\n`;
+  const missing = options.exportNames.filter((name) => !new RegExp(`export\\s+(?:const|let|var|function|class)\\s+${name}\\b`).test(code));
+  if (missing.length > 0) code += `\nexport { ${missing.join(", ")} };\n`;
   mkdirSync(generatedDir, { recursive: true });
   const file = path.join(generatedDir, `${name.replace(/\W+/g, "_")}_${index}_${process.pid}_${Date.now()}.ts`);
   writeFileSync(file, code);
