@@ -1,6 +1,10 @@
+import type { IncomingMessage } from "node:http";
 import { AuthError, InvalidConfigurationError, VerifyAccessTokenError } from "@auth0/auth0-api-js";
+import { authenticateRequest } from "@auth0/ai-mcp";
+import type { RejectedRequest } from "@auth0/ai-mcp";
 import { describe, expect, it, vi } from "vitest";
 import { createFastMcpAuth } from "../src/create.js";
+import { bearerOnly } from "../src/options.js";
 import type { FastMcpAuthOptions } from "../src/options.js";
 import {
   AUDIENCE,
@@ -219,6 +223,31 @@ describe("createFastMcpAuth", () => {
       expect(response.status).toBe(500);
     });
 
+    it("turns a fault of its own into a generic 500 instead of throwing it", async () => {
+      const onError = vi.fn();
+      const { auth } = setup({ onError });
+      // A request without headers makes the adapter's own code throw a TypeError.
+      const broken = { url: "/mcp" } as unknown as IncomingMessage;
+      const response = await failure(auth.authenticate(broken));
+      expect(response.status).toBe(500);
+      expect(response.headers.get("www-authenticate")).toBeNull();
+      expect(await response.json()).toEqual({ error: "server_error", error_description: "Internal server error." });
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError.mock.calls[0]![0]).toBeInstanceOf(TypeError);
+    });
+
+    it("keeps that 500 when the error hook throws, and when there is no hook", async () => {
+      const broken = { url: "/mcp" } as unknown as IncomingMessage;
+      const throwing = setup({
+        onError: () => {
+          throw new Error("hook failed");
+        },
+      });
+      expect((await failure(throwing.auth.authenticate(broken))).status).toBe(500);
+      const none = setup();
+      expect((await failure(none.auth.authenticate(broken))).status).toBe(500);
+    });
+
     it("answers a request that cannot become a Request with 400", async () => {
       const { auth } = setup();
       const response = await failure(auth.authenticate(fakeRequest({ authorization: "Bearer abcĀ" })));
@@ -243,6 +272,17 @@ describe("createFastMcpAuth", () => {
       expect(challenge).toContain('error="invalid_token"');
       expect(challenge).toContain("DPoP is not supported");
       expect(challenge).not.toMatch(/^DPoP|, DPoP /);
+      expect(client.verifyCalls).toHaveLength(0);
+    });
+
+    it("recognizes a key-bound token under any spelling of the Bearer scheme", async () => {
+      const { auth, client } = setup({}, { dpopMode: "disabled" });
+      for (const scheme of ["bearer", "BEARER", "Bearer"]) {
+        const response = await failure(
+          auth.authenticate(fakeRequest({ authorization: `${scheme} ${fakeJwt({ cnf: { jkt: "t" } })}` })),
+        );
+        expect(response.status).toBe(401);
+      }
       expect(client.verifyCalls).toHaveLength(0);
     });
 
@@ -390,6 +430,25 @@ describe("createFastMcpAuth", () => {
       const response = await failure(auth.authenticate(fakeRequest()));
       const url = /resource_metadata="([^"]+)"/.exec(response.headers.get("www-authenticate")!)![1]!;
       expect(url).toBe(`https://mcp.example.com/.well-known/oauth-protected-resource${new URL(AUDIENCE).pathname}`);
+    });
+
+    it("names the same metadata URL that @auth0/ai-mcp derives from the resource by itself", async () => {
+      const audiences = [
+        "https://mcp.example.com/mcp",
+        "https://mcp.example.com/mcp/",
+        "https://mcp.example.com",
+        "https://mcp.example.com/",
+        "http://127.0.0.1:4000/api/mcp",
+      ];
+      for (const audience of audiences) {
+        const path = new URL(audience).pathname.replace(/\/$/, "");
+        const { auth, client } = setup({ ...(path !== "" && { endpoint: path as `/${string}` }) }, { audience });
+        const mine = await failure(auth.authenticate(fakeRequest()));
+        const theirs = await authenticateRequest(new Request(audience), { client: bearerOnly(client) });
+        expect(theirs.ok).toBe(false);
+        const challenge = (response: Response) => response.headers.get("www-authenticate");
+        expect(challenge(mine)).toBe(challenge((theirs as RejectedRequest).response));
+      }
     });
 
     it("passes the optional metadata fields on", () => {
