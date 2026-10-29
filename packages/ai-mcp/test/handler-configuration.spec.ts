@@ -101,6 +101,7 @@ describe("resource versus audience", () => {
     const error = capture(() => build(AUD, "https://other.example.com/mcp"));
     expect(error).toBeInstanceOf(InvalidConfigurationError);
     expect(error.message).not.toMatch(/trailing slash/);
+    expect(error.message).toMatch(/Omit "resource" to use the audience\./);
   });
 
   it("accepts a difference in the case of the scheme and host only", () => {
