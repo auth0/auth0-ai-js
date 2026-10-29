@@ -23,7 +23,9 @@
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node scripts/e2e/run.mjs",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "files": [
     "dist/**/*.{*js,*js.map,d.ts,d.ts.map}",
