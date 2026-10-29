@@ -62,7 +62,7 @@ const present = (/** @type {Record<string, string | undefined>} */ env, /** @typ
 
 /**
  * Parses the runner arguments. File name fragments come from `--only <fragment>` (repeatable) or
- * as bare words, so `npm run e2e -- session obo` works too.
+ * as bare words, so `run.mjs session obo` works too.
  * @param {string[]} argv
  * @returns {Options}
  */
@@ -95,7 +95,7 @@ export function parseArgs(argv) {
   return options;
 }
 
-export const USAGE = `Usage: npm run e2e -- [options] [fragment ...]
+export const USAGE = `Usage: node scripts/e2e/run.mjs [options] [fragment ...]
 
   --check          run the preflight only (env names, discovery, one login, one exchange)
   --slow           run the slow tier only (real waiting for token expiry)
@@ -227,7 +227,7 @@ export function buildVitestArgs({ config, fragments, jsonPath }) {
   return ["vitest", "run", "--config", config, "--reporter=default", "--reporter=json", `--outputFile.json=${jsonPath}`, ...fragments];
 }
 
-const SCENARIO_ID = /\bFM-\d{2}\b/;
+const SCENARIO_ID = /\bE-[A-Z]-\d{2}\b/;
 
 /**
  * @typedef {object} Row
@@ -271,24 +271,26 @@ export function rowsFromVitestJson(json) {
  */
 export function foldRows(rows) {
   const rank = { FAIL: 2, PASS: 1, SKIP: 0 };
-  /** @type {Map<string, { row: Row, tests: number, passed: number }>} */
+  /** @type {Map<string, { row: Row, passed: number, failed: number, skipped: number }>} */
   const byId = new Map();
   for (const row of rows) {
     const key = row.id.startsWith("file:") ? `${row.id}:${row.status}` : row.id;
-    const entry = byId.get(key);
+    let entry = byId.get(key);
     if (entry === undefined) {
-      byId.set(key, { row: { ...row }, tests: 1, passed: row.status === "PASS" ? 1 : 0 });
-      continue;
-    }
-    entry.tests += 1;
-    if (row.status === "PASS") entry.passed += 1;
-    if (rank[row.status] > rank[entry.row.status] || (entry.row.status === "SKIP" && row.status !== "SKIP")) {
+      entry = { row: { ...row }, passed: 0, failed: 0, skipped: 0 };
+      byId.set(key, entry);
+    } else if (rank[row.status] > rank[entry.row.status]) {
       entry.row.status = row.status;
     }
+    if (row.status === "PASS") entry.passed += 1;
+    else if (row.status === "FAIL") entry.failed += 1;
+    else entry.skipped += 1;
   }
-  return [...byId.values()].map(({ row, tests, passed }) => ({
+  return [...byId.values()].map(({ row, passed, failed, skipped }) => ({
     ...row,
-    detail: row.id.startsWith("file:") ? `${tests} tests` : `${passed} of ${tests} tests passed`,
+    detail: row.id.startsWith("file:")
+      ? `${passed + failed + skipped} tests`
+      : `${passed} passed, ${skipped} skipped, ${failed} failed of ${passed + failed + skipped} tests`,
   }));
 }
 
@@ -312,9 +314,9 @@ function cell(/** @type {string} */ value) {
 /**
  * Renders the markdown report. It holds scenario ids, statuses, file names, counts and the
  * versions under test, no environment values and no tokens.
- * @param {{ rows: Row[], skippedGroups: string[], skippedFiles: string[], tiers: string[], exitCode: number, finishedAt: Date, preflight: string[], fastmcpVersion: string }} input
+ * @param {{ rows: Row[], tests: { pass: number, fail: number, skip: number }, skippedGroups: string[], skippedFiles: string[], tiers: string[], exitCode: number, finishedAt: Date, preflight: string[], fastmcpVersion: string }} input
  */
-export function renderReport({ rows, skippedGroups, skippedFiles, tiers, exitCode, finishedAt, preflight, fastmcpVersion }) {
+export function renderReport({ rows, tests, skippedGroups, skippedFiles, tiers, exitCode, finishedAt, preflight, fastmcpVersion }) {
   const counts = countRows(rows);
   const lines = [
     "# ai-fastmcp real-tenant e2e report",
@@ -323,6 +325,7 @@ export function renderReport({ rows, skippedGroups, skippedFiles, tiers, exitCod
     `Tiers: ${tiers.join(", ")}`,
     `fastmcp under test: ${fastmcpVersion}`,
     `Result: ${exitCode === 0 ? "PASS" : "FAIL"} (${counts.pass} passed, ${counts.fail} failed, ${counts.skip} skipped)`,
+    `Tests: ${tests.pass} passed, ${tests.fail} failed, ${tests.skip} skipped`,
     "",
     "## Preflight",
     "",

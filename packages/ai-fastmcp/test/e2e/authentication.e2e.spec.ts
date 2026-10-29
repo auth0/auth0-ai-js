@@ -63,7 +63,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
       await server?.stop();
     });
 
-    it("FM-01 a valid user token reaches a tool and the session holds the caller", async () => {
+    it("E-A-01 a valid user token reaches a tool and the session holds the caller", async () => {
       const session = await connect(server, userToken);
       try {
         const { isError, value } = await callTool<WhoamiResult>(session, "whoami");
@@ -79,7 +79,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
       }
     });
 
-    it.skipIf(!hasLimited)("FM-01 a client credentials token reaches the same tool with its own subject", async () => {
+    it.skipIf(!hasLimited)("E-A-01 a client credentials token reaches the same tool with its own subject", async () => {
       const machine = limitedClient(e2e);
       const token = await machine.token();
       const session = await connect(server, token);
@@ -96,7 +96,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
     });
 
     describe("a request without a usable credential", () => {
-      it("FM-11 no Authorization header: 401, a bare Bearer challenge that names the metadata, no error code", async () => {
+      it("E-A-02 no Authorization header: 401, a bare Bearer challenge that names the metadata, no error code", async () => {
         const res = await postInitialize(server);
         expect(res.status).toBe(401);
         expect(res.challenge?.scheme).toBe("Bearer");
@@ -105,7 +105,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
         expect(JSON.parse(res.body)).toEqual({ error: "unauthorized", error_description: "Authentication is required." });
       });
 
-      it("FM-11 a real client sees the 401 and the challenge", async () => {
+      it("E-A-02 a real client sees the 401 and the challenge", async () => {
         const failure = await connect(server).then(
           () => undefined,
           (error: Error & { seen: Array<{ status: number; wwwAuthenticate: string | null }> }) => error,
@@ -138,7 +138,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
         ],
       ];
 
-      it.each(cases)("FM-11 %s: 401 invalid_token, no library text, no echo", async (_name, build) => {
+      it.each(cases)("E-A-02 %s: 401 invalid_token, no library text, no echo", async (_name, build) => {
         const token = await build();
         sent.push(token);
         const res = await postInitialize(server, `Bearer ${token}`);
@@ -156,7 +156,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
       it.each([
         ["an empty bearer value", "Bearer "],
         ["a bearer value of two words", "Bearer a b"],
-      ])("FM-11 %s is a malformed request: 400 invalid_request with a Bearer challenge", async (_name, authorization) => {
+      ])("E-A-02 %s is a malformed request: 400 invalid_request with a Bearer challenge", async (_name, authorization) => {
         const res = await postInitialize(server, authorization);
         expect(res.status).toBe(400);
         expect(res.challenge?.scheme).toBe("Bearer");
@@ -164,14 +164,14 @@ describeLive("fastmcp authentication", [], (e2e) => {
         expect(res.challenge?.params["resource_metadata"]).toMatch(/\/\.well-known\/oauth-protected-resource\/mcp$/);
       });
 
-      it("FM-11 another scheme counts as no credential: 401 and a bare Bearer challenge", async () => {
+      it("E-A-02 another scheme counts as no credential: 401 and a bare Bearer challenge", async () => {
         const res = await postInitialize(server, "Basic dXNlcjpwYXNz");
         expect(res.status).toBe(401);
         expect(res.challenge?.scheme).toBe("Bearer");
         expect(res.challenge?.params).not.toHaveProperty("error");
       });
 
-      it("FM-11 a 20 KB bearer value is refused before the adapter, and is neither served nor a server error", async () => {
+      it("E-A-02 a 20 KB bearer value is refused before the adapter, and is neither served nor a server error", async () => {
         const res = await postInitialize(server, `Bearer ${"a".repeat(20_000)}`).catch(() => undefined);
         // Node refuses oversized headers with 431 or closes the socket; both are fine, 200 and 500 are not.
         if (res !== undefined) {
@@ -180,7 +180,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
         }
       });
 
-      it("FM-11 the server is still healthy and logged no token", async () => {
+      it("E-A-02 the server is still healthy and logged no token", async () => {
         const session = await connect(server, userToken);
         try {
           expect((await callTool(session, "whoami")).isError).toBe(false);
@@ -192,7 +192,7 @@ describeLive("fastmcp authentication", [], (e2e) => {
     });
 
     describe("tenant tokens that are not for this server", () => {
-      it("FM-01 a tenant-signed token for another audience: 401 invalid_token", async () => {
+      it("E-A-01 a tenant-signed token for another audience: 401 invalid_token", async () => {
         const otherAudience = await getUserToken(e2e, { audience: e2e.downstreamAudience, scope: e2e.downstreamScope });
         expect(decodeClaims(otherAudience)["aud"]).not.toEqual(e2e.mcpAudience);
         const res = await postInitialize(server, `Bearer ${otherAudience}`);

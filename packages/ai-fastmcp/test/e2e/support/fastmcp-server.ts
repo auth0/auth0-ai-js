@@ -158,6 +158,14 @@ function registerTools(server: FastMCP<Auth0Session>, deps: ToolDeps): void {
   });
 
   server.addTool({
+    name: "whoami_raw",
+    description: "The session without the wrapper: the accessors are not bound here.",
+    parameters: z.object({}),
+    execute: async (_args, ctx) =>
+      json({ sessionSub: ctx.session?.principal.sub ?? null, accessorBound: getCallerPrincipal() !== undefined }),
+  });
+
+  server.addTool({
     name: "delegate",
     description: "Exchanges the caller's token for the downstream API and calls it.",
     parameters: z.object({ scope: z.string().optional(), audience: z.string().optional() }),

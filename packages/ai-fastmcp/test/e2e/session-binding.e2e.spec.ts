@@ -58,7 +58,7 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
     return { server, owner, id: id! };
   }
 
-  it("FM-05 the second user's real token on the first user's session id is refused with 403, no challenge, and the tool does not run", async () => {
+  it("E-N-01 the second user's real token on the first user's session id is refused with 403, no challenge, and the tool does not run", async () => {
     const { server: running, owner: active, id } = await openSession();
     const reply = await callOnSession(running, id, secondToken, "whoami");
     expect(reply.status).toBe(403);
@@ -75,7 +75,7 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
     expect(mine.value.sessionSub).toBe(firstSub);
   });
 
-  it("FM-05 the owner can keep using the session id with a fresh token", async () => {
+  it("E-N-01 the owner can keep using the session id with a fresh token", async () => {
     const { server: running, id } = await openSession();
     const fresh = await firstUser(e2e).token({ fresh: true });
     const reply = await callOnSession(running, id, fresh, "whoami");
@@ -83,7 +83,7 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
     expect(JSON.parse(reply.toolText!)).toMatchObject({ sessionSub: firstSub });
   });
 
-  it("FM-05 a GET or DELETE with the other user's token is refused too, and the session survives", async () => {
+  it("E-N-01 a GET or DELETE with the other user's token is refused too, and the session survives", async () => {
     const { server: running, owner: active, id } = await openSession();
     for (const method of ["GET", "DELETE"]) {
       const response = await rawRequest(running, {
@@ -96,14 +96,14 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
     expect((await callTool(active, "whoami")).isError).toBe(false);
   });
 
-  it("FM-05 a bad token on a bound session id is a 401 with a challenge, not a 403", async () => {
+  it("E-N-01 a bad token on a bound session id is a 401 with a challenge, not a 403", async () => {
     const { server: running, id } = await openSession();
     const reply = await callOnSession(running, id, "not.a.token", "whoami");
     expect(reply.status).toBe(401);
     expect(reply.challenge?.params["error"]).toBe("invalid_token");
   });
 
-  it("FM-05 two users each get a session of their own and each is served as itself", async () => {
+  it("E-N-01 two users each get a session of their own and each is served as itself", async () => {
     const { server: running, owner: first, id } = await openSession();
     const second = await connect(running, secondToken);
     try {
@@ -116,7 +116,7 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
     }
   });
 
-  it("FM-05 pinned-behavior: with the binding off FastMCP runs the call as the second user, never as the first", async () => {
+  it("E-N-01 pinned-behavior: with the binding off FastMCP runs the call as the second user, never as the first", async () => {
     const { server: running, id } = await openSession({ sessionBinding: false });
     const reply = await callOnSession(running, id, secondToken, "whoami");
     expect(reply.status).toBe(200);

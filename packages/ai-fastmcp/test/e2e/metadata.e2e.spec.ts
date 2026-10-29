@@ -56,13 +56,13 @@ describeLive("fastmcp metadata and discovery", [], (e2e) => {
       return url!;
     }
 
-    it("FM-02 the challenge names the metadata route of the server's own resource", async () => {
+    it("E-D-01 the challenge names the metadata route of the server's own resource", async () => {
       const url = new URL(await advertisedUrl());
       expect(url.origin).toBe(new URL(e2e.mcpAudience).origin);
       expect(url.pathname).toBe(`${WELL_KNOWN}${new URL(e2e.mcpAudience).pathname}`);
     });
 
-    it("FM-02 the running server serves the document there: the resource is the audience, the authorization server is the tenant", async () => {
+    it("E-D-01 the running server serves the document there: the resource is the audience, the authorization server is the tenant", async () => {
       const response = await fetchFromServer(server, await advertisedUrl());
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toMatch(/^application\/json/);
@@ -73,14 +73,14 @@ describeLive("fastmcp metadata and discovery", [], (e2e) => {
       expect(Object.keys(document).filter((key) => key.includes("dpop"))).toEqual([]);
     });
 
-    it("FM-02 the root route serves the same document as the suffixed route", async () => {
+    it("E-D-01 the root route serves the same document as the suffixed route", async () => {
       const suffixed = await fetchFromServer(server, await advertisedUrl());
       const root = await fetch(`${server.origin}${WELL_KNOWN}`, { headers: { connection: "close" } });
       expect(root.status).toBe(200);
       expect(await root.json()).toEqual(await suffixed.json());
     });
 
-    it("FM-02 the document needs no token, even when a bad one is sent", async () => {
+    it("E-D-01 the document needs no token, even when a bad one is sent", async () => {
       const url = new URL(await advertisedUrl());
       const response = await fetch(new URL(url.pathname, server.origin), {
         headers: { authorization: "Bearer not.a.token", connection: "close" },
@@ -88,7 +88,7 @@ describeLive("fastmcp metadata and discovery", [], (e2e) => {
       expect(response.status).toBe(200);
     });
 
-    it("FM-02 the MCP SDK follows the challenge to the document, then to the tenant's authorization server", async () => {
+    it("E-D-01 the MCP SDK follows the challenge to the document, then to the tenant's authorization server", async () => {
       const advertised = await advertisedUrl();
       const document = await discoverOAuthProtectedResourceMetadata(
         server.url,
@@ -105,7 +105,7 @@ describeLive("fastmcp metadata and discovery", [], (e2e) => {
       expect(new URL(String((metadata as Record<string, unknown>)["jwks_uri"])).host).toBe(e2e.domain);
     });
 
-    it("FM-02 the SDK also finds the document from the server URL alone, by its own path rule", async () => {
+    it("E-D-01 the SDK also finds the document from the server URL alone, by its own path rule", async () => {
       const document = await discoverOAuthProtectedResourceMetadata(server.url, undefined, (input) =>
         fetchFromServer(server, String(input)),
       );

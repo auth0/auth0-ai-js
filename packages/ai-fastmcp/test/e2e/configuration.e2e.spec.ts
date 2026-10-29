@@ -65,19 +65,19 @@ describeLive("fastmcp configuration tiers", [], (e2e) => {
       await server?.stop();
     });
 
-    it("FM-09 the server builds, and builds its client from the tier's own settings", () => {
+    it("E-C-01 the server builds, and builds its client from the tier's own settings", () => {
       if (tier === "client") expect(server.client).toBeDefined();
       else expect(server.client).toBeUndefined();
     });
 
-    it("FM-09 the environment is read while the adapter is built and left as it was", () => {
+    it("E-C-01 the environment is read while the adapter is built and left as it was", () => {
       expect(process.env["AUTH0_DOMAIN"]).toBe(before.domain);
       expect(process.env["AUTH0_AUDIENCE"]).toBe(before.audience);
       expect(process.env["AUTH0_CLIENT_ID"]).toBe(before.clientId);
       expect(process.env["AUTH0_CLIENT_SECRET"]).toBe(before.clientSecret);
     });
 
-    it("FM-09 a request without a token gets the challenge of the configured resource; the document names the tenant", async () => {
+    it("E-C-01 a request without a token gets the challenge of the configured resource; the document names the tenant", async () => {
       const refused = await postInitialize(server);
       expect(refused.status).toBe(401);
       const url = new URL(refused.challenge!.params["resource_metadata"]!);
@@ -90,7 +90,7 @@ describeLive("fastmcp configuration tiers", [], (e2e) => {
       observed.set(tier, { challenge: refused.headers.get("www-authenticate"), document });
     });
 
-    it("FM-09 a live user token is verified and the session holds the caller", async () => {
+    it("E-C-01 a live user token is verified and the session holds the caller", async () => {
       const session = await connect(server, userToken);
       try {
         const { isError, value } = await callTool<WhoamiResult>(session, "whoami");
@@ -102,7 +102,7 @@ describeLive("fastmcp configuration tiers", [], (e2e) => {
       }
     });
 
-    it("FM-09 the client built by the tier really exchanges: the downstream API sees the caller and the exchange client as actor", async () => {
+    it("E-C-01 the client built by the tier really exchanges: the downstream API sees the caller and the exchange client as actor", async () => {
       const session = await connect(server, userToken);
       try {
         const { isError, value } = await callTool<DelegateResult>(session, "delegate", { scope: "work:read" });
@@ -117,14 +117,14 @@ describeLive("fastmcp configuration tiers", [], (e2e) => {
       }
     });
 
-    it("FM-09 a garbage token is refused with invalid_token", async () => {
+    it("E-C-01 a garbage token is refused with invalid_token", async () => {
       const res = await postInitialize(server, "Bearer not.a.token");
       expect(res.status).toBe(401);
       expect(res.challenge?.params["error"]).toBe("invalid_token");
     });
   });
 
-  it("FM-09 all four tiers publish the same document and send the same challenge", () => {
+  it("E-C-01 all four tiers publish the same document and send the same challenge", () => {
     expect([...observed.keys()].sort()).toEqual([...TIERS].sort());
     const reference = observed.get("client")!;
     for (const tier of TIERS) {
@@ -134,7 +134,7 @@ describeLive("fastmcp configuration tiers", [], (e2e) => {
     }
   });
 
-  it("FM-09 a wrong client secret is accepted at construction and refused by the tenant at the exchange, with fixed text", async () => {
+  it("E-C-01 a wrong client secret is accepted at construction and refused by the tenant at the exchange, with fixed text", async () => {
     const server = await startFastMcpServer({
       env: e2e,
       downstreamUrl: downstream.url,

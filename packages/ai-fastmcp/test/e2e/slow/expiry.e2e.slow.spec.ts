@@ -72,7 +72,7 @@ describeLive("fastmcp expiry over time", SHORT_VARS, (e2e) => {
   const shortCallerToken = () =>
     getUserToken(e2e, { audience: e2e.shortMcpAudience, scope: CALLER_SCOPE, fresh: true });
 
-  it("FM-14 a caller token that expires inside a stateful session is refused on the next call; a fresh token for the same user is served on the same session", async () => {
+  it("E-X-01 a caller token that expires inside a stateful session is refused on the next call; a fresh token for the same user is served on the same session", async () => {
     const server = await startFastMcpServer({
       env: e2e,
       downstreamUrl: shortDownstream.url,
@@ -110,7 +110,7 @@ describeLive("fastmcp expiry over time", SHORT_VARS, (e2e) => {
     expect(JSON.parse(resumed.toolText!)).toMatchObject({ sessionSub: subjectOf(token) });
   });
 
-  it("FM-14 a caller token that expires is refused by a stateless server too", async () => {
+  it("E-X-01 a caller token that expires is refused by a stateless server too", async () => {
     const server = await startFastMcpServer({
       env: e2e,
       downstreamUrl: shortDownstream.url,
@@ -135,7 +135,7 @@ describeLive("fastmcp expiry over time", SHORT_VARS, (e2e) => {
     expect(fresh.status).toBe(200);
   });
 
-  it("FM-15 a cached exchanged token past its exp is replaced by a new exchange for the same caller", async () => {
+  it("E-X-02 a cached exchanged token past its exp is replaced by a new exchange for the same caller", async () => {
     // The normal MCP API and exchange client, but the downstream API is the short-lived one, so the
     // exchanged token lives 30 seconds while the caller token (24 hours) outlives it.
     const env: E2eEnv = { ...e2e, downstreamAudience: e2e.shortDownstreamAudience, downstreamScope: SHORT_DOWNSTREAM_SCOPE };
