@@ -4,6 +4,8 @@
 
 FastMCP stays the server. This package only fills two of its options.
 
+[Quickstart](#quickstart) | [Documentation](#documentation) | [Example](#example) | [Feedback](#feedback)
+
 ## Install
 
 ```bash
@@ -36,7 +38,26 @@ server.addTool({
 await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });
 ```
 
-This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. Do not use FastMCP's own `auth` option next to it: that option makes FastMCP an OAuth proxy that issues its own tokens, which is the wrong model for a resource server.
+This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. Do not set FastMCP's own `auth` option as well: FastMCP documents it as a provider that configures `authenticate` and `oauth` itself, and this package supplies both.
+
+## Documentation
+
+| Guide | What it covers |
+| --- | --- |
+| [Getting started](./docs/GettingStarted.md) | Install, a server in under 20 lines, running it, and calling it with a token. |
+| [Configuration](./docs/Configuration.md) | The three ways to configure the client, the `resource` and `endpoint` rule, metadata, required scopes and realm. |
+| [Tools](./docs/Tools.md) | The session, `withAuth0Execute`, scopes for one tool, and calling downstream APIs for the caller. |
+| [Token caching](./docs/TokenCaching.md) | Turning on the cache, scope matching, and the reference store. |
+| [Stateless and stateful servers](./docs/StatelessAndStateful.md) | Why we recommend stateless, and what the session binding does and does not do. |
+| [DPoP](./docs/DPoP.md) | Why this release answers DPoP requests with 401, and what to do instead. |
+| [Errors and status codes](./docs/Errors.md) | Every response `authenticate` can throw and every text a tool can return. |
+| [Security notes](./docs/Security.md) | What the adapter enforces, what stays your job, and the limits. |
+| [Troubleshooting](./docs/Troubleshooting.md) | The messages you may see, with causes and fixes. |
+| [Compatibility](./docs/Compatibility.md) | The tested FastMCP versions and protocol revisions. |
+
+## Example
+
+[`examples/ai-fastmcp-server`](../../examples/ai-fastmcp-server) is a runnable server with three tools: one that needs no scope, one that exchanges the caller's token for a read token to a downstream API, and one that needs a scope of its own and exchanges for a write token. Its tests run it against a mocked tenant.
 
 ## How it works
 
@@ -52,7 +73,12 @@ A tool receives the session as `context.session`. It holds `principal` (the veri
 `withAuth0Execute(execute, options?)` wraps a tool's `execute`. Inside the wrapped body the accessors of `@auth0/ai-mcp` work, for example `getCallerMcpClientOrThrow()` and `getCallerPrincipal()`. FastMCP has no outer layer where the request context could be bound, so without the wrapper the accessors return `undefined` and you read the session instead. The wrapper changes nothing about argument types: the types FastMCP infers from `parameters` are kept. Inside the wrapped function `context.session` is typed as always present, so you read `session.principal` without a non-null assertion. FastMCP types the session as optional, but when a call arrives without one the wrapper answers it and never runs your function.
 
 ```ts
+import { FastMCP } from "fastmcp";
+import { z } from "zod";
 import { getCallerMcpClientOrThrow } from "@auth0/ai-mcp";
+import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
+
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
 
 server.addTool({
   name: "invoices",
@@ -76,7 +102,7 @@ Token exchange, caching (pass a `tokenStore` such as `MemoryIndexedTokenStore` t
 
 - **Server-wide.** `requiredScopes` on `createFastMcpAuth` applies before any tool runs. A token without one of them gets HTTP 403 with an `insufficient_scope` challenge that lists the missing scopes.
 - **Per tool.** `withAuth0Execute(execute, { requiredScopes })`, or `requireScopes(...)` from `@auth0/ai-mcp` inside the body, answers a missing scope with a tool error that names it, for example `Missing required scope: admin:all`. The HTTP status is 200 and the result has `isError: true`. The tool stays listed.
-- **Hiding a tool.** FastMCP's own `canAccess: requireScopes("admin:all")` is the alternative. It removes the tool from the list for callers without the scope and answers a direct call with a JSON-RPC `Unknown tool` error, so the client cannot learn which scope it is missing.
+- **Hiding a tool.** FastMCP's own `canAccess: requireScopes("admin:all")` is the alternative. It removes the tool from the list for callers without the scope and fails a direct call with a JSON-RPC error whose message contains `Unknown tool`, so the client cannot learn which scope it is missing.
 
 ## Errors inside tools
 
