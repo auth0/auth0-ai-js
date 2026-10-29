@@ -1,5 +1,4 @@
-import { InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { createMcpClient, resolveMcpClientOptions } from "@auth0/ai-mcp";
+import { InvalidConfigurationError, createMcpClient, resolveMcpClientOptions } from "@auth0/ai-mcp";
 import type { McpClient, McpClientOptions, McpHandlerClientConfig } from "@auth0/ai-mcp";
 import type { SessionBindingOptions } from "./binding.js";
 

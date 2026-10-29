@@ -1,5 +1,5 @@
-import { AuthError } from "@auth0/auth0-api-js";
 import {
+  AuthError,
   DownscopedTokenError,
   InsufficientScopeError,
   UnauthenticatedError,

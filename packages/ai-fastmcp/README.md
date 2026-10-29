@@ -86,7 +86,7 @@ Errors from `session.mcpClient` are already sanitized by `@auth0/ai-mcp`. Tools 
 
 ## Configuration
 
-Configure the client in one of three ways, the same three as the `@auth0/ai-mcp` handler. Passing `client` together with an inline client option throws `InvalidConfigurationError`.
+Configure the client in one of three ways, the same three as the `@auth0/ai-mcp` handler. Passing `client` together with an inline client option throws `InvalidConfigurationError`, the class `@auth0/ai-mcp` exports.
 
 | Tier | Example |
 | --- | --- |
