@@ -4,7 +4,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.spec.ts", "test/**/*.test.ts"],
-    exclude: ["**/node_modules/**", "**/dist/**"],
+    // Real-tenant specs run only through vitest.e2e.config.ts and vitest.e2e.slow.config.ts (npm run e2e).
+    exclude: ["**/node_modules/**", "**/dist/**", "test/e2e/**/*.e2e.spec.ts", "test/e2e/**/*.e2e.slow.spec.ts"],
     testTimeout: 20000,
     hookTimeout: 20000,
     coverage: {
