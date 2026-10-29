@@ -346,10 +346,15 @@ export function resolveResource(client: McpClient, resource: string | undefined)
     const a = canonicalizeOrigin(resource);
     const b = canonicalizeOrigin(audience);
     const slashOnly = a.replace(/\/$/, "") === b.replace(/\/$/, "");
+    // Omitting `resource` only helps when the audience can serve as the resource itself.
+    const advice =
+      resourceFromAudience(audience) !== undefined
+        ? ' Omit "resource" to use the audience.'
+        : " The handler cannot serve this audience because it is not an absolute http or https URL without a fragment or credentials. Set the audience to the public URL of this MCP server.";
     throw new InvalidConfigurationError(
       'Invalid configuration: "resource" must equal the client audience, because access tokens for any other audience are rejected.' +
         (slashOnly ? " The two differ only by a trailing slash, which counts as a difference." : "") +
-        ' Omit "resource" to use the audience.',
+        advice,
     );
   }
   return resource;
