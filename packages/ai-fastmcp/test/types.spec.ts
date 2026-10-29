@@ -2,6 +2,7 @@
  * Compile-time checks: `npm run type-check` (tsc --noEmit) covers this file. The assertions
  * below also run, but their value is that the file compiles.
  */
+import { getCallerMcpClientOrThrow } from "@auth0/ai-mcp";
 import { FastMCP, requireScopes } from "fastmcp";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
@@ -30,6 +31,27 @@ describe("types", () => {
         expectTypeOf(ctx.session).toEqualTypeOf<Auth0Session | undefined>();
         const sub: string | undefined = ctx.session?.principal.sub;
         return `${args.id}:${sub}`;
+      }),
+    });
+    expect(server).toBeDefined();
+  });
+
+  it("compiles the shapes the README shows", () => {
+    const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
+    server.addTool({
+      name: "list_orders",
+      description: "Lists the caller's orders.",
+      parameters: z.object({}),
+      execute: withAuth0Execute(async (_args, { session }) => `Orders of ${session?.principal.sub}`, {
+        requiredScopes: "read:orders",
+      }),
+    });
+    server.addTool({
+      name: "invoices",
+      parameters: z.object({ id: z.string() }),
+      execute: withAuth0Execute(async ({ id }) => {
+        const client = getCallerMcpClientOrThrow();
+        return `${id}:${client.getPrincipal().sub}`;
       }),
     });
     expect(server).toBeDefined();
