@@ -1,6 +1,8 @@
+import * as core from '@auth0/auth0-api-js';
 import { AuthError } from '@auth0/auth0-api-js';
 import { describe, expect, it } from 'vitest';
 import { DownscopedTokenError, InsufficientScopeError, UnauthenticatedError } from '../src/errors.js';
+import * as entry from '../src/index.js';
 
 describe('UnauthenticatedError', () => {
   it('is a 401 invalid_token with a default message', () => {
@@ -105,5 +107,33 @@ describe('DownscopedTokenError', () => {
     expect(err).toBeInstanceOf(Error);
     expect(err).not.toBeInstanceOf(InsufficientScopeError);
     expect(err).not.toBeInstanceOf(UnauthenticatedError);
+  });
+});
+
+describe('core error classes re-exported from the package entry', () => {
+  it('are the core classes themselves, so instanceof works against errors from every path', () => {
+    expect(entry.AuthError).toBe(core.AuthError);
+    expect(entry.InvalidConfigurationError).toBe(core.InvalidConfigurationError);
+
+    // An error thrown inside the core package, and one thrown by this package.
+    const fromCore = (() => {
+      try {
+        new core.ApiClient({
+          domain: 'tenant.example.com',
+          audience: 'https://mcp.example.com/mcp',
+          clientId: 'client',
+          clientSecret: 'secret',
+          scopeMatching: 'bogus' as never,
+        });
+      } catch (error) {
+        return error;
+      }
+      return undefined;
+    })();
+    expect(fromCore).toBeInstanceOf(entry.InvalidConfigurationError);
+    expect(() => new entry.MemoryIndexedTokenStore({ maxEntries: 0 })).toThrow(entry.InvalidConfigurationError);
+
+    expect(new UnauthenticatedError()).toBeInstanceOf(entry.AuthError);
+    expect(new entry.InsufficientScopeError(['a'])).toBeInstanceOf(entry.AuthError);
   });
 });

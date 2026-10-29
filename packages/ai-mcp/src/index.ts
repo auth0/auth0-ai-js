@@ -32,3 +32,6 @@ export { createEncryptedTokenStore } from './stores/encrypted-store.js';
 export type { EncryptedTokenStoreOptions } from './stores/encrypted-store.js';
 // Types a custom token store needs, re-exported so integrators do not have to depend on the core package directly.
 export type { CachedToken, IndexedTokenStore, TokenIndexMember, TokenSet, TokenStore } from '@auth0/auth0-api-js';
+// Core error classes this package throws or maps, re-exported so an application and sibling packages run `instanceof`
+// against the same class this package uses, even when more than one copy of the core package is installed.
+export { AuthError, InvalidConfigurationError } from '@auth0/auth0-api-js';
