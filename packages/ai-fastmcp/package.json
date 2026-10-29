@@ -13,7 +13,9 @@
   "module": "./dist/esm/index.js",
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:markers",
-    "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
+    "build:watch": "run-p build:esm:watch build:cjs:watch",
+    "build:esm:watch": "tsc --project ./tsconfig.build.json --outDir ./dist/esm --watch",
+    "build:cjs:watch": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --outDir ./dist/cjs --watch",
     "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
     "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --outDir ./dist/cjs",
     "build:markers": "node ./scripts/write-module-markers.mjs",
@@ -49,7 +51,7 @@
   },
   "peerDependencies": {
     "@auth0/ai-mcp": "*",
-    "fastmcp": "^4.0.0"
+    "fastmcp": "^4.7.0"
   },
   "devDependencies": {
     "@auth0/ai-mcp": "*",
