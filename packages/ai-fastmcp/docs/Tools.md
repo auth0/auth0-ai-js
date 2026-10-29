@@ -58,7 +58,7 @@ server.addTool({
 });
 ```
 
-FastMCP has no outer layer where the adapter could bind the request context, so the binding happens in this wrapper. A tool you do not wrap still gets `context.session`, but the accessors return `undefined` (`getCallerMcpClientOrThrow()` throws `UnauthenticatedError`). Wrap every tool that uses them.
+FastMCP has no outer layer where the adapter could bind the request context, so the binding happens in this wrapper. A tool you do not wrap still gets `context.session`, but the accessors return `undefined` (`getCallerMcpClientOrThrow()` throws `UnauthenticatedError`). Wrap every tool that uses them. Resources and prompts receive the session as the `auth` argument of their `load` function, and the accessors return `undefined` there too.
 
 The wrapper keeps the argument types FastMCP infers from `parameters`. It also turns failures into safe tool results, see [Errors and status codes](./Errors.md#errors-inside-tools).
 
