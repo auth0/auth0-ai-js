@@ -40,6 +40,14 @@ describe("SessionBindings", () => {
     expect(bindings.accept("s1", "alice")).toBe(false);
   });
 
+  it("forgets an id exactly when the ttl has passed", () => {
+    const time = clock();
+    const bindings = new SessionBindings({ ttlMs: 1000 }, time.now);
+    bindings.accept("s1", "alice");
+    time.advance(1000);
+    expect(bindings.accept("s1", "bob")).toBe(true);
+  });
+
   it("still enforces the binding just before the ttl", () => {
     const time = clock();
     const bindings = new SessionBindings({ ttlMs: 1000 }, time.now);

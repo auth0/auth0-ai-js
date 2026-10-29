@@ -62,10 +62,7 @@ export class SessionBindings {
     }
     // Delete first so the id moves to the end of the insertion order (most recently used).
     this.#entries.delete(sessionId);
-    this.#entries.set(sessionId, {
-      subject: existing !== undefined && existing.expiresAt > now ? existing.subject : subject,
-      expiresAt: now + this.#ttl,
-    });
+    this.#entries.set(sessionId, { subject, expiresAt: now + this.#ttl });
     while (this.#entries.size > this.#max) {
       const oldest = this.#entries.keys().next();
       if (oldest.done) break;
