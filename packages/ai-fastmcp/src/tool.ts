@@ -129,12 +129,15 @@ function toToolResult(error: unknown, session: Auth0Session, options: WithAuth0E
  * });
  * ```
  *
- * @param execute - The tool's `execute`.
+ * The wrapped function receives a context whose `session` is always set: FastMCP types it as
+ * optional, but the wrapper answers a call without a session itself and never runs the body then.
+ *
+ * @param execute - The tool's `execute`. Its context carries a non-optional `session`.
  * @param options - Per-tool scopes and an error observer.
  * @returns An `execute` with the same arguments.
  */
 export function withAuth0Execute<A, C extends { session?: Auth0Session | undefined }, R>(
-  execute: (args: A, context: C) => R,
+  execute: (args: A, context: C & { session: Auth0Session }) => R,
   options: WithAuth0ExecuteOptions = {},
 ): (args: A, context: C) => Promise<Awaited<R> | ToolErrorResult> {
   const needed = normalizeScopes(options.requiredScopes);
@@ -148,7 +151,7 @@ export function withAuth0Execute<A, C extends { session?: Auth0Session | undefin
       if (missing.length > 0) return scopeDenied(missing);
       const value = await runWithRequestContext(
         { principal: session.principal, mcpClient: session.mcpClient },
-        () => execute(args, context),
+        () => execute(args, context as C & { session: Auth0Session }),
       );
       return value as Awaited<R>;
     } catch (error) {
