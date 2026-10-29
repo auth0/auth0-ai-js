@@ -36,7 +36,7 @@ server.addTool({
 await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });
 ```
 
-This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. Do not use FastMCP's own `auth` option next to it: that option makes FastMCP an OAuth proxy that issues its own tokens, which is the wrong model for a resource server.
+This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. Do not set FastMCP's own `auth` option as well: FastMCP documents it as a provider that configures `authenticate` and `oauth` itself, and this package supplies both.
 
 ## How it works
 
@@ -52,7 +52,12 @@ A tool receives the session as `context.session`. It holds `principal` (the veri
 `withAuth0Execute(execute, options?)` wraps a tool's `execute`. Inside the wrapped body the accessors of `@auth0/ai-mcp` work, for example `getCallerMcpClientOrThrow()` and `getCallerPrincipal()`. FastMCP has no outer layer where the request context could be bound, so without the wrapper the accessors return `undefined` and you read the session instead. The wrapper changes nothing about argument types: the types FastMCP infers from `parameters` are kept. Inside the wrapped function `context.session` is typed as always present, so you read `session.principal` without a non-null assertion. FastMCP types the session as optional, but when a call arrives without one the wrapper answers it and never runs your function.
 
 ```ts
+import { FastMCP } from "fastmcp";
+import { z } from "zod";
 import { getCallerMcpClientOrThrow } from "@auth0/ai-mcp";
+import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
+
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
 
 server.addTool({
   name: "invoices",
