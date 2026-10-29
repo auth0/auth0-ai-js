@@ -1,8 +1,8 @@
 # Tenant provisioning for the @auth0/ai-mcp end-to-end suite
 
-These scripts build, check and remove the Auth0 tenant objects the real-tenant suite needs. A human with the `auth0` CLI runs them; agents may only run `--dry-run`, `--print-login-command` and the offline `test.sh`.
+These scripts build, check and remove the Auth0 tenant objects the real-tenant suite needs. Changing a tenant needs the `auth0` CLI. The commands that never change the tenant are `--dry-run`, `--print-login-command` and the offline `test.sh`.
 
-All commands are run from `/Users/tushar.pandey/src/auth0-ai-js-ai-mcp-e2e/packages/ai-mcp` (or the equivalent package directory of your checkout).
+Run all commands from the `packages/ai-mcp` directory of your checkout.
 
 ## Run order
 
