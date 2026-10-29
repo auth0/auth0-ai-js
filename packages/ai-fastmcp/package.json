@@ -1,0 +1,74 @@
+{
+  "name": "@auth0/ai-fastmcp",
+  "private": true,
+  "description": "Auth0 authentication and token delegation for FastMCP servers",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/auth0/auth0-ai-js",
+    "directory": "packages/ai-fastmcp"
+  },
+  "homepage": "https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-fastmcp#readme",
+  "types": "dist/esm/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "scripts": {
+    "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:markers",
+    "build:watch": "run-p 'build:esm -- --watch' 'build:cjs -- -watch'",
+    "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
+    "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --outDir ./dist/cjs",
+    "build:markers": "node ./scripts/write-module-markers.mjs",
+    "clean": "rm -rf dist",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist/**/*.{*js,*js.map,d.ts,d.ts.map}",
+    "dist/**/package.json"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "author": {
+    "name": "Auth0 Inc.",
+    "url": "https://auth0.com"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@auth0/auth0-api-js": "^1.7.0"
+  },
+  "peerDependencies": {
+    "@auth0/ai-mcp": "*",
+    "fastmcp": "^4.0.0"
+  },
+  "devDependencies": {
+    "@auth0/ai-mcp": "*",
+    "@eslint/compat": "^1.2.7",
+    "@eslint/js": "^9.18.0",
+    "@modelcontextprotocol/client": "^2.3.0",
+    "@types/node": "^22.10.6",
+    "@vitest/coverage-v8": "^3.0.9",
+    "eslint": "^9.22.0",
+    "fastmcp": "^4.23.8",
+    "globals": "^15.11.0",
+    "jose": "^6.0.0",
+    "msw": "^2.0.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^3.0.9",
+    "zod": "^4.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
