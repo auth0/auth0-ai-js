@@ -105,7 +105,12 @@ describe("Configuration.md: the three ways to configure the client", () => {
       // The client id and secret are not needed to build the adapter.
       expect(() => createFastMcpAuth({})).not.toThrow();
     });
-    documented("Configuration.md", "A missing `domain` or `audience` throws `InvalidConfigurationError`", '`Missing MCP client option "domain"`');
+    documented(
+      "Configuration.md",
+      "A missing `domain` or `audience` throws `InvalidConfigurationError`",
+      '`Missing MCP client option "domain"`',
+      "A server that only verifies tokens does not need the client id and secret.",
+    );
   });
 
   it("refuses a client combined with an inline client option and names the option", () => {
@@ -349,6 +354,7 @@ describe("Configuration.md: required scopes, realm and the error observer", () =
     documented(
       "Configuration.md",
       "A token that lacks one gets HTTP 403 before any tool runs.",
+      "A token with all of them passes.",
       'The challenge has `error="insufficient_scope"` and a `scope` parameter that lists only the missing scopes.',
     );
   });

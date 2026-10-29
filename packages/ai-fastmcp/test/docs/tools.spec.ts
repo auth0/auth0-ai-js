@@ -3,6 +3,7 @@ import { z } from "zod";
 import { HttpResponse, http } from "msw";
 import { UnauthenticatedError, getCallerMcpClientOrThrow, getCallerPrincipal } from "@auth0/ai-mcp";
 import { createFastMcpAuth, withAuth0Execute } from "../../src/index.js";
+import type { Auth0Session } from "../../src/index.js";
 import {
   DOMAIN,
   callTool,
@@ -60,6 +61,7 @@ describe("Tools.md: the session", () => {
           execute: async (_args, { session }) =>
             JSON.stringify({
               principal: session?.principal,
+              viaClient: session?.mcpClient.getPrincipal(),
               scopes: session?.scopes,
               frozenSession: Object.isFrozen(session),
               frozenScopes: Object.isFrozen(session?.scopes),
@@ -79,6 +81,7 @@ describe("Tools.md: the session", () => {
       const out = await toolResult(server, token, "principal");
       const body = JSON.parse(out.result!.content[0]!.text) as {
         principal: Record<string, unknown>;
+        viaClient: Record<string, unknown>;
         scopes: string[];
         frozenSession: boolean;
         frozenScopes: boolean;
@@ -93,6 +96,7 @@ describe("Tools.md: the session", () => {
         clientId: "from-azp",
         orgId: "org_9",
       });
+      expect(body.viaClient).toEqual(body.principal);
       expect(body.scopes).toEqual(["read:orders", "write:orders"]);
       expect(body.frozenSession).toBe(true);
       expect(body.frozenScopes).toBe(true);
@@ -114,6 +118,7 @@ describe("Tools.md: the session", () => {
       "The session is frozen and holds no credential.",
       "| `scopes` | The same scopes as a plain, frozen array.",
       "The request-scoped client has four methods:",
+      "| `getPrincipal()` | The verified caller, the same value as `session.principal`. |",
     );
   });
 
@@ -178,6 +183,33 @@ describe("Tools.md: withAuth0Execute", () => {
     documented("Tools.md", "`getCallerPrincipal()`, `getCallerMcpClient()` and `getCallerMcpClientOrThrow()`");
   });
 
+  it("exchanges the caller's token through the accessor too, without the session argument", async () => {
+    const server = await startDocsServer({
+      auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience, clientId: "mcp-client", clientSecret: "secret" }),
+      tools: (s) => {
+        s.addTool({
+          name: "exchange",
+          parameters: z.object({}),
+          execute: withAuth0Execute(async () => {
+            const { accessToken } = await getCallerMcpClientOrThrow().getTokenOnBehalfOf({
+              audience: "https://api.example.com",
+              scope: "api:read",
+            });
+            return accessToken.length > 0 ? "exchanged" : "empty";
+          }),
+        });
+      },
+    });
+    try {
+      const out = await toolResult(server, await rig().token(server), "exchange");
+      expect(out.result!.content[0]!.text).toBe("exchanged");
+      expect(rig().tenant.auth0.state.successfulExchangeCount).toBe(1);
+    } finally {
+      await server.stop();
+    }
+    documented("Tools.md", "Inside any wrapped function, `getCallerMcpClientOrThrow().getTokenOnBehalfOf(...)` does the same without the session argument.");
+  });
+
   it("leaves the accessors empty in a tool that is not wrapped, and getCallerMcpClientOrThrow throws UnauthenticatedError", async () => {
     await withServer({}, async (server) => {
       const session = await connect(server, await rig().token(server));
@@ -197,6 +229,34 @@ describe("Tools.md: withAuth0Execute", () => {
       "Tools.md",
       "A tool you do not wrap still gets `context.session`, but the accessors return `undefined` (`getCallerMcpClientOrThrow()` throws `UnauthenticatedError`).",
     );
+  });
+});
+
+describe("Tools.md: resources and prompts", () => {
+  it("hands the session to the load function of a resource and a prompt, and leaves the accessors empty", async () => {
+    const server = await startDocsServer({
+      auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience }),
+      tools: (s) => {
+        const who = (auth?: Auth0Session) => JSON.stringify({ session: auth?.principal.sub ?? null, accessor: getCallerPrincipal()?.sub ?? null });
+        s.addResource({ uri: "file:///who", name: "who", mimeType: "text/plain", load: async (auth) => ({ text: who(auth) }) });
+        s.addPrompt({ name: "who", description: "Describes the caller.", load: async (_args, auth) => who(auth) });
+      },
+    });
+    try {
+      const session = await connect(server, await rig().token(server, { sub: "user|res" }));
+      try {
+        const resource = await session.client.readResource({ uri: "file:///who" });
+        expect(JSON.parse((resource.contents[0] as { text: string }).text)).toEqual({ session: "user|res", accessor: null });
+        const prompt = await session.client.getPrompt({ name: "who" });
+        expect(JSON.parse((prompt.messages[0]!.content as { text: string }).text)).toEqual({ session: "user|res", accessor: null });
+      } finally {
+        await session.close();
+      }
+    } finally {
+      await server.stop();
+    }
+    documented("Tools.md", "Resources and prompts receive the session as the `auth` argument of their `load` function, and the accessors return `undefined` there too.");
+    documented("README.md", "Resources and prompts get the session as FastMCP passes it.");
   });
 });
 

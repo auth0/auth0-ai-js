@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { UserError } from "fastmcp";
+import { FastMCP, UserError } from "fastmcp";
 import { HttpResponse, http } from "msw";
 import { VerifyAccessTokenError } from "@auth0/auth0-api-js";
 import { UnauthenticatedError } from "@auth0/ai-mcp";
@@ -9,6 +9,7 @@ import {
   DOMAIN,
   INITIALIZE_BODY,
   createRig,
+  freePort,
   parseChallenge,
   parseMessage,
   rawRequest,
@@ -257,6 +258,30 @@ describe("Errors.md: authentication failures", () => {
       "Errors.md",
       "the core client reports it as a failed verification, so the caller gets the 401 `invalid_token` above and `onError` does not run",
     );
+  });
+});
+
+describe("Errors.md: why authenticate throws only responses", () => {
+  it("shows that FastMCP turns a thrown plain Error into a 401 that repeats the message", async () => {
+    const port = await freePort();
+    const bare = new FastMCP({
+      name: "bare",
+      version: "1.0.0",
+      logger: { debug() {}, error() {}, info() {}, log() {}, warn() {} },
+      authenticate: async () => {
+        throw new Error("secret detail");
+      },
+    });
+    await bare.start({ transportType: "httpStream", httpStream: { port, host: "127.0.0.1", stateless: true } });
+    try {
+      const response = await rawRequest({ url: new URL(`http://127.0.0.1:${port}/mcp`) }, { body: INITIALIZE_BODY });
+      expect(response.status).toBe(401);
+      expect(await response.text()).toContain("secret detail");
+    } finally {
+      await bare.stop();
+    }
+    documented("Errors.md", "It never throws anything else, because FastMCP would turn another error into a 401 that repeats its message.");
+    documented("README.md", "FastMCP would turn a plain error into a 401 that echoes the message.");
   });
 });
 
