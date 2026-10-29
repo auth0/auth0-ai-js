@@ -160,8 +160,8 @@ describe("withAuth0Execute", () => {
 
   describe("errors thrown by the body", () => {
     it("maps InsufficientScopeError from requireScopes to a result naming the missing scope", async () => {
-      const wrapped = withAuth0Execute(async (_args: unknown, ctx: { session?: Auth0Session }) => {
-        requireScopes(["read:orders", "write:orders"], ctx.session!.principal);
+      const wrapped = withAuth0Execute(async (_args: unknown, ctx) => {
+        requireScopes(["read:orders", "write:orders"], ctx.session.principal);
         return "ok";
       });
       const result = asError(await wrapped({}, contextFor(sessionFor("alice"))));

@@ -212,7 +212,7 @@ export function registerStandardTools(server: FastMCP<Auth0Session>, tool: ToolH
     description: "Exchanges the caller's token and calls the downstream API with it.",
     parameters: z.object({ scope: z.string().optional() }),
     execute: withAuth0Execute(async (args, ctx) => {
-      const exchanged = await ctx.session!.mcpClient.getTokenOnBehalfOf({
+      const exchanged = await ctx.session.mcpClient.getTokenOnBehalfOf({
         audience: DOWNSTREAM,
         scope: args.scope ?? "api:read",
       });
@@ -236,7 +236,7 @@ export function registerStandardTools(server: FastMCP<Auth0Session>, tool: ToolH
     description: "Checks the scope inside the body with the ai-mcp helper.",
     parameters: z.object({}),
     execute: withAuth0Execute(async (_args, ctx) => {
-      requireAuth0Scopes(["write:orders"], ctx.session!.principal);
+      requireAuth0Scopes(["write:orders"], ctx.session.principal);
       return "write ok";
     }, { onError }),
   });
