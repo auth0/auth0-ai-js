@@ -10,3 +10,4 @@ export * from "./clients.js";
 export * from "./leak.js";
 export * from "./forge.js";
 export * from "./dpop.js";
+export * from "./fetch-fault.js";
