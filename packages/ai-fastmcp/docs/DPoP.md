@@ -14,7 +14,7 @@ This release of `@auth0/ai-fastmcp` does not verify DPoP proofs. It accepts Bear
 
 The first two refusals happen before the adapter contacts your tenant: it makes no discovery request and no key request. The `cnf` check reads the token payload without verifying the signature. The adapter refuses a token that claims a binding whether or not its signature is good, so the check can only reject more requests, never fewer.
 
-Challenges and metadata never mention DPoP. Every challenge lists the `Bearer` scheme only, and the metadata document has no `dpop_signing_alg_values_supported` or `dpop_bound_access_tokens_required` field. A client that reads them knows to send a Bearer token.
+Challenges and metadata never mention DPoP. Every challenge lists the `Bearer` scheme only, and the metadata document has no `dpop_signing_alg_values_supported` or `dpop_bound_access_tokens_required` field.
 
 ## The dpop option
 

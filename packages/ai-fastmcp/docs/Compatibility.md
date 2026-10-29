@@ -31,7 +31,7 @@ The integration tests talk to FastMCP over real HTTP with the client of the MCP 
 
 ## Transports
 
-The tests cover only FastMCP's `httpStream` transport, in both its stateless and stateful modes. The stdio transport has no HTTP request to authenticate.
+The tests cover only FastMCP's `httpStream` transport, in both its stateless and stateful modes. The stdio transport is not tested.
 
 ## @auth0/ai-mcp
 

@@ -87,7 +87,7 @@ await server.start({
 
 FastMCP serves the metadata document at `/.well-known/oauth-protected-resource` and at that path followed by the endpoint, for example `/.well-known/oauth-protected-resource/api/mcp`. A client finds the document by putting the path of the resource after the well-known path (RFC 9728). That works only when the path of the resource is the endpoint or is empty, so `createFastMcpAuth` throws `InvalidConfigurationError` for any other path. The message reads `the path of "resource" ("/mcp") must equal "endpoint" ("/other") or be empty` and ends with the fix: `Set "endpoint" to the path of "resource".`
 
-You may use a resource without a path. With the audience `https://mcp.example.com` and the default endpoint, the document is served at the root well-known path, and the challenge names that path. Clients then have to know to call `/mcp` themselves, so prefer an audience that includes the path.
+You may use a resource without a path. With the audience `https://mcp.example.com` and the default endpoint, the document is served at the root well-known path, and the challenge names that path. The document then does not say where the MCP route is, so prefer an audience that includes the path.
 
 `endpoint` must be an absolute path such as `/mcp`, without a trailing slash, query or fragment. `/` and values like `mcp` or `/mcp/` throw.
 
@@ -107,7 +107,7 @@ The metadata document tells clients which authorization server to use.
 | `metadata.resourceName` | `resource_name` | Left out. |
 | `metadata.resourceDocumentation` | `resource_documentation` | Left out. |
 
-The document always contains `bearer_methods_supported` with the value `["header"]`. Set `authorizationServers` yourself when you advertise a custom domain or more than one issuer. Each entry must match the `iss` claim of your tokens.
+The document always contains `bearer_methods_supported` with the value `["header"]`. Set `authorizationServers` yourself when the issuers you advertise differ from `https://<domain>/`, or when you advertise more than one.
 
 ```ts
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
