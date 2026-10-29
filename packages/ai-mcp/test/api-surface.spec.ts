@@ -20,9 +20,11 @@ if (process.env.CI === "true" && !built) {
 
 // Any added or removed public runtime export must be reflected here on purpose.
 const ROOT_EXPORTS = [
+  "AuthError",
   "DownscopedTokenError",
   "ForeignCallerError",
   "InsufficientScopeError",
+  "InvalidConfigurationError",
   "MemoryIndexedTokenStore",
   "UnauthenticatedError",
   "authenticateRequest",

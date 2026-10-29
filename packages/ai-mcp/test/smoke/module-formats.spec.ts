@@ -41,6 +41,8 @@ const expectedValues = [
   "withRequiredScopes",
   "MemoryIndexedTokenStore",
   "createEncryptedTokenStore",
+  "AuthError",
+  "InvalidConfigurationError",
 ];
 
 const mcpSdkValues = [
