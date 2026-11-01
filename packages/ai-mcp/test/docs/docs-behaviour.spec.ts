@@ -962,3 +962,25 @@ describe("the custom adapter example (Handler.md)", () => {
     expect(section).not.toContain("startsWith('/.well-known");
   });
 });
+
+describe("credential length limit (Handler.md, Errors.md, TokenVerification.md)", () => {
+  const handle = () => handlerFor(stubClient(async () => ({ principal: principalWith([]) })));
+
+  it("accepts a bearer token of exactly 8192 characters and refuses one more with 400", async () => {
+    const at = await handle()(post({ authorization: `Bearer ${"a".repeat(8192)}` }));
+    const over = await handle()(post({ authorization: `Bearer ${"a".repeat(8193)}` }));
+
+    expect(at.status).toBe(200);
+    expect(over.status).toBe(400);
+    expect(over.headers.get("www-authenticate")).toContain('error="invalid_request"');
+  });
+
+  it("refuses a DPoP proof longer than 8192 characters with 400", async () => {
+    const proof = (length: number) => `a.b.${"c".repeat(length - 4)}`;
+    const over = await handle()(post({ authorization: "DPoP abc", dpop: proof(8193) }));
+    const at = await handle()(post({ authorization: "DPoP abc", dpop: proof(8192) }));
+
+    expect(over.status).toBe(400);
+    expect(at.status).not.toBe(400);
+  });
+});

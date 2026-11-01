@@ -95,6 +95,8 @@ export const client = createMcpClient({
 
 - **DPoP on outgoing requests.** The token exchange request to Auth0 carries no DPoP proof, and this package does not request DPoP-bound downstream tokens. If the authorization server rejects the exchange, the error propagates to the tool.
 - **Nonce issuing.** This package does not generate nonces. It relays one only when the core client supplies it. Without a usable nonce the response says `invalid_dpop_proof`.
+- **Detecting a replayed proof.** The core client checks a proof against the token, the method, the URL and the time window, but it keeps no record of the proofs it has accepted. The same proof can be sent again until it leaves the window set by `iatOffset`. A shorter `iatOffset` narrows that window.
+- **Credentials longer than 8192 characters.** The handler refuses an access token or a DPoP proof longer than 8192 characters with a 400 `invalid_request`, before any verification. A token that carries many permissions or custom claims can grow past that. Keep the tokens for your MCP API small.
 - **Overriding the URL checked in the proof.** The handler checks `request.url`. See [Proxies](./Handler.md#proxies).
 - **DPoP through the MCP SDK's `requireBearerAuth` shim.** `asTokenVerifier` verifies Bearer tokens only, so a DPoP-bound token fails verification there.
 - **Passing your own `apiClient`.** The package cannot read the mode of a client you supply, so `McpClient.dpopMode` reports `'allowed'`. Build the client from options when challenges must reflect `'required'` or `'disabled'`.
