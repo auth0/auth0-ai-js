@@ -153,12 +153,46 @@ function coreErrorPrototype(error: Error): object | undefined {
   return undefined;
 }
 
-/** Copies headers one level deep, so no sanitized error shares an object with the original or another copy. */
-function copyHeaders(headers: Record<string, string | string[]> | undefined) {
-  if (headers === undefined) return undefined;
-  return Object.fromEntries(
-    Object.entries(headers).map(([name, value]) => [name, Array.isArray(value) ? [...value] : value])
-  );
+/** True for a fetch `Headers` object, including one created by another implementation of the class. */
+function isHeaders(value: object): value is Headers {
+  return value instanceof Headers || (typeof (value as Headers).get === 'function' && typeof (value as Headers).forEach === 'function');
+}
+
+/**
+ * Copies response headers so no sanitized error shares an object with the original or with
+ * another copy. A fetch `Headers` object (token endpoint errors) is cloned; a plain record
+ * (`AuthError`) is copied one level deep. Anything else is dropped.
+ */
+function copyHeaders(headers: unknown): Headers | Record<string, string | string[]> | undefined {
+  if (typeof headers !== 'object' || headers === null) return undefined;
+  // Rebuilt from its entries rather than passed to the `Headers` constructor, which does not
+  // read a `Headers` object created by another implementation of the class.
+  if (isHeaders(headers)) {
+    const copy = new Headers();
+    headers.forEach((value, name) => copy.append(name, value));
+    return copy;
+  }
+  const copy: Record<string, string | string[]> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (typeof value === 'string') copy[name] = value;
+    else if (Array.isArray(value) && value.every((item) => typeof item === 'string')) copy[name] = [...value];
+  }
+  return copy;
+}
+
+/**
+ * Carries the HTTP details of a failed token request over to a sanitized error: `code`,
+ * `statusCode` and `headers` (so a tool can read `Retry-After` from a rate limit response),
+ * each only when the original has a value of the expected type. The response body is never
+ * copied, because it can hold upstream detail the generic message exists to hide.
+ */
+function copyHttpDetails(from: unknown, to: Error & { code?: string; statusCode?: number; headers?: unknown }): void {
+  if (!(from instanceof Error)) return;
+  const { code, statusCode, headers } = from as { code?: unknown; statusCode?: unknown; headers?: unknown };
+  if (typeof code === 'string') to.code = code;
+  if (typeof statusCode === 'number' && Number.isFinite(statusCode)) to.statusCode = statusCode;
+  const copied = copyHeaders(headers);
+  if (copied !== undefined) to.headers = copied;
 }
 
 /**
@@ -170,13 +204,14 @@ function copyHeaders(headers: Record<string, string | string[]> | undefined) {
  *
  * The package's own errors already have generic messages and pass through unchanged. They are
  * thrown per caller (after the shared exchange settles), never from inside it, so waiters never
- * share one. A core error becomes a fresh instance of the same core class with the same `code`,
- * `statusCode` and a copy of the `headers`, so `instanceof` checks and status mapping keep
- * working. The one exception is a core `VerifyAccessTokenError` (the caller's token expired
- * before the exchange), which becomes an {@link UnauthenticatedError}. An error whose class is
- * not exported by the core package, and any non-core error (network failures, for example),
- * becomes a plain `AuthError` or `Error`, so no foreign
- * prototype runs on the copy. Each call returns a new instance.
+ * share one. A core error becomes a fresh instance of the same core class, so `instanceof`
+ * checks keep working. The `code`, `statusCode` and `headers` (a copy) of the original are
+ * kept whenever it has them, whichever class it is, so a tool can read `Retry-After` from a
+ * rate limited token request. The response body is not kept. The one exception is a core
+ * `VerifyAccessTokenError` (the caller's token expired before the exchange), which becomes an
+ * {@link UnauthenticatedError}. An error whose class is not exported by the core package, and
+ * any non-core error (network failures, for example), becomes a plain `AuthError` or `Error`,
+ * so no foreign prototype runs on the copy. Each call returns a new instance.
  */
 export function sanitizeTokenError(error: unknown): Error {
   if (
@@ -196,9 +231,15 @@ export function sanitizeTokenError(error: unknown): Error {
   const known = error instanceof Error ? coreErrorPrototype(error) : undefined;
   let safe: Error;
   if (error instanceof AuthError) {
-    safe = new AuthError(GENERIC_FAILURE_MESSAGE, error.code, error.statusCode, copyHeaders(error.headers));
+    safe = new AuthError(
+      GENERIC_FAILURE_MESSAGE,
+      error.code,
+      error.statusCode,
+      copyHeaders(error.headers) as Record<string, string | string[]> | undefined
+    );
   } else {
     safe = new Error(GENERIC_FAILURE_MESSAGE);
+    copyHttpDetails(error, safe);
   }
   if (known !== undefined) {
     Object.setPrototypeOf(safe, known);
