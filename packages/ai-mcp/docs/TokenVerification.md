@@ -6,7 +6,7 @@ Every request to a protected MCP server carries an access token that Auth0 issue
 
 Verification is done by the core client, `@auth0/auth0-api-js`. It checks the signature against the tenant's JWKS, the issuer, the audience (the `audience` you passed to `createMcpClient`), and the expiry. On top of that, the `McpClient` enforces the [organization policy](./OrganizationPolicy.md) and the DPoP rules you configured.
 
-The core client applies no clock tolerance to the `exp` claim. See [known limitations](./KnownLimitations.md#a-token-in-its-last-seconds-passes-the-gate-but-cannot-be-exchanged).
+The core client applies no clock tolerance to the `exp` claim. See [known limitations](./KnownLimitations.md#a-token-in-its-last-seconds-passes-the-gate-but-may-not-be-exchanged).
 
 ## The Principal
 

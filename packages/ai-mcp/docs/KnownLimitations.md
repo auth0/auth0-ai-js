@@ -1,10 +1,15 @@
 # Known limitations
 
-## A token in its last seconds passes the gate but cannot be exchanged
+## A token in its last seconds passes the gate but may not be exchanged
 
-Token verification applies no clock tolerance to the `exp` claim: the handler accepts a token until the moment it expires. The On Behalf Of exchange is stricter. It refuses a subject token that expires within the next five seconds, and the cache treats an entry within five seconds of expiry as a miss.
+Token verification applies no clock tolerance to the `exp` claim: the handler accepts a token until the moment it expires. The five second rule belongs to the cache path of the On Behalf Of exchange, so it applies only when a `tokenStore` is set. With a store, the exchange refuses a subject token that expires within the next five seconds, and the cache treats an entry within five seconds of expiry as a miss.
 
-A request that arrives with a token in its last five seconds therefore passes authentication and runs your tool, but any token exchange inside that tool fails. The client recovers by refreshing its access token and retrying. This does not affect tools that do not exchange tokens. This package adds no workaround, so plan for it in the error path of tools that call downstream APIs.
+The two cases differ in the error a tool sees:
+
+- **With a `tokenStore`.** A request that arrives with a token in its last five seconds passes authentication and runs your tool, but any token exchange inside that tool fails as `UnauthenticatedError` before a request reaches Auth0. Under the MCP SDK adapters that is a tool result with `isError: true` and HTTP 200.
+- **Without a `tokenStore`.** The five second rule does not run. A token with three seconds left is exchanged normally. A token that expires before Auth0 handles the request is refused by Auth0, and the call fails with the generic token operation error, not `UnauthenticatedError`.
+
+The client recovers by refreshing its access token and retrying. This does not affect tools that do not exchange tokens. This package adds no workaround, so plan for it in the error path of tools that call downstream APIs.
 
 ## Verified claims cannot cross a process boundary
 

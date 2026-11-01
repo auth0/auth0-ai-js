@@ -61,4 +61,4 @@ export function readSubject(context: RequestContext): string | undefined {
 
 ## Outside the handler
 
-Work that runs outside any request, such as a job queue consumer, has no request context, and `getCallerPrincipal()` returns `undefined` there. A request-scoped client stops working once the caller's token expires, so do not keep one beyond the request. Pass the job what it needs explicitly.
+Work that runs outside any request, such as a job queue consumer, has no request context, and `getCallerPrincipal()` returns `undefined` there. A request-scoped client holds the caller's token. `getTokenOnBehalfOf` and `getTokenForConnection` send it to Auth0, which refuses it once it has expired, so these two calls stop working. `getClientCredentialsToken` does not use the caller's token and keeps working after it expires. Do not keep a client beyond the request in any case. Pass the job what it needs explicitly.
