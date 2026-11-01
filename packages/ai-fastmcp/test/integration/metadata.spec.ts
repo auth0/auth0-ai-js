@@ -82,6 +82,24 @@ describe.each(MODES)("protected resource metadata (stateless: $stateless)", ({ s
     );
   });
 
+  it("publishes the required scopes as scopes_supported, the same ones the challenge names", async () => {
+    await withServer({ stateless, auth: { requiredScopes: ["read:orders write:orders", "read:orders"] } }, async (server) => {
+      const refused = await rawRequest(server, { body: INITIALIZE_BODY });
+      const scope = parseChallenge(refused.headers.get("www-authenticate")).params["scope"]!;
+      const { response } = await followChallenge(server);
+      const document = (await response.json()) as { scopes_supported?: string[] };
+      expect(document.scopes_supported).toEqual(["read:orders", "write:orders"]);
+      expect(document.scopes_supported).toEqual(scope.split(" "));
+    });
+  });
+
+  it("leaves scopes_supported out when no scope is required and none is set", async () => {
+    await withServer({ stateless }, async (server) => {
+      const { response } = await followChallenge(server);
+      expect(await response.json()).not.toHaveProperty("scopes_supported");
+    });
+  });
+
   it("agrees with the challenge on a custom endpoint, and the old route is gone", async () => {
     await withServer({ stateless, endpoint: "/api/mcp" }, async (server) => {
       const { url, response } = await followChallenge(server);

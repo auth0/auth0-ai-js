@@ -168,6 +168,15 @@ describe.each(MODES)("authentication (stateless: $stateless)", ({ stateless }) =
       });
     });
 
+    it("names them in the 401 challenge of a request without credentials", async () => {
+      await withServer({ stateless, auth: { requiredScopes: ["read:orders mcp:access", "mcp:access"] } }, async (server) => {
+        const response = await rawRequest(server, { body: INITIALIZE_BODY });
+        expect(response.status).toBe(401);
+        const challenge = parseChallenge(response.headers.get("www-authenticate"));
+        expect(challenge.params).toEqual({ resource_metadata: metadataUrlOf(server), scope: "read:orders mcp:access" });
+      });
+    });
+
     it("refuses a token that carries no scope claim", async () => {
       await withServer({ stateless, auth: { requiredScopes: ["mcp:access"] } }, async (server) => {
         const token = await rig().token(server, {});

@@ -49,6 +49,21 @@ describe("createFastMcpAuth", () => {
       expect(() => setup({}, { dpopMode: "required" })).toThrow(/DPoP mode "required"/);
     });
 
+    it.each([[[""]], [["read", "  "]], [[7]], [[undefined]]])(
+      "rejects the requiredScopes %j at construction, so no request reaches the throw of @auth0/ai-mcp",
+      (requiredScopes) => {
+        expect(() => setup({ requiredScopes: requiredScopes as unknown as string[] })).toThrow(InvalidConfigurationError);
+        expect(() => setup({ requiredScopes: requiredScopes as unknown as string[] })).toThrow(/requiredScopes/);
+      },
+    );
+
+    it("accepts an empty requiredScopes list as no requirement", async () => {
+      const { auth } = setup({ requiredScopes: [] });
+      const response = await failure(auth.authenticate(fakeRequest()));
+      expect(response.headers.get("www-authenticate")).toBe(`Bearer resource_metadata="${METADATA_URL}"`);
+      expect(auth.oauth.protectedResource).not.toHaveProperty("scopesSupported");
+    });
+
     it("rejects a resource that differs from the client audience", () => {
       expect(() => setup({ resource: "https://other.example.com/mcp" })).toThrow(InvalidConfigurationError);
     });
@@ -110,6 +125,30 @@ describe("createFastMcpAuth", () => {
       const challenge = response.headers.get("www-authenticate")!;
       expect(challenge).toBe(`Bearer resource_metadata="${METADATA_URL}"`);
       expect(client.verifyCalls).toHaveLength(0);
+    });
+
+    it("names the required scopes in the challenge of a request without credentials", async () => {
+      const { auth, client } = setup({ requiredScopes: ["read:orders write:orders", "read:orders"] });
+      const response = await failure(auth.authenticate(fakeRequest()));
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toBe(
+        `Bearer scope="read:orders write:orders", resource_metadata="${METADATA_URL}"`,
+      );
+      expect(client.verifyCalls).toHaveLength(0);
+    });
+
+    it("gives the challenge @auth0/ai-mcp builds for the same scopes", async () => {
+      const requiredScopes = ["read:orders write:orders", "admin"];
+      const { auth, client } = setup({ requiredScopes });
+      const mine = await failure(auth.authenticate(fakeRequest()));
+      const theirs = await authenticateRequest(new Request(AUDIENCE), {
+        client: bearerOnly(client),
+        requiredScopes,
+      });
+      expect(theirs.ok).toBe(false);
+      expect(mine.headers.get("www-authenticate")).toBe(
+        (theirs as RejectedRequest).response.headers.get("www-authenticate"),
+      );
     });
 
     it("answers a malformed header with 400", async () => {
@@ -449,6 +488,28 @@ describe("createFastMcpAuth", () => {
         const challenge = (response: Response) => response.headers.get("www-authenticate");
         expect(challenge(mine)).toBe(challenge((theirs as RejectedRequest).response));
       }
+    });
+
+    it("publishes the required scopes as scopes_supported, split and without repeats", () => {
+      const { auth } = setup({ requiredScopes: ["read:orders write:orders", "read:orders"] });
+      expect(auth.oauth.protectedResource.scopesSupported).toEqual(["read:orders", "write:orders"]);
+    });
+
+    it("prefers an explicit metadata.scopesSupported to the required scopes", () => {
+      const { auth } = setup({ requiredScopes: ["read:orders"], metadata: { scopesSupported: ["a", "b"] } });
+      expect(auth.oauth.protectedResource.scopesSupported).toEqual(["a", "b"]);
+    });
+
+    it("publishes an explicitly empty scopesSupported as given", () => {
+      const { auth } = setup({ requiredScopes: ["read:orders"], metadata: { scopesSupported: [] } });
+      expect(auth.oauth.protectedResource.scopesSupported).toEqual([]);
+    });
+
+    it("keeps the challenge scope and the published scopes in agreement", async () => {
+      const { auth } = setup({ requiredScopes: ["read:orders  write:orders"] });
+      const response = await failure(auth.authenticate(fakeRequest()));
+      const scope = /scope="([^"]+)"/.exec(response.headers.get("www-authenticate")!)![1]!;
+      expect(auth.oauth.protectedResource.scopesSupported).toEqual(scope.split(" "));
     });
 
     it("passes the optional metadata fields on", () => {

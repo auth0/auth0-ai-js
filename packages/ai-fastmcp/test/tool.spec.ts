@@ -2,6 +2,7 @@ import {
   AuthError,
   DownscopedTokenError,
   InsufficientScopeError,
+  InvalidConfigurationError,
   UnauthenticatedError,
   getCallerMcpClient,
   getCallerMcpClientOrThrow,
@@ -111,6 +112,18 @@ describe("withAuth0Execute", () => {
     it("runs the body when the caller holds every scope", async () => {
       const wrapped = withAuth0Execute(async () => "ok", { requiredScopes: ["read:orders", "write:orders"] });
       expect(await wrapped({}, contextFor(sessionFor("alice", ["write:orders", "read:orders"])))).toBe("ok");
+    });
+
+    it("rejects a blank or non-string entry when the wrapper is created", () => {
+      for (const bad of [[""], ["read", "  "], [5 as unknown as string], "" as string]) {
+        expect(() => withAuth0Execute(async () => "ok", { requiredScopes: bad })).toThrow(InvalidConfigurationError);
+      }
+    });
+
+    it("treats a space-delimited entry as several scopes", async () => {
+      const wrapped = withAuth0Execute(async () => "ok", { requiredScopes: "read:orders write:orders" });
+      const result = asError(await wrapped({}, contextFor(sessionFor("alice", ["read:orders"]))));
+      expect(result.content).toEqual([{ type: "text", text: "Missing required scope: write:orders" }]);
     });
 
     it("names the missing scope and does not run the body", async () => {

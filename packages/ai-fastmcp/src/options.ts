@@ -24,13 +24,19 @@ export interface FastMcpAuthBaseOptions {
    * `https://<domain>/`.
    */
   authorizationServers?: string[];
-  /** Scopes every request must carry (all of them). A request without them is answered with 403. */
+  /**
+   * Scopes every request must carry (all of them). A request without them is answered with 403.
+   * Each entry is split on whitespace, so `"read write"` means two scopes, and repeats are
+   * dropped. A blank or non-string entry is a configuration error. The challenge of a request
+   * without credentials names these scopes in `scope`, and they are published as
+   * `scopes_supported` unless `metadata.scopesSupported` is set.
+   */
   requiredScopes?: readonly string[];
   /** Protection space reported as `realm` in challenges. */
   realm?: string;
   /** Fields of the RFC 9728 metadata document. */
   metadata?: {
-    /** Scopes to publish as `scopes_supported`. */
+    /** Scopes to publish as `scopes_supported`. Defaults to `requiredScopes` when that is set. */
     scopesSupported?: string[];
     /** Human readable name to publish as `resource_name`. */
     resourceName?: string;

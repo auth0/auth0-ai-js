@@ -29,13 +29,22 @@ function snakeToCamel(key: string): string {
  */
 export function buildProtectedResource(
   client: McpClient,
-  options: Pick<FastMcpAuthBaseOptions, "resource" | "authorizationServers" | "metadata">,
+  options: Pick<FastMcpAuthBaseOptions, "resource" | "authorizationServers" | "metadata"> & {
+    /** The normalized `requiredScopes`; published as `scopes_supported` unless `metadata.scopesSupported` is set. */
+    requiredScopes?: readonly string[];
+  },
 ): FastMcpProtectedResource {
   const document = buildProtectedResourceMetadata({
     client,
     resource: options.resource,
     authorizationServers: options.authorizationServers,
-    scopesSupported: options.metadata?.scopesSupported,
+    // Without an explicit list, publish the scopes every request must carry, as the
+    // `@auth0/ai-mcp` handler does, so a client that reads `scopes_supported` has something to ask for.
+    scopesSupported:
+      options.metadata?.scopesSupported ??
+      (options.requiredScopes !== undefined && options.requiredScopes.length > 0
+        ? [...options.requiredScopes]
+        : undefined),
     resourceName: options.metadata?.resourceName,
     resourceDocumentation: options.metadata?.resourceDocumentation,
   });

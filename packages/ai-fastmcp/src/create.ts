@@ -14,6 +14,7 @@ import {
 } from "./options.js";
 import type { FastMcpAuthOptions } from "./options.js";
 import { challengeResponse, genericServerError, jsonResponse, sessionMismatchResponse } from "./responses.js";
+import { normalizeRequiredScopes } from "./scopes.js";
 import { createSession } from "./session.js";
 import type { Auth0Session } from "./session.js";
 
@@ -91,8 +92,9 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
   const endpoint = resolveEndpoint(rest.endpoint);
   assertRealm(rest.realm);
   assertSessionBinding(rest.sessionBinding);
+  const requiredScopes = normalizeRequiredScopes(rest.requiredScopes, "requiredScopes");
 
-  const protectedResource = buildProtectedResource(bearerClient, rest);
+  const protectedResource = buildProtectedResource(bearerClient, { ...rest, requiredScopes });
   const resource = protectedResource.resource;
   const metadataUrl = resolveMetadataUrl(resource, endpoint);
 
@@ -100,7 +102,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
     client: bearerClient,
     resource,
     resourceMetadataUrl: metadataUrl,
-    ...(rest.requiredScopes !== undefined && { requiredScopes: rest.requiredScopes }),
+    ...(requiredScopes.length > 0 && { requiredScopes }),
     ...(rest.realm !== undefined && { realm: rest.realm }),
     ...(rest.onError !== undefined && { onError: rest.onError }),
   };

@@ -6,6 +6,7 @@ import {
   runWithRequestContext,
 } from "@auth0/ai-mcp";
 import { UserError } from "fastmcp";
+import { normalizeRequiredScopes } from "./scopes.js";
 import { isAuth0Session } from "./session.js";
 import type { Auth0Session } from "./session.js";
 
@@ -24,7 +25,9 @@ export interface ToolErrorResult {
 /** Options of {@link withAuth0Execute}. */
 export interface WithAuth0ExecuteOptions {
   /**
-   * Scopes the caller must hold for this tool (all of them). A caller that lacks one gets a tool
+   * Scopes the caller must hold for this tool (all of them). Each entry is split on whitespace,
+   * so `"read write"` means two scopes, and a blank entry throws `InvalidConfigurationError`
+   * when the wrapper is created. A caller that lacks one gets a tool
    * error that names the missing scopes. The tool stays listed, unlike with FastMCP's `canAccess`,
    * which hides it and answers `Unknown tool`.
    */
@@ -63,11 +66,6 @@ function scopeDenied(missing: readonly string[]): ToolErrorResult {
   return textResult(text, "insufficient_scope");
 }
 
-function normalizeScopes(required: string | readonly string[] | undefined): string[] {
-  if (required === undefined) return [];
-  const list = typeof required === "string" ? [required] : required;
-  return list.flatMap((entry) => entry.split(/\s+/).filter((scope) => scope.length > 0));
-}
 
 function safely(hook: ((error: unknown) => void) | undefined, error: unknown): void {
   try {
@@ -135,12 +133,13 @@ function toToolResult(error: unknown, session: Auth0Session, options: WithAuth0E
  * @param execute - The tool's `execute`. Its context carries a non-optional `session`.
  * @param options - Per-tool scopes and an error observer.
  * @returns An `execute` with the same arguments.
+ * @throws {InvalidConfigurationError} When `requiredScopes` has a blank or non-string entry.
  */
 export function withAuth0Execute<A, C extends { session?: Auth0Session | undefined }, R>(
   execute: (args: A, context: C & { session: Auth0Session }) => R,
   options: WithAuth0ExecuteOptions = {},
 ): (args: A, context: C) => Promise<Awaited<R> | ToolErrorResult> {
-  const needed = normalizeScopes(options.requiredScopes);
+  const needed = normalizeRequiredScopes(options.requiredScopes, "requiredScopes");
   return async (args, context): Promise<Awaited<R> | ToolErrorResult> => {
     const session: unknown = context.session;
     if (!isAuth0Session(session)) {
