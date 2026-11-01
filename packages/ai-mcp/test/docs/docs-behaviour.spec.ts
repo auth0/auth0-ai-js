@@ -984,3 +984,25 @@ describe("credential length limit (Handler.md, Errors.md, TokenVerification.md)"
     expect(at.status).not.toBe(400);
   });
 });
+
+describe("exact scope matching (ScopeEnforcement.md)", () => {
+  function contextWith(scopes: string[]): RequestContext {
+    const principal = principalWith(scopes);
+    return { principal, mcpClient: scopedClient(principal) };
+  }
+
+  it("does not let a broader scope cover a narrower one, for the tool wrapper and for requireScopes", async () => {
+    const context = contextWith(["mcp:write"]);
+    const tool = withRequiredScopes("mcp:read", async () => "ran");
+
+    expect(await runWithRequestContext(context, () => tool())).toMatchObject({ isError: true });
+    expect(() => runWithRequestContext(context, () => requireScopes("mcp:read"))).toThrow(InsufficientScopeError);
+  });
+
+  it("accepts a token that holds both scopes", async () => {
+    const context = contextWith(["mcp:write", "mcp:read"]);
+    const tool = withRequiredScopes("mcp:read", async () => "ran");
+
+    expect(await runWithRequestContext(context, () => tool())).toBe("ran");
+  });
+});

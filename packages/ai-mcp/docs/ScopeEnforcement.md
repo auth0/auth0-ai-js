@@ -11,6 +11,8 @@ There are two levels, and they fail differently on purpose.
 
 Both compare against the `scope` claim only. The `permissions` claim is never consulted. Every listed scope must be present (AND semantics).
 
+Matching is exact, and the package applies no scope hierarchy. A broader scope does not cover a narrower one: a token with `mcp:write` does not satisfy a requirement for `mcp:read`. This fails closed, so a caller never gets more than it was granted. If you want `write` to include `read`, grant both scopes, or check for either inside the tool.
+
 ## Server-wide scopes
 
 Scopes every request needs go in `requiredScopes`. The handler checks them after verification and before the request reaches MCP:
