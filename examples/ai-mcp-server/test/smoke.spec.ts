@@ -30,6 +30,12 @@ let downstream: Server;
 let mcp: Server;
 let mcpPort: number;
 let downstreamPort: number;
+let failingUpstream: Server;
+let failingMcp: Server;
+let failingMcpPort: number;
+
+/** What a failing store API says. It must never reach a tool result. */
+const UPSTREAM_SECRET = "UPSTREAM-SECRET-TEXT";
 
 const msw = setupServer();
 
@@ -84,13 +90,23 @@ beforeAll(async () => {
   const app = createMcpApp(mcpConfig);
   mcp = createServer((req, res) => void app(req, res));
   mcpPort = await listen(mcp);
+
+  // A second MCP server whose store API answers every call with an error that carries a body.
+  failingUpstream = createServer((_req, res) => {
+    res.writeHead(502, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: UPSTREAM_SECRET, detail: `${UPSTREAM_SECRET} internal.example.com` }));
+  });
+  const failingUpstreamPort = await listen(failingUpstream);
+  const failingApp = createMcpApp({ ...mcpConfig, storeApiUrl: `http://127.0.0.1:${failingUpstreamPort}` });
+  failingMcp = createServer((req, res) => void failingApp(req, res));
+  failingMcpPort = await listen(failingMcp);
 });
 
 afterEach(() => tenant.state.reset());
 afterAll(async () => {
   msw.close();
   await Promise.all(
-    [mcp, downstream].map((s) => new Promise((resolve) => s.close(resolve))),
+    [mcp, downstream, failingMcp, failingUpstream].map((s) => new Promise((resolve) => s.close(resolve))),
   );
 });
 
@@ -108,8 +124,9 @@ async function callTool(
   name: string,
   token?: string,
   args: Record<string, unknown> = {},
+  port: number = mcpPort,
 ) {
-  return fetch(`http://127.0.0.1:${mcpPort}/mcp`, {
+  return fetch(`http://127.0.0.1:${port}/mcp`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -282,6 +299,43 @@ describe("example MCP server", () => {
     expect(allowed.isError).toBeFalsy();
   });
 
+  describe("a caller who holds only the scopes of the other tools", () => {
+    const tools = [
+      ["order_status_report", {}, "tool:order_status_report"],
+      ["fulfill_order", { order_id: "ORD-1001" }, "tool:fulfill_order"],
+      ["sales_analytics_report", {}, "tool:sales_analytics_report"],
+    ] as const;
+
+    it.each(tools)("is refused by %s before any token request", async (name, args, own) => {
+      const others = tools.map(([, , scope]) => scope).filter((scope) => scope !== own);
+
+      const out = await run(name, `openid ${others.join(" ")}`, `user|without-${name}`, args);
+
+      expect(out.isError).toBe(true);
+      expect(out.text).toBe("Missing one or more required scopes.");
+      expect(tenant.state.exchangeCount).toBe(0);
+      expect(tenant.state.clientCredentialsCount).toBe(0);
+    });
+  });
+
+  describe("a store API that fails with a body", () => {
+    it.each([
+      ["order_status_report", {}],
+      ["fulfill_order", { order_id: "ORD-1001" }],
+      ["sales_analytics_report", {}],
+    ] as const)("%s returns a fixed message and none of the upstream text", async (name, args) => {
+      const response = await callTool(name, await callerToken(ALL_TOOLS, `user|upstream-${name}`), args, failingMcpPort);
+      const raw = await response.text();
+      const body = JSON.parse(raw) as ToolResult;
+
+      expect(response.status).toBe(200);
+      expect(body.result?.isError).toBe(true);
+      expect(body.result?.content[0]?.text).toBe("The store API answered 502.");
+      expect(raw).not.toContain(UPSTREAM_SECRET);
+      expect(raw).not.toContain("internal.example.com");
+    });
+  });
+
   it("never returns exchange error text in the tool result", async () => {
     tenant.state.failure = {
       status: 400,
@@ -451,6 +505,16 @@ describe("example store API", () => {
     expect((await get("/analytics/monthly-revenue", service)).status).toBe(200);
     const user = await mint(ANALYTICS, "read:analytics");
     expect((await get("/analytics/monthly-revenue", user)).status).toBe(401);
+  });
+
+  it("answers 401 for a correctly signed token from another issuer", async () => {
+    const token = await mintAccessToken(key, {
+      iss: "https://other-tenant.example.com/",
+      aud: ORDERS,
+      sub: "user|1",
+      scope: "read:orders",
+    });
+    expect((await get("/orders", token)).status).toBe(401);
   });
 
   it("answers 401 for an unsigned alg:none token", async () => {
