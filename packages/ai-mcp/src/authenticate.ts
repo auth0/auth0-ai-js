@@ -616,7 +616,9 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
       clientId: principal.clientId ?? "",
       scopes: [...principal.scopes],
       expiresAt: principal.expiresAt,
-      resource: resourceUrl,
+      // A fresh object per request: URL is mutable, and a tool that edits it must not change
+      // what the next request sees.
+      resource: new URL(resourceUrl.href),
       extra: {
         sub: principal.sub,
         ...(principal.orgId !== null && { orgId: principal.orgId }),

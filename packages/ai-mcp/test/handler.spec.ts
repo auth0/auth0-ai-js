@@ -635,6 +635,22 @@ describe("AuthInfo", () => {
     });
   });
 
+  it("gives every request its own resource object, so one tool cannot change what the next sees", async () => {
+    useTenant();
+    const { handle, calls } = makeHandler();
+    const headers = await bearer();
+    await handle(request(headers));
+    const first = calls[0]!.authInfo.resource!;
+    first.pathname = "/evil";
+    first.search = "?x=1";
+    await handle(request(headers));
+    const second = calls[1]!.authInfo.resource!;
+
+    expect(second).not.toBe(first);
+    expect(second.href).toBe(new URL(AUDIENCE).href);
+    expect(first.href).not.toBe(second.href);
+  });
+
   it("adds organization and permissions when the token carries them", async () => {
     useTenant();
     const { handle, calls } = makeHandler();
