@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { decodeJwt } from "jose";
 import { createTestKey, mintAccessToken } from "../support/index.js";
 import {
   AUDIENCE,
@@ -9,6 +10,7 @@ import {
   connectClient,
   createRig,
   makeMcpClient,
+  rawToolCall,
   withApp,
 } from "./harness.js";
 import type { Seen } from "./harness.js";
@@ -64,7 +66,20 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
     });
   });
 
-  it("answers 401 invalid_token for a token signed with an unknown key", async () => {
+  it("answers 401 invalid_token for a token with the tenant's key id but another signature", async () => {
+    const { tenant } = rig();
+    // The key id matches the tenant key, so the key lookup succeeds and only the signature check can refuse.
+    const other = await createTestKey({ kid: tenant.key.kid });
+    const forged = await mintAccessToken(other, { iss: tenant.auth0.issuer, aud: AUDIENCE, sub: "user|1" });
+    await run(async (app) => {
+      const { status, seen } = await refused(connectClient(app, forged));
+
+      expect(status).toBe(401);
+      expect(seen[0]!.wwwAuthenticate).toContain('error="invalid_token"');
+    });
+  });
+
+  it("answers 401 invalid_token for a token signed with a key the tenant does not publish", async () => {
     const { tenant } = rig();
     const other = await createTestKey();
     const forged = await mintAccessToken(other, { iss: tenant.auth0.issuer, aud: AUDIENCE, sub: "user|1" });
@@ -137,7 +152,7 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
         const { isError, value } = await callJson<{ contextSub: string; clientSub: string }>(session, "whoami");
 
         expect(isError).toBe(false);
-        expect(value).toMatchObject({ contextSub: "user|valid", clientSub: "user|valid" });
+        expect(value).toMatchObject({ contextSub: "user|valid", clientSub: "user|valid", clientId: "client-a" });
         // The SDK client opens a GET for an SSE stream after initialize. The handler serves POST
         // only and answers 405, which the client treats as "no stream" without retrying.
         const gets = session.seen.filter((r) => r.status === 405);
@@ -147,6 +162,34 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
         );
         expect(gets.every((r) => r.method === "GET")).toBe(true);
         expect(session.seen.every((r) => r.status === 200 || r.status === 202 || r.status === 405)).toBe(true);
+      } finally {
+        await session.close();
+      }
+    });
+  });
+
+  it("mints Auth0's default token profile in these suites: azp, with no client_id, sid or jti", async () => {
+    const claims = decodeJwt(await rig().token());
+
+    expect(claims["azp"]).toBe("client-a");
+    expect(claims).not.toHaveProperty("client_id");
+    expect(claims).not.toHaveProperty("sid");
+    expect(claims).not.toHaveProperty("jti");
+  });
+
+  it.each([
+    ["azp only", { azp: "client-a" }, "client-a"],
+    ["client_id only", { client_id: "client-b" }, "client-b"],
+    ["both, where azp is preferred", { azp: "client-a", client_id: "client-b" }, "client-a"],
+    ["neither", {}, null],
+  ])("reports the calling client to the tool from %s", async (_label, claims, expected) => {
+    await run(async (app) => {
+      const session = await connectClient(app, await rig().token({ claims }));
+      try {
+        const { isError, value } = await callJson<{ clientId: string | null }>(session, "whoami");
+
+        expect(isError).toBe(false);
+        expect(value.clientId).toBe(expected);
       } finally {
         await session.close();
       }
@@ -178,6 +221,48 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
 
       expect(rig().tenant.auth0.state.exchangeCount).toBe(0);
       expect(rig().tenant.oracle.calls).toHaveLength(0);
+    });
+  });
+
+  describe("a tools/call sent on its own, without the handshake", () => {
+    // The server keeps no session, so every request stands alone and must carry its own credential.
+    // A refused connect only shows that the first request was refused; these send the call itself.
+    const CREDENTIALS = ["no credential", "a token that is not a JWT", "a token with a forged signature"] as const;
+
+    async function authorizationFor(credential: (typeof CREDENTIALS)[number]): Promise<string | undefined> {
+      if (credential === "no credential") return undefined;
+      if (credential === "a token that is not a JWT") return "Bearer not-a.valid.token";
+      const { tenant } = rig();
+      // The tenant's key id, so the key lookup succeeds and only the signature check can refuse.
+      const forged = await mintAccessToken(await createTestKey({ kid: tenant.key.kid }), {
+        iss: tenant.auth0.issuer,
+        aud: AUDIENCE,
+        sub: "user|1",
+      });
+      return `Bearer ${forged}`;
+    }
+
+    it("is served for a valid token, so the refusals below are about the credential", async () => {
+      await run(async (app) => {
+        const response = await rawToolCall(app, `Bearer ${await rig().token({ sub: "user|valid" })}`);
+
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as { result?: { isError?: boolean } };
+        expect(body.result?.isError).not.toBe(true);
+        expect(rig().tenant.auth0.state.successfulExchangeCount).toBe(1);
+      });
+    });
+
+    it.each(CREDENTIALS)("answers 401 and exchanges nothing for %s", async (credential) => {
+      const authorization = await authorizationFor(credential);
+      await run(async (app) => {
+        const response = await rawToolCall(app, authorization);
+
+        expect(response.status).toBe(401);
+        expect(response.headers.get("www-authenticate")).toMatch(/^Bearer /);
+        expect(rig().tenant.auth0.state.exchangeCount).toBe(0);
+        expect(rig().tenant.oracle.calls).toHaveLength(0);
+      });
     });
   });
 });

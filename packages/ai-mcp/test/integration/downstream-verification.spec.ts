@@ -52,7 +52,8 @@ describe.each(WIRINGS)("downstream token verification (%s wiring)", (wiring) => 
   it("rejects a token with a forged signature and a token without the required scope", async () => {
     const { tenant } = rig();
     rig().useTenant();
-    const forged = await mintAccessToken(await createTestKey(), {
+    // Same key id as the tenant key: the key lookup succeeds and only the signature check can refuse.
+    const forged = await mintAccessToken(await createTestKey({ kid: tenant.key.kid }), {
       iss: tenant.auth0.issuer,
       aud: DOWNSTREAM,
       sub: "user|d",
