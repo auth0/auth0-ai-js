@@ -178,6 +178,22 @@ describe("authenticateRequest", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("rejects a blank scope requirement as invalid configuration", async () => {
+    await expect(authenticateRequest(await post(), { client, requiredScopes: ["read", " "] })).rejects.toThrow(
+      InvalidConfigurationError,
+    );
+  });
+
+  it("splits a space-delimited scope requirement entry", async () => {
+    const result = await authenticateRequest(await post(await authorized({ scope: "read" })), {
+      client,
+      requiredScopes: ["read write"],
+    });
+    if (result.ok) throw new Error("expected a rejection");
+    expect(result.response.status).toBe(403);
+    expect(result.response.headers.get("www-authenticate")).toContain('scope="write"');
+  });
+
   it("throws for invalid configuration rather than answering a request", async () => {
     await expect(authenticateRequest(await post(), { client, resource: "https://other.example.com/mcp" })).rejects.toThrow(
       InvalidConfigurationError,

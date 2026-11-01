@@ -15,6 +15,7 @@ import {
   UnauthenticatedError,
 } from "./errors.js";
 import { runWithRequestContext } from "./request-context.js";
+import { normalizeScopeRequirement } from "./scopes.js";
 import type { Principal, RequestContext, RequestScopedMcpClient } from "./types.js";
 
 /**
@@ -460,7 +461,11 @@ export interface AuthenticateRequestOptions {
    * `http` or `https` URL. When set, it must equal the client audience (see {@link resolveResource}).
    */
   resource?: string;
-  /** Scopes every request must carry (all of them). Checked against the `scope` claim only. */
+  /**
+   * Scopes every request must carry (all of them). Checked against the `scope` claim only.
+   * Like {@link requireScopes}, each entry is split on whitespace, so `"read write"` names two
+   * scopes, and a blank or non-string entry is a configuration error.
+   */
   requiredScopes?: readonly string[];
   /** Protection space reported as `realm` in challenges. */
   realm?: string;
@@ -540,7 +545,13 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
   const metadataUrl =
     options.resourceMetadataUrl ??
     new URL(`${WELL_KNOWN_PRM}${resourcePathOf(resourceUrl)}`, resourceUrl.origin).href;
-  const requiredScopes = [...new Set(options.requiredScopes ?? [])];
+  // Entries are split on whitespace and blank ones are rejected, as `requireScopes` does, so
+  // `"read write"` means two scopes and a typo cannot silently lock every caller out.
+  const rawScopes: unknown = options.requiredScopes;
+  const requiredScopes =
+    rawScopes === undefined || rawScopes === null || (Array.isArray(rawScopes) && rawScopes.length === 0)
+      ? []
+      : [...new Set(normalizeScopeRequirement(options.requiredScopes as readonly string[]))];
   const responder = createFailureResponder({
     schemes,
     realm: options.realm,
@@ -659,7 +670,8 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
  * @returns `{ ok: true, authInfo, caller, run }` for an authenticated request, otherwise
  * `{ ok: false, response }` with the response to return.
  * @throws {InvalidConfigurationError} When `resource` cannot be derived or differs from the
- * client audience, or `realm` is not usable in a challenge.
+ * client audience, `requiredScopes` has a blank or non-string entry, or `realm` is not usable in a
+ * challenge.
  * @throws {TypeError} When an explicit `resource` is not an absolute URL.
  */
 export async function authenticateRequest(

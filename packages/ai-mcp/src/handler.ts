@@ -62,7 +62,11 @@ export interface McpHandlerBaseOptions {
    * `getCallerMcpClient()` and friends work in everything it starts.
    */
   handler: (request: Request, authInfo: AuthInfo) => Promise<Response>;
-  /** Scopes every request must carry (all of them). Checked against the `scope` claim only. */
+  /**
+   * Scopes every request must carry (all of them). Checked against the `scope` claim only.
+   * Like {@link requireScopes}, each entry is split on whitespace, so `"read write"` names two
+   * scopes, and a blank or non-string entry is a configuration error.
+   */
   requiredScopes?: readonly string[];
   /** Protection space reported as `realm` in challenges. */
   realm?: string;
@@ -214,7 +218,8 @@ function validateMetadataPath(path: string, origin: string): void {
  * when `resource` is omitted and the client
  * audience is not an absolute http or https URL, when `authorizationServers` is omitted
  * and the client does not declare a usable tenant domain, when `metadata.path` is not a normalized absolute path,
- * or `realm` is empty, whitespace-only or contains characters a challenge cannot carry.
+ * `requiredScopes` has a blank or non-string entry, or `realm` is empty, whitespace-only or contains
+ * characters a challenge cannot carry.
  */
 export function createMcpHandler(
   options: McpHandlerOptions,
