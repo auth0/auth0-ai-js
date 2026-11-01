@@ -110,7 +110,7 @@ Failures that happen before your handler runs use a generic JSON body (`error` a
 | Situation | Status | `error` in the challenge |
 | --- | --- | --- |
 | No credential, or a scheme the configured DPoP mode does not accept | 401 | none |
-| Malformed `Authorization` or `DPoP` header | 400 | `invalid_request` |
+| Malformed `Authorization` or `DPoP` header, including an access token or a proof longer than 8192 characters | 400 | `invalid_request` |
 | Token fails verification, including organization policy failures | 401 | `invalid_token` |
 | DPoP proof fails verification | 401 | `invalid_dpop_proof` |
 | Server requires a DPoP nonce | 401 | `use_dpop_nonce` |

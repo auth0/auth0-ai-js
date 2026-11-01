@@ -26,7 +26,7 @@ Messages are generic by design:
 | Failure | HTTP status | `error` value |
 | --- | --- | --- |
 | No credential | 401 | none in the challenge |
-| Malformed `Authorization` or `DPoP` header | 400 | `invalid_request` |
+| Malformed `Authorization` or `DPoP` header, including a credential longer than 8192 characters | 400 | `invalid_request` |
 | `VerifyAccessTokenError` (bad signature, expired, wrong audience or issuer) | 401 | `invalid_token` |
 | `MissingOrganizationError`, `OrganizationNotAllowedError` | 401 | `invalid_token` |
 | `InvalidDpopProofError` | 401 | `invalid_dpop_proof` |
