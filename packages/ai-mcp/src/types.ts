@@ -168,7 +168,9 @@ export interface McpClientOptions {
    * challenge; nothing is cached, concurrent callers that shared the exchange all fail, and
    * the next call starts a new one. A stalled discovery or JWKS fetch surfaces from core as
    * a token verification failure, so at ingress it currently answers 401 `invalid_token`,
-   * not 500. Must be a finite number greater than 0 and at most 2147483647, otherwise
+   * not 500. A JWKS fetch also stops after 5 seconds at most, because the JWT library caps
+   * it there, so a value above `5000` does not lengthen it (a smaller value shortens it).
+   * Must be a finite number greater than 0 and at most 2147483647, otherwise
    * `createMcpClient` throws `InvalidConfigurationError`.
    * @defaultValue `10000`
    */
