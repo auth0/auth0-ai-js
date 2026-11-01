@@ -16,7 +16,7 @@ Seed data lives in memory and resets on restart. Each shopper gets their own thr
 
 ## Set up your tenant
 
-On-behalf-of token exchange must be enabled on your tenant. Enabling it may require Auth0 support; ask them if the exchange is rejected with an `on_behalf_of_token_exchange` error. The commands use the [Auth0 CLI](https://github.com/auth0/auth0-cli). Replace each `YOUR_...` with the id from the previous command's output.
+On-behalf-of token exchange must be enabled on your tenant. Enabling it may require Auth0 support. A rejected exchange has several possible causes: the exchange is not enabled on the tenant, the exchange client lacks the profile, a regular application is used as the exchange client (Auth0 then answers `Client must be a Custom API Client with resource_server_id`), or a client grant is missing. The tool only answers "Could not reach the store API" in every case, so read the reason in the server log, where the example prints the error and its causes, and in the tenant logs (Dashboard, Monitoring, Logs). The commands use the [Auth0 CLI](https://github.com/auth0/auth0-cli). Replace each `YOUR_...` with the id from the previous command's output.
 
 ```bash
 auth0 login --scopes create:client_grants,update:connections
@@ -36,7 +36,7 @@ auth0 api patch "clients/YOUR_EXCHANGE_CLIENT_ID" --data '{"grant_types":["EXIST
 auth0 api post client-grants --data '{"client_id":"YOUR_EXCHANGE_CLIENT_ID","audience":"https://orders.api/","scope":["read:orders"],"subject_type":"user"}'
 auth0 api post client-grants --data '{"client_id":"YOUR_EXCHANGE_CLIENT_ID","audience":"https://inventory.api/","scope":["read:inventory","write:inventory"],"subject_type":"user"}'
 auth0 api post client-grants --data '{"client_id":"YOUR_EXCHANGE_CLIENT_ID","audience":"https://analytics.api/","scope":["read:analytics"]}'
-# 4. Skip the consent screen for the exchanged tokens
+# 4. Allow the exchange without user consent (the downstream APIs need this setting on, or the exchange is rejected)
 auth0 api patch "resource-servers/YOUR_ORDERS_API_ID" --data '{"skip_consent_for_verifiable_first_party_clients":true}'
 auth0 api patch "resource-servers/YOUR_INVENTORY_API_ID" --data '{"skip_consent_for_verifiable_first_party_clients":true}'
 # 5. Test shopper in a database connection that third-party clients (Claude Code) may use
@@ -68,12 +68,17 @@ If sign-in fails:
 ## Run
 
 ```sh
+# At the repository root. The example imports @auth0/ai-mcp from its dist folder, which is git ignored.
+npm install
+npm run build --workspace @auth0/ai-mcp
+
+cd examples/ai-mcp-server
 cp .env.example .env   # fill in the domain, client id and secret
 npm run start:api      # store APIs on port 3003
 npm run start          # MCP server on port 3001, in a second terminal
 ```
 
-Connect Claude Code. The URL must end in `/mcp`.
+Connect Claude Code with the MCP URL of this example, which ends in `/mcp`.
 
 ```sh
 claude mcp add --transport http store http://localhost:3001/mcp
@@ -85,7 +90,7 @@ Start `claude`, type `/mcp`, pick `store` and choose Authenticate. Sign in as th
 - `fulfill order ORD-1002`: stock for the keyboard goes from 12 to 11. Only the Inventory write token is new.
 - `run the sales analytics report`: the server fetches revenue with its own token.
 
-With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope. Remove the server again with `claude mcp remove store`.
+With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope. The server lists the three tool scopes as `scopes_supported` in its protected resource metadata, which is how a client learns to ask for them. A client that asks for no scope can get a token without them, and then every tool refuses the call. Remove the server again with `claude mcp remove store`.
 
 The `.env` file is read with Node's `--env-file` support, so no extra package is needed.
 
@@ -98,16 +103,6 @@ npm run build
 npm test
 ```
 
-The example needs `@modelcontextprotocol/server` 2.3 or newer (the MCP TypeScript SDK v2, which requires Node.js 20 or later) and zod 4.2 or later. `npm test` fails if the resolved copy of the SDK is older. If a hoisted older copy wins, install a newer one next to the example without saving. Create a scratch directory outside the repository and run the install there, then copy the result in:
-
-```sh
-SCRATCH="$(mktemp -d)"
-cd "$SCRATCH" && echo '{"name":"scratch","private":true}' > package.json
-npm install --no-save --no-package-lock --ignore-scripts @modelcontextprotocol/server@^2.3.0 zod@^4.2.0
-cd - && mkdir -p examples/ai-mcp-server/node_modules
-cp -R "$SCRATCH/node_modules/." examples/ai-mcp-server/node_modules/
-```
-
-Any version at or above 2.3 works. The copy also brings the SDK's transitive dependencies. A clean checkout fails this test until the root dependency resolves 2.3 or later.
+The example needs `@modelcontextprotocol/server` 2.3 or newer (the MCP TypeScript SDK v2, which requires Node.js 20 or later) and zod 4.2 or later. `npm test` fails if the resolved copy of the SDK is older.
 
 `npm test` runs both servers on loopback with a mocked Auth0 tenant. It makes no network calls.

@@ -24,4 +24,15 @@ describe("example structure", () => {
       expect(source(name)).not.toContain("getTokenForService");
     }
   });
+
+  it("tells the reader to build the package first, by its real name, and keeps no scratch install", () => {
+    const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+    const readme = readFileSync(here("../README.md"), "utf8");
+    const { name } = JSON.parse(readFileSync(here("../../../packages/ai-mcp/package.json"), "utf8")) as {
+      name: string;
+    };
+
+    expect(readme).toContain(`npm run build --workspace ${name}`);
+    expect(readme).not.toContain("npm install --no-save");
+  });
 });
