@@ -81,7 +81,36 @@ interface OrderBody {
   status: string;
 }
 
-/** Turns thrown errors into fixed messages. Logs the error name only, never its message. */
+/**
+ * The original failure behind a sanitized token error, as one line for the server log. The token
+ * calls attach it as `cause`, and the authorization server's own answer (its `error` and
+ * `error_description`) sits a level deeper. That
+ * detail is what you need to diagnose a first run, so it goes to the log and never to the tool
+ * result.
+ */
+function describeCause(error: unknown): string {
+  const parts: string[] = [];
+  let cause: unknown = error instanceof Error ? error.cause : undefined;
+  for (let depth = 0; depth < 3 && typeof cause === "object" && cause !== null; depth++) {
+    const fields = cause as Record<string, unknown>;
+    const pieces = [
+      fields["name"],
+      fields["code"],
+      fields["statusCode"],
+      fields["error"],
+      fields["error_description"],
+      fields["message"],
+    ].filter((v): v is string | number => typeof v === "string" || typeof v === "number");
+    parts.push(pieces.join(" "));
+    cause = fields["cause"];
+  }
+  return parts.length === 0 ? "none" : parts.join(" <- ");
+}
+
+/**
+ * Turns thrown errors into fixed messages. The error name and its causes go to the server log,
+ * never to the tool result, and the message of the error itself is not logged.
+ */
 async function guarded(
   tool: string,
   run: () => Promise<ReturnType<typeof text>>,
@@ -93,6 +122,7 @@ async function guarded(
     console.error(
       `${tool} failed`,
       error instanceof Error ? error.name : "unknown",
+      `cause: ${describeCause(error)}`,
     );
     if (
       error instanceof DownscopedTokenError ||
