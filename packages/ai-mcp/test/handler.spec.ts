@@ -594,6 +594,40 @@ describe("server-wide required scopes", () => {
     expect(wwwAuthenticate(response)).toContain('scope="a"');
   });
 
+  it("splits an entry that holds several space-delimited scopes, like requireScopes does", async () => {
+    useTenant();
+    const { handle, calls } = makeHandler({ requiredScopes: ["read write"] });
+
+    expect((await handle(request(await bearer({}, { scope: "read write" })))).status).toBe(200);
+    expect(calls).toHaveLength(1);
+
+    const denied = await handle(request(await bearer({}, { scope: "read" })));
+    expect(denied.status).toBe(403);
+    expect(wwwAuthenticate(denied)).toContain('scope="write"');
+  });
+
+  it("lists a scope that repeats across entries once", async () => {
+    useTenant();
+    const { handle } = makeHandler({ requiredScopes: ["a b", "b c"] });
+    const response = await handle(request(await bearer({}, { scope: "x" })));
+    expect(wwwAuthenticate(response)).toContain('scope="a b c"');
+  });
+
+  it.each([[[""]], [["   "]], [["read", ""]], [[42]], [[null]]])(
+    "rejects the invalid requirement %j at construction instead of locking every caller out",
+    (requiredScopes) => {
+      expect(() => makeHandler({ requiredScopes: requiredScopes as unknown as string[] })).toThrow(
+        InvalidConfigurationError,
+      );
+    },
+  );
+
+  it("treats an empty list as no requirement", async () => {
+    useTenant();
+    const { handle } = makeHandler({ requiredScopes: [] });
+    expect((await handle(request(await bearer({}, { scope: "x" })))).status).toBe(200);
+  });
+
   it("puts the error on the DPoP challenge for a DPoP request", async () => {
     useTenant();
     const { handle } = makeHandler({ requiredScopes: ["admin"] });

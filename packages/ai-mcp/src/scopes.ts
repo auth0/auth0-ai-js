@@ -19,10 +19,12 @@ export interface McpToolErrorResult {
 }
 
 /**
- * Validates and flattens a scope requirement. A requirement that names no scope would
- * pass for every caller, so it is a configuration mistake and is rejected.
+ * Validates and flattens a scope requirement: each entry is split on whitespace. A
+ * requirement that names no scope would pass for every caller, so it is a configuration
+ * mistake and is rejected.
+ * @internal
  */
-function normalize(required: string | readonly string[]): string[] {
+export function normalizeScopeRequirement(required: string | readonly string[]): string[] {
   const list: unknown = typeof required === 'string' ? [required] : required;
   if (!Array.isArray(list) || list.length === 0) {
     throw new InvalidConfigurationError('Invalid scope requirement: name at least one scope.');
@@ -52,7 +54,7 @@ function normalize(required: string | readonly string[]): string[] {
  *   context is active.
  */
 export function requireScopes(required: string | readonly string[], principal?: Principal): void {
-  const needed = normalize(required);
+  const needed = normalizeScopeRequirement(required);
   const caller = principal ?? getCallerPrincipal();
   if (!caller) {
     throw new UnauthenticatedError('No authenticated request context.');
@@ -82,7 +84,7 @@ export function withRequiredScopes<A extends unknown[], R>(
   required: string | readonly string[],
   handler: (...args: A) => R | Promise<R>
 ): (...args: A) => Promise<R | McpToolErrorResult> {
-  const needed = normalize(required);
+  const needed = normalizeScopeRequirement(required);
   return async (...args: A) => {
     try {
       requireScopes(needed);
