@@ -184,6 +184,15 @@ describe("TokenCaching.md: what is cached", () => {
     );
   });
 
+  it("says Auth0 access tokens in the default profile carry neither sid nor jti", () => {
+    documented(
+      "TokenCaching.md",
+      "carry neither `sid` nor `jti`, so for them the session part is a digest of the whole token",
+      "a cached token is reused only for the same access token",
+      "A `jti` appears only with the RFC 9068 access token profile, which we have not verified.",
+    );
+  });
+
   it("compares the scopes the tenant granted, not the ones requested", async () => {
     rig().tenant.auth0.state.scope = scopeMode.fixed("api:read api:write");
     const auth = adapter({ tokenStore: new MemoryIndexedTokenStore() });

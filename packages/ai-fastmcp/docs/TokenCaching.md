@@ -43,7 +43,7 @@ Nothing else changes in your tools. A second `getTokenOnBehalfOf` for the same a
 ## What is cached
 
 - **On Behalf Of results** go into the store. Client credentials tokens do not: `getClientCredentialsToken` asks the tenant every time.
-- **Per caller.** The key includes the subject, so the store never hands one caller a token issued for another. It also includes the audience, the scopes, the client that performs the exchange, and the session of the incoming token. The session is the `sid` claim, or the `jti` claim when there is no `sid`, or the token itself when there is neither. In practice a token is reused for requests that present the same access token or tokens that share a `sid`. Two different tokens without a `sid` do not share entries.
+- **Per caller.** The key includes the subject, so the store never hands one caller a token issued for another. It also includes the audience, the scopes, the client that performs the exchange, and the session of the incoming token. The session is the `sid` claim, or the `jti` claim when there is no `sid`, or the token itself when there is neither. In practice a token is reused for requests that present the same access token or tokens that share a `sid`. Two different tokens without a `sid` do not share entries. Auth0 access tokens for an API in the default access token profile carry neither `sid` nor `jti`, so for them the session part is a digest of the whole token and a cached token is reused only for the same access token. A `jti` appears only with the RFC 9068 access token profile, which we have not verified.
 - **By granted scopes.** The scope comparison uses the scopes the tenant granted, not the ones the tool requested.
 
 ## Scope matching
