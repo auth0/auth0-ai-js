@@ -216,11 +216,14 @@ function copyHttpDetails(from: unknown, to: Error & { code?: string; statusCode?
  * share one. A core error becomes a fresh instance of the same core class, so `instanceof`
  * checks keep working. The `code`, `statusCode` and `headers` (a copy) of the original are
  * kept whenever it has them, whichever class it is, so a tool can read `Retry-After` from a
- * rate limited token request. The response body is not kept. The one exception is a core
- * `VerifyAccessTokenError` (the caller's token expired before the exchange), which becomes an
- * {@link UnauthenticatedError}. An error whose class is not exported by the core package, and
- * any non-core error (network failures, for example), becomes a plain `AuthError` or `Error`,
- * so no foreign prototype runs on the copy. Each call returns a new instance.
+ * rate limited token request. The response body is not kept.
+ *
+ * The one exception is a core `VerifyAccessTokenError`, which becomes an
+ * {@link UnauthenticatedError}. Core raises it only when a token store is configured and the
+ * caller's token has expired or is within five seconds of expiring. An error whose class is
+ * not exported by the core package, and any non-core error (network failures, for example),
+ * becomes a plain `AuthError` or `Error`, so no foreign prototype runs on the copy. Each call
+ * returns a new instance.
  */
 export function sanitizeTokenError(error: unknown): Error {
   if (
@@ -230,10 +233,13 @@ export function sanitizeTokenError(error: unknown): Error {
   ) {
     return error;
   }
-  // Core 1.7.0 re-checks the caller's verified claims before it exchanges. Those claims come
-  // from this server's own ingress check, so the only way to fail here is a caller token that
-  // expired while the request was running. That is the caller's credential, not a server
-  // fault, so it surfaces as the package's 401 rather than as an internal error.
+  // With a token store configured, core 1.7.0 re-checks the caller's verified claims before it
+  // reads the cache and refuses a token that is expired or within five seconds of expiry.
+  // Those claims come from this server's own ingress check, so the only way to fail here is a
+  // caller token that ran out while the request was being handled. That is the caller's
+  // credential, not a server fault, so it surfaces as the package's 401 rather than as an
+  // internal error. Without a store there is no such check: the exchange goes to the tenant,
+  // which rejects an expired token, and that arrives as a token endpoint error instead.
   if (error instanceof VerifyAccessTokenError) {
     return withCause(new UnauthenticatedError(), error);
   }
