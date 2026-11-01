@@ -31,7 +31,10 @@ async function refused(attempt: Promise<unknown>): Promise<{ status: number | un
 }
 
 describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)", (wiring) => {
-  async function run<T>(fn: (url: Parameters<typeof connectClient>[0]) => Promise<T>) {
+  async function run<T>(
+    fn: (url: Parameters<typeof connectClient>[0]) => Promise<T>,
+    extra: { requiredScopes?: string[] } = {},
+  ) {
     const { tenant } = rig();
     rig().useTenant();
     return withApp(
@@ -40,6 +43,7 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
       {
         client: makeMcpClient(tenant),
         createServer: () => buildToolServer({ downstreamUrl: tenant.downstreamUrl }),
+        ...extra,
       },
       fn,
     );
@@ -51,9 +55,32 @@ describe.each(WIRINGS)("bearer authentication through the SDK client (%s wiring)
 
       expect(status).toBe(401);
       const challenge = seen[0]!.wwwAuthenticate!;
-      expect(challenge.startsWith(`Bearer resource_metadata="${PRM}"`)).toBe(true);
+      expect(challenge.startsWith("Bearer ")).toBe(true);
+      expect(challenge).toContain(`resource_metadata="${PRM}"`);
       expect(challenge).not.toContain("error=");
+      // No server-wide scopes are configured here, so none are advertised.
+      expect(challenge).not.toContain("scope=");
     });
+  });
+
+  it("names the configured server-wide scopes in the challenge when no credential is sent", async () => {
+    await run(
+      async (app) => {
+        const { status, seen } = await refused(connectClient(app));
+
+        expect(status).toBe(401);
+        const challenge = seen[0]!.wwwAuthenticate!;
+        expect(challenge.startsWith("Bearer ")).toBe(true);
+        expect(challenge).toContain(`resource_metadata="${PRM}"`);
+        expect(challenge).toContain('scope="read admin"');
+        expect(challenge).not.toContain("error=");
+
+        const metadata = await app.fetch(new URL(new URL(PRM).pathname, app.url));
+        expect(metadata.status).toBe(200);
+        expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual(["read", "admin"]);
+      },
+      { requiredScopes: ["read", "admin"] },
+    );
   });
 
   it("answers 401 invalid_token for a token that is not a JWT", async () => {
