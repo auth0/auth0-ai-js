@@ -32,6 +32,8 @@ export const handle = createMcpHandler({
 });
 ```
 
+Each entry of `requiredScopes` is split on whitespace, so `'read write'` names two scopes, and duplicates count once. A blank or non-string entry is a mistake, so the handler throws `InvalidConfigurationError` when you create it, and an empty list means no requirement. The same scopes go out in the `scope` parameter of the 401 challenge that answers a request without a credential, so a client learns what to ask for when it authorizes, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`.
+
 When a scope is missing the response is a 403 whose challenge lists only the missing scopes in its `scope` parameter, so a client learns what to request without learning what else the server knows about:
 
 ```http
