@@ -64,14 +64,20 @@ export type McpSdkHandlerOptions = McpHandlerClientConfig &
  * the `Authorization` header is reachable there.
  *
  * Mode: stateless and JSON responses, using the SDK's low-level web standard
- * transport. The SDK's own `createMcpHandler` is not used because it answers
- * with an event stream. The server is closed as soon as `handleRequest` returns,
- * which is only valid for JSON response mode (a streamed response would be cut
- * off), so this function does not offer streaming. Each POST is answered with one JSON body and no session id is
- * issued, so any instance can serve any request.
+ * transport. The server is closed as soon as `handleRequest` returns, which is
+ * only valid for JSON response mode (a streamed response would be cut off), so
+ * this function does not offer streaming. Each POST is answered with one JSON
+ * body and no session id is issued, so any instance can serve any request.
  * Server-to-client notifications and standalone event streams (GET) are not
  * offered. If you need sessions or streaming, use {@link createMcpHandler} and
  * manage the transport yourself.
+ *
+ * Protocol revision: this handler speaks only the earlier `initialize` handshake.
+ * It does not serve the 2026-07-28 revision. A `server/discover` request gets a
+ * JSON-RPC "Method not found" error, so a client that negotiates the revision
+ * automatically has to fall back to `initialize`, and a client pinned to
+ * 2026-07-28 cannot connect. The SDK's own `createMcpHandler` serves both
+ * revisions; moving to it is tracked as a follow-up.
  *
  * Failures that happen before the server runs (no credential, bad token, missing
  * server-wide scope) follow the challenge rules of {@link createMcpHandler}.

@@ -480,6 +480,11 @@ export interface AuthenticateRequestOptions {
   /**
    * Called with the raw error whenever the failure response is a 500. The error never reaches
    * the response. A throwing hook, or one that returns a rejected promise, is ignored.
+   *
+   * It is not called for authentication failures. A failed discovery or JWKS fetch of the
+   * authorization server is reported by the core library as an invalid token, so during an
+   * outage of the tenant the result is a 401 `invalid_token` response and this hook stays
+   * silent. A 503 for that case, with a call to this hook, needs a change in the core library.
    */
   onError?: (error: unknown) => void;
 }
@@ -668,6 +673,8 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
  * Accepted schemes and challenges follow `client.dpopMode`. Failures become RFC 6750
  * responses with a generic body and a rebuilt `WWW-Authenticate` challenge; verifier messages
  * are never echoed. The returned promise rejects only for invalid configuration, never for a bad request.
+ * A failed discovery or JWKS fetch of the authorization server is reported by the core library as an
+ * invalid token, so an outage of the tenant gives a 401 `invalid_token` response, not a 503.
  *
  * DPoP `htu` is checked against `request.url`, so pass a `Request` whose URL is the public one
  * the client used.
