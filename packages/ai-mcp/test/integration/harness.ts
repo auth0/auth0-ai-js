@@ -49,6 +49,12 @@ export const AUDIENCE = ORIGIN;
 export const ENDPOINT = `${ORIGIN}/mcp`;
 export const DOWNSTREAM = "https://api.example.com";
 
+/**
+ * Claims beyond the registered ones that an Auth0 access token carries in its default profile:
+ * the client that asked for the token is `azp`. There is no `client_id`, no `sid` and no `jti`.
+ */
+export const AUTH0_DEFAULT_CLAIMS = { azp: "client-a" } as const;
+
 export type Wiring = "node" | "web";
 export const WIRINGS: Wiring[] = ["node", "web"];
 
@@ -69,7 +75,11 @@ export interface Rig {
   addTenant(domain: string): Promise<Tenant>;
   /** Registers the handlers of a tenant with MSW. Call once per test, after reset. */
   useTenant(tenant?: Tenant): void;
-  /** Mints an access token for the MCP server. */
+  /**
+   * Mints an access token for the MCP server. Unless `claims` is given, the token has the shape
+   * Auth0 sends in its default profile: the calling client in `azp`, no `client_id`, no `sid`
+   * and no `jti`. Pass `claims` to build another shape (it replaces the default claims).
+   */
   token(options?: Omit<MintAccessTokenOptions, "iss" | "aud"> & { tenant?: Tenant }): Promise<string>;
   /** Resets counters and handlers between tests. */
   reset(): void;
@@ -93,6 +103,8 @@ export interface DelegateOutcome {
 /** Creates the tenant, MSW server and lifecycle helpers. Call at module scope of a spec file. */
 export function createRig(): { rig: () => Rig; install: (hooks: Hooks) => void } {
   const server = setupServer();
+  /** Outbound requests no handler matched. MSW only logs these; the package could swallow the failure. */
+  const unhandled: string[] = [];
   let current: Rig | undefined;
   let tenants: Tenant[] = [];
 
@@ -154,7 +166,7 @@ export function createRig(): { rig: () => Rig; install: (hooks: Hooks) => void }
             aud: AUDIENCE,
             sub: "user|1",
             scope: "read write",
-            claims: { client_id: "client-a" },
+            claims: { ...AUTH0_DEFAULT_CLAIMS },
             ...rest,
           });
         },
@@ -177,11 +189,18 @@ export function createRig(): { rig: () => Rig; install: (hooks: Hooks) => void }
           }
         },
       };
+      server.events.on("request:unhandled", ({ request }) => {
+        unhandled.push(`${request.method} ${request.url}`);
+      });
       server.listen({ onUnhandledRequest: "error" });
     });
     hooks.afterEach(() => {
       current!.reset();
       tenants = tenants.slice(0, 1);
+      const stray = unhandled.splice(0);
+      if (stray.length > 0) {
+        throw new Error(`The package made outbound requests that no handler expected: ${stray.join(", ")}`);
+      }
     });
     hooks.afterAll(() => server.close());
   };
@@ -251,6 +270,7 @@ export function buildToolServer(options: ToolServerOptions): McpServer {
       contextSub: context?.principal.sub ?? null,
       clientSub: context?.mcpClient.getPrincipal().sub ?? null,
       orgId: context?.principal.orgId ?? null,
+      clientId: context?.principal.clientId ?? null,
     });
   });
 
@@ -338,6 +358,39 @@ export function makeMcpClient(
   });
 }
 
+
+/** The credentials a token request presented, from the form body or the HTTP Basic header. */
+function presentedCredentials(request: Request, form: URLSearchParams): { id?: string; secret?: string } {
+  const basic = /^Basic +(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1];
+  if (basic !== undefined) {
+    const decoded = Buffer.from(basic, "base64").toString("utf8");
+    const split = decoded.indexOf(":");
+    const unform = (value: string) => decodeURIComponent(value.replace(/\+/g, " "));
+    return split < 0
+      ? { id: unform(decoded) }
+      : { id: unform(decoded.slice(0, split)), secret: unform(decoded.slice(split + 1)) };
+  }
+  return {
+    ...(form.has("client_id") && { id: form.get("client_id")! }),
+    ...(form.has("client_secret") && { secret: form.get("client_secret")! }),
+  };
+}
+
+/**
+ * A handler for the tenant's token endpoint that refuses (401 `invalid_client`) any request whose
+ * client id or secret is not the expected pair, and otherwise hands the request on to the tenant's
+ * own handler. Register it after `useTenant`, so a server that reads its credentials from the wrong
+ * place, or lets the wrong source win, fails instead of being served.
+ */
+export function requireClientCredentials(tenant: Tenant, expected: { clientId: string; clientSecret: string }) {
+  return http.post(tenant.auth0.tokenEndpoint, async ({ request }) => {
+    const form = new URLSearchParams(await request.clone().text());
+    const presented = presentedCredentials(request, form);
+    if (presented.id === expected.clientId && presented.secret === expected.clientSecret) return undefined;
+    return HttpResponse.json({ error: "invalid_client" }, { status: 401 });
+  });
+}
+
 export interface App {
   /** URL the transport connects to. */
   url: URL;
@@ -413,7 +466,7 @@ export interface Session {
  */
 export async function connectClient(app: App, bearer?: string | { authorization: string }): Promise<Session> {
   const seen: Seen[] = [];
-  const base = app.fetch ?? socketFetch;
+  const base = app.fetch;
   const recording = (async (input: string | URL | Request, init?: RequestInit) => {
     const response = await base(input, init);
     const method = (input instanceof Request ? input.method : (init?.method ?? "GET")).toUpperCase();
@@ -444,6 +497,19 @@ export async function connectClient(app: App, bearer?: string | { authorization:
       await client.close();
     },
   };
+}
+
+/** A `tools/call` as a bare HTTP request, with no MCP handshake before it and nothing but the header given. */
+export async function rawToolCall(app: App, authorization?: string, name = "delegate"): Promise<Response> {
+  return app.fetch(app.url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      ...(authorization !== undefined && { authorization }),
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } }),
+  });
 }
 
 /** Result of `callTool` with the JSON text payload parsed. */
