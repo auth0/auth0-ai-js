@@ -3,6 +3,7 @@ import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import type { CachedToken, TokenStore } from '@auth0/auth0-api-js';
 import { createMcpClient } from '../src/client.js';
+import { UnauthenticatedError } from '../src/errors.js';
 import { createAuth0Handlers, createTestKey, mintAccessToken } from './support/index.js';
 import type { TestKey } from './support/index.js';
 
@@ -20,7 +21,7 @@ beforeAll(async () => {
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-async function scopedClient(expiresIn: number, tokenStore?: TokenStore) {
+async function scopedClient(expiresIn: number, tokenStore?: TokenStore, callerExpiresIn = 3600) {
   tenant = createAuth0Handlers({ key, expiresIn });
   server.use(...tenant.handlers);
   const client = createMcpClient({
@@ -35,6 +36,7 @@ async function scopedClient(expiresIn: number, tokenStore?: TokenStore) {
     aud: AUDIENCE,
     sub: 'user|1',
     scope: 'openid',
+    expiresIn: callerExpiresIn,
   });
   return client.withToken(await client.verifyAccessToken({ accessToken }));
 }
@@ -142,5 +144,31 @@ describe('request-scoped client: a token response without an expiry', () => {
     const scoped = await scopedClient(0);
     const error = await failure(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM }));
     expect(rootCause(error).message).toMatch(/already expired/);
+  });
+});
+
+describe('request-scoped client: the caller token about to expire', () => {
+  const memoryStore = (): TokenStore => {
+    const entries = new Map<string, CachedToken>();
+    return {
+      get: async (k) => entries.get(k),
+      set: async (k, v) => void entries.set(k, v),
+      delete: async (k) => void entries.delete(k),
+    };
+  };
+
+  it('becomes a 401 when a store is configured and the token has less than five seconds left', async () => {
+    const scoped = await scopedClient(3600, memoryStore(), 3);
+    const error = await failure(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM }));
+    expect(error).toBeInstanceOf(UnauthenticatedError);
+    expect((error as UnauthenticatedError).statusCode).toBe(401);
+    expect(tenant.state.exchangeCount).toBe(0);
+  });
+
+  it('is exchanged as usual when no store is configured', async () => {
+    const scoped = await scopedClient(3600, undefined, 3);
+    const result = await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM });
+    expect(result.accessToken).toBeTruthy();
+    expect(tenant.state.exchangeCount).toBe(1);
   });
 });
