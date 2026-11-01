@@ -109,7 +109,8 @@ describe("e2e fault injection", () => {
 
       const failed = await callToolJson<string>(session.client, "delegate");
       // The SDK reports a throwing tool as an `isError` result over HTTP 200, not an HTTP error.
-      // A 429 maps like any other upstream failure: the wrapper does not retry or surface Retry-After.
+      // A 429 maps like any other upstream failure: the wrapper does not retry, and the tool result stays generic. The
+      // sanitized error keeps statusCode and Retry-After for server code, but the SDK does not pass them to the caller.
       expect(failed.isError).toBe(true);
       expect(failed.value).toBe(GENERIC_FAILURE);
       expect(JSON.stringify(failed.value).includes(UPSTREAM_SECRET), "tool result must not echo the upstream body").toBe(false);

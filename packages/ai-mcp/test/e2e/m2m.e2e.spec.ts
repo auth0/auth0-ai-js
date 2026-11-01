@@ -82,6 +82,9 @@ describe("e2e client credentials through the wrapper", () => {
       expect(error!.message === "The token operation failed.", "error message must be the generic public text").toBe(true);
       expect(error).toBeInstanceOf(TokenByClientCredentialsError);
       expect(error!.name).toBe("TokenByClientCredentialsError");
+      // The sanitized error keeps the HTTP details of the failed token request, not its body.
+      expect((error as Error & { statusCode?: number }).statusCode).toBe(403);
+      expect((error as Error & { code?: unknown }).code).toEqual(expect.any(String));
       // The tenant's reason stays on the cause chain for server-side diagnostics only.
       const reason = (error!.cause as { cause?: { error?: string } } | undefined)?.cause?.error;
       expect(reason).toBe("access_denied");

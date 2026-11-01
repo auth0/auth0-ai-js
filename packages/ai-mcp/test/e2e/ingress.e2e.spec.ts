@@ -54,7 +54,7 @@ describe("e2e ingress", () => {
     }
   });
 
-  it("answers a missing Authorization header with a bare Bearer challenge", async () => {
+  it("answers a missing Authorization header with a Bearer challenge that names the metadata", async () => {
     const res = await postInitialize(server.url);
     expect(res.status).toBe(401);
     expect(res.challenge?.scheme).toBe("Bearer");
@@ -100,6 +100,28 @@ describe("e2e ingress", () => {
       expect(res.challenge?.params["error"]).toBe("invalid_token");
     },
   );
+
+  it("sends the required scopes in the challenge of a request without a credential and publishes them as scopes_supported", async () => {
+    const strict = await startMcpServer({
+      env: e2e,
+      downstreamUrl: downstream.url,
+      requiredScopes: ["e2e:never-granted", "tool:whoami"],
+    });
+    try {
+      const res = await postInitialize(strict.url);
+      expect(res.status).toBe(401);
+      expect(res.challenge?.scheme).toBe("Bearer");
+      expect(res.challenge?.params).not.toHaveProperty("error");
+      expect(res.challenge?.params["scope"]?.split(" ")).toEqual(["e2e:never-granted", "tool:whoami"]);
+
+      const metadata = await fetch(new URL("/.well-known/oauth-protected-resource", strict.url));
+      expect(metadata.status).toBe(200);
+      const document = (await metadata.json()) as { scopes_supported?: string[] };
+      expect(document.scopes_supported).toEqual(["e2e:never-granted", "tool:whoami"]);
+    } finally {
+      await strict.close();
+    }
+  });
 
   it("answers a token without the required scope with 403 insufficient_scope", async () => {
     const strict = await startMcpServer({
