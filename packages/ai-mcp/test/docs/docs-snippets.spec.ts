@@ -155,7 +155,8 @@ const DOUBLE_HYPHEN = /(?<!-)--(?!-)/;
 /** The prose of a Markdown file: without fenced code, inline code, link targets and bare URLs. */
 function proseOf(markdown: string): string {
   return markdown
-    .replace(/^```[\s\S]*?^```$/gm, "")
+    // A fence inside a list item is indented, so the markers may follow whitespace.
+    .replace(/^[ \t]*```[\s\S]*?^[ \t]*```[ \t]*$/gm, "")
     .replace(/`[^`\n]*`/g, "")
     .replace(/\]\([^)\s]*\)/g, "]")
     .replace(/https?:\/\/\S+/g, "");
@@ -213,7 +214,7 @@ describe("documentation structure", () => {
     expect(UNICODE_DASHES.test(prose) || DOUBLE_HYPHEN.test(prose)).toBe(true);
   });
 
-  it("leaves code, flags, table rules and link targets alone", () => {
+  it("leaves code, indented code in lists, flags, table rules and link targets alone", () => {
     const text = [
       "Run `npm install --no-save` first.",
       "",
@@ -225,6 +226,12 @@ describe("documentation structure", () => {
       "| --- | --- |",
       "",
       "See [the page](https://example.com/a--b) or https://example.com/c--d.",
+      "",
+      "- A step with a command:",
+      "",
+      "  ```sh",
+      "  npm install --no-save --no-package-lock",
+      "  ```",
     ].join("\n");
     const prose = proseOf(text);
     expect(UNICODE_DASHES.test(prose) || DOUBLE_HYPHEN.test(prose)).toBe(false);
