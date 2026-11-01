@@ -154,15 +154,15 @@ export function createDownstreamListener(
       if (!v) return;
       if (id === undefined) {
         send(res, 200, {
-          orders: data.orders().map((o) => ({ ...o, customer: v.subject })),
+          orders: data.orders(v.subject),
           verified: proof(v),
         });
         return;
       }
-      const order = data.order(id);
+      const order = data.order(v.subject, id);
       if (!order) return send(res, 404, { error: "not_found" });
       send(res, 200, {
-        order: { ...order, customer: v.subject },
+        order,
         verified: proof(v),
       });
       return;
@@ -198,8 +198,8 @@ export function createDownstreamListener(
         ) {
           return send(res, 400, { error: "invalid_request" });
         }
-        if (!data.order(orderId)) return send(res, 404, { error: "not_found" });
-        const result = data.reserve(id, qty, orderId);
+        if (!data.order(v.subject, orderId)) return send(res, 404, { error: "not_found" });
+        const result = data.reserve(v.subject, id, qty, orderId);
         if (!result) return send(res, 404, { error: "not_found" });
         send(res, 200, {
           sku: id,
