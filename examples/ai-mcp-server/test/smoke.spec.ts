@@ -153,9 +153,19 @@ describe("example MCP server", () => {
     const root = await fetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource`);
     expect(suffixed.status).toBe(200);
     expect(root.status).toBe(200);
-    const document = (await suffixed.json()) as { resource: string; authorization_servers: string[] };
+    const document = (await suffixed.json()) as {
+      resource: string;
+      authorization_servers: string[];
+      scopes_supported?: string[];
+    };
     expect(document.resource).toBe(MCP_URL);
     expect(document.authorization_servers).toEqual(["https://tenant.example.com/"]);
+    // Clients ask for these, so a sign-in yields a token that can run the tools.
+    expect(document.scopes_supported).toEqual([
+      "tool:order_status_report",
+      "tool:fulfill_order",
+      "tool:sales_analytics_report",
+    ]);
     expect(await root.json()).toEqual(document);
 
     const refused = await callTool("order_status_report");
