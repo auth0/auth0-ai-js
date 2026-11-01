@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { setupServer } from "msw/node";
 import { InvalidConfigurationError } from "@auth0/auth0-api-js";
-import { authenticateRequest } from "../src/authenticate.js";
+import { authenticateRequest, createFailureResponder, genericServerError } from "../src/authenticate.js";
 import { createMcpClient } from "../src/client.js";
 import type { McpClient } from "../src/client.js";
 import * as entry from "../src/index.js";
@@ -133,6 +133,49 @@ describe("authenticateRequest", () => {
     expect(result.response.status).toBe(500);
     expect(JSON.stringify(await result.response.json())).not.toContain("internal detail");
     expect(seen).toHaveLength(1);
+  });
+
+  it("marks every failure response no-store, so a shared cache never replays it", async () => {
+    server.use(...tenant.handlers);
+    const broken = {
+      ...client,
+      dpopMode: "allowed" as const,
+      verifyAccessToken: () => Promise.reject(new Error("internal detail")),
+    } as McpClient;
+    const outcomes = [
+      await authenticateRequest(await post(), { client }),
+      await authenticateRequest(
+        new Request(ENDPOINT, { method: "POST", headers: { authorization: "Bearer a b" } }),
+        { client },
+      ),
+      await authenticateRequest(await post("not-a-jwt"), { client }),
+      await authenticateRequest(await post(await authorized()), { client, requiredScopes: ["admin"] }),
+      await authenticateRequest(await post("abc"), { client: broken }),
+    ];
+
+    expect(outcomes.map((outcome) => (outcome.ok ? 200 : outcome.response.status))).toEqual([
+      401, 400, 401, 403, 500,
+    ]);
+    for (const outcome of outcomes) {
+      if (outcome.ok) throw new Error("expected a rejection");
+      expect(outcome.response.headers.get("cache-control")).toBe("no-store");
+    }
+  });
+
+  it("marks the last-resort 500 response no-store as well", () => {
+    expect(genericServerError().headers.get("cache-control")).toBe("no-store");
+
+    const responder = createFailureResponder({
+      schemes: ["Bearer"],
+      realm: undefined,
+      metadataUrl: PRM_SUFFIXED,
+      onError: undefined,
+    });
+    const response = responder.fail(() => {
+      throw new Error("classifier broke");
+    }, new Error("original"));
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it("throws for invalid configuration rather than answering a request", async () => {

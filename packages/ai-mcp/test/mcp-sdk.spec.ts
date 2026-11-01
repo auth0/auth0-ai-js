@@ -575,6 +575,7 @@ describe("Node adapter", () => {
     const response = await fetch(url, { method: "POST", body: "x".repeat(64) });
 
     expect(response.status).toBe(413);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(handle).not.toHaveBeenCalled();
     expect(await response.json()).toEqual({
       error: "invalid_request",
