@@ -84,6 +84,32 @@ describe("authenticateRequest", () => {
     const challenge = result.response.headers.get("www-authenticate") ?? "";
     expect(challenge).toContain(`resource_metadata="${PRM_SUFFIXED}"`);
     expect(challenge).not.toContain("error=");
+    expect(challenge).not.toContain("scope=");
+  });
+
+  it("names the required scopes in the challenge of a request without a credential", async () => {
+    const result = await authenticateRequest(await post(), { client, requiredScopes: ["read", "write read", "admin"] });
+    if (result.ok) throw new Error("expected a rejection");
+    expect(result.response.status).toBe(401);
+    expect(result.response.headers.get("www-authenticate")).toBe(
+      `Bearer scope="read write admin", resource_metadata="${PRM_SUFFIXED}", DPoP scope="read write admin", algs="ES256", resource_metadata="${PRM_SUFFIXED}"`,
+    );
+    expect(await result.response.json()).toEqual({
+      error: "unauthorized",
+      error_description: "Authentication is required.",
+    });
+  });
+
+  it("does not name the scopes in a challenge that reports an invalid token or a malformed request", async () => {
+    const invalid = await authenticateRequest(await post("not-a-jwt"), { client, requiredScopes: ["read"] });
+    const malformed = await authenticateRequest(
+      new Request(ENDPOINT, { method: "POST", headers: { authorization: "Bearer a b" } }),
+      { client, requiredScopes: ["read"] },
+    );
+    for (const outcome of [invalid, malformed]) {
+      if (outcome.ok) throw new Error("expected a rejection");
+      expect(outcome.response.headers.get("www-authenticate")).not.toContain("scope=");
+    }
   });
 
   it("answers an invalid token with 401 and a generic body", async () => {

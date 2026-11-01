@@ -641,6 +641,56 @@ describe("server-wide required scopes", () => {
     );
   });
 
+  it("names the required scopes in the challenge of a request without a credential", async () => {
+    const { handle, calls } = makeHandler({ requiredScopes: ["read", "write"] });
+    const response = await handle(request({}));
+    expect(response.status).toBe(401);
+    expect(wwwAuthenticate(response)).toBe(
+      `Bearer scope="read write", ${ALLOWED_PRM}, DPoP scope="read write", algs="ES256", ${ALLOWED_PRM}`,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it("names the required scopes only on the DPoP challenge when DPoP is required", async () => {
+    const { handle } = makeHandler(
+      { requiredScopes: ["read"] },
+      undefined,
+      makeClient({ dpop: { mode: "required" } }),
+    );
+    expect(wwwAuthenticate(await handle(request({})))).toBe(
+      `DPoP scope="read", algs="ES256", ${ALLOWED_PRM}`,
+    );
+  });
+
+  it("sends no scope parameter without a requirement", async () => {
+    const empty = makeHandler({ requiredScopes: [] });
+    for (const { handle } of [makeHandler(), empty]) {
+      expect(wwwAuthenticate(await handle(request({})))).toBe(`${BEARER_ADVERT}, ${DPOP_ADVERT}`);
+    }
+  });
+
+  it("publishes the required scopes as scopes_supported unless the list is set explicitly", async () => {
+    const derived = makeHandler({ requiredScopes: ["read", "write read"] });
+    expect(await bodyOf(await derived.handle(request({}, { method: "GET" }, PRM)))).toMatchObject({
+      scopes_supported: ["read", "write"],
+    });
+    const root = await derived.handle(
+      request({}, { method: "GET" }, "https://mcp.example.com/.well-known/oauth-protected-resource"),
+    );
+    expect(await bodyOf(root)).toMatchObject({ scopes_supported: ["read", "write"] });
+
+    const explicit = makeHandler({ requiredScopes: ["read"], metadata: { scopesSupported: ["read", "extra"] } });
+    expect(await bodyOf(await explicit.handle(request({}, { method: "GET" }, PRM)))).toMatchObject({
+      scopes_supported: ["read", "extra"],
+    });
+
+    for (const none of [makeHandler(), makeHandler({ requiredScopes: [] })]) {
+      expect(await bodyOf(await none.handle(request({}, { method: "GET" }, PRM)))).not.toHaveProperty(
+        "scopes_supported",
+      );
+    }
+  });
+
   it("does not run the gate before the credential is verified", async () => {
     useTenant();
     const { handle } = makeHandler({ requiredScopes: ["admin"] });

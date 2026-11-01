@@ -465,7 +465,8 @@ export interface AuthenticateRequestOptions {
   /**
    * Scopes every request must carry (all of them). Checked against the `scope` claim only.
    * Like `requireScopes`, each entry is split on whitespace, so `"read write"` names two
-   * scopes, and a blank or non-string entry is a configuration error.
+   * scopes, and a blank or non-string entry is a configuration error. They are also sent as
+   * the `scope` of the challenge for a request without a credential.
    */
   requiredScopes?: readonly string[];
   /** Protection space reported as `realm` in challenges. */
@@ -520,6 +521,8 @@ export interface Authenticator {
   resourceUrl: URL;
   metadataUrl: string;
   schemes: ChallengeScheme[];
+  /** The normalized server-wide scope requirement, without repeats. */
+  requiredScopes: string[];
   responder: FailureResponder;
 }
 
@@ -571,6 +574,9 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
             bodyError: "unauthorized",
             description: "Authentication is required.",
             challenge: true,
+            // Tells a client which scopes to ask for when it authorizes. Without it the
+            // client may request none and get a token that fails the scope check.
+            ...(requiredScopes.length > 0 && { scope: requiredScopes }),
           }),
           undefined,
         ),
@@ -650,7 +656,7 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
     };
   }
 
-  return { authenticate, resource, resourceUrl, metadataUrl, schemes, responder };
+  return { authenticate, resource, resourceUrl, metadataUrl, schemes, requiredScopes, responder };
 }
 
 /**

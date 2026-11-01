@@ -64,6 +64,39 @@ const cases: Case[] = [
     expected: ['Bearer error="insufficient_scope"'],
   },
   {
+    name: "scope without an error goes on every challenge",
+    options: {
+      schemes: ["Bearer", "DPoP"],
+      realm: "mcp",
+      scope: ["tools:read", "tools:write"],
+      resourceMetadata: PRM,
+    },
+    expected: [
+      `Bearer realm="mcp", scope="tools:read tools:write", resource_metadata="${PRM}"`,
+      `DPoP realm="mcp", scope="tools:read tools:write", algs="ES256", resource_metadata="${PRM}"`,
+    ],
+  },
+  {
+    name: "scope without an error is sanitized and an empty list is omitted",
+    options: { schemes: ["Bearer"], scope: ['a"b', "c d", ""] },
+    expected: ['Bearer scope="ab cd"'],
+  },
+  {
+    name: "empty scope list without an error is omitted",
+    options: { schemes: ["Bearer"], scope: [] },
+    expected: ["Bearer"],
+  },
+  {
+    name: "scope with an error stays on the challenge that carries the error",
+    options: {
+      schemes: ["Bearer", "DPoP"],
+      error: "insufficient_scope",
+      errorScheme: "DPoP",
+      scope: ["a"],
+    },
+    expected: ["Bearer", 'DPoP error="insufficient_scope", scope="a", algs="ES256"'],
+  },
+  {
     name: "realm on",
     options: { schemes: ["Bearer"], realm: "my realm", error: "invalid_token" },
     expected: ['Bearer realm="my realm", error="invalid_token"'],
@@ -187,7 +220,6 @@ describe("buildWwwAuthenticate", () => {
     });
     for (const value of values) {
       expect(value).not.toContain("error");
-      expect(value).not.toContain("scope=");
     }
   });
 
