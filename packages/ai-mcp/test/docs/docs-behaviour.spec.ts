@@ -1,5 +1,7 @@
 import {
   InvalidConfigurationError,
+  MissingOrganizationError,
+  OrganizationNotAllowedError,
   VerifyAccessTokenError,
 } from "@auth0/auth0-api-js";
 import type { ApiClient } from "@auth0/auth0-api-js";
@@ -836,5 +838,38 @@ describe("errors thrown in a tool and onError (Errors.md, Handler.md, OnBehalfOf
     expect(unauthorized.status).toBe(401);
     expect(forbidden.status).toBe(403);
     expect(seen).toEqual([]);
+  });
+});
+
+describe("organization failures through the handler (OrganizationPolicy.md)", () => {
+  async function rejectWith(error: Error) {
+    const seen: unknown[] = [];
+    const response = await createMcpHandler({
+      client: stubClient(async () => {
+        throw error;
+      }),
+      resource: RESOURCE,
+      authorizationServers: ["https://your-tenant.us.auth0.com/"],
+      onError: (reported) => seen.push(reported),
+      handler: async () => new Response("ok"),
+    })(post({ authorization: "Bearer abc.def.ghi" }));
+    return {
+      status: response.status,
+      challenge: response.headers.get("www-authenticate"),
+      body: await response.text(),
+      seen,
+    };
+  }
+
+  it("answers a missing and a disallowed organization with the same 401 and does not call onError", async () => {
+    const missing = await rejectWith(new MissingOrganizationError());
+    const notAllowed = await rejectWith(new OrganizationNotAllowedError());
+
+    expect(missing.status).toBe(401);
+    expect(missing.challenge).toContain('error="invalid_token"');
+    expect({ ...notAllowed, seen: undefined }).toEqual({ ...missing, seen: undefined });
+    expect(missing.body).not.toContain("organization");
+    expect(missing.seen).toEqual([]);
+    expect(notAllowed.seen).toEqual([]);
   });
 });

@@ -42,7 +42,7 @@ Setting `organizationId` with any policy other than `'required'`, including the 
 
 ## Failures
 
-The client enforces the policy during token verification, before any tool runs. The handler answers a rejected token with HTTP 401 and `error="invalid_token"`, because RFC 6750 defines no organization-specific error value. Server-side code can tell the two cases apart:
+The client enforces the policy during token verification, before any tool runs. The handler answers a rejected token with HTTP 401 and `error="invalid_token"`, because RFC 6750 defines no organization-specific error value. The two cases have different error classes:
 
 | Case | Error class from `@auth0/auth0-api-js` | `code` |
 | --- | --- | --- |
@@ -50,6 +50,8 @@ The client enforces the policy during token verification, before any tool runs. 
 | `org_id` not in the allowlist | `OrganizationNotAllowedError` | `organization_not_allowed` |
 
 Both extend `VerifyAccessTokenError`. Their messages never include the rejected organization id.
+
+With `createMcpHandler`, `createMcpSdkHandler` and `createNodeMcpHandler`, both cases produce the same 401, and the handler does not call `onError` for a 401, so those entry points give you no place to see the class or the `code`. Server-side code sees them only when it calls `client.verifyAccessToken` itself, for example in your own wrapper in front of the handler (see [Token verification](./TokenVerification.md#verifying-a-token-yourself)).
 
 The client validates the policy when you create it. Changing the options object afterwards has no effect.
 
