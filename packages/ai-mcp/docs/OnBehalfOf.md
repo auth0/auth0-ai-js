@@ -11,6 +11,14 @@ A tool often needs to call a downstream API as the user who invoked it. Forwardi
   - Each downstream API allows the exchange without user consent (`skip_consent_for_verifiable_first_party_clients`).
 
   [Set up your tenant](https://github.com/auth0/auth0-ai-js/tree/main/examples/ai-mcp-server#set-up-your-tenant) in the example README has a command for each step. When one is missing the tool sees only a generic failure, so read the reason in the tenant logs.
+
+  Calling the token endpoint directly shows the reason. A development tenant answered with HTTP 400 and the error `invalid_request` in these cases:
+
+  - `Client must be a Custom API Client with resource_server_id`: a regular application is the exchange client.
+  - `This client cannot exchange access tokens for this audience.`: the subject token was issued for another API than the one the exchange client is tied to.
+  - `The API must have "Allow Skipping User Consent for Verifiable First-Party Clients" enabled.`: the downstream API does not allow the exchange without user consent.
+
+  An audience that matches no API identifier exactly gets 400 `invalid_target` with `Invalid audience specified.`. A report of a 403 `unauthorized_client` with a "Profile not enabled" text for a Custom API client without the profile has not been reproduced, so this guide does not rely on it.
 - A request context. The exchange is available on the request-scoped client, which the handler binds to the request.
 
 ## Exchanging the caller's token
@@ -64,7 +72,9 @@ Auth0 can grant fewer scopes than you asked for. When you request scopes and the
 
 The narrower token is still cached under the scopes it was actually granted. A later, narrower request can reuse it. See [Token caching](./TokenCaching.md).
 
-When you request no scopes, the package enforces nothing and returns whatever Auth0 granted. On the tenant we tested, an exchange that sends no `scope` is granted none: the response has no `scope` field and the token has no `scope` claim. The exchange does not fall back to the scopes of the client grant, as a client credentials request does. A downstream API that checks scopes then refuses the token, and the package does not complain, so always pass the `scope` the downstream API needs.
+When you request no scopes, the package enforces nothing and returns whatever Auth0 granted. Auth0 grants no scope to an exchange that sends none: the response has no `scope` field and the token has no `scope` claim. The exchange does not fall back to the scopes of the client grant, as a client credentials request does. A downstream API that checks scopes then refuses the token, and the package does not complain, so always pass the `scope` the downstream API needs.
+
+Do not put `openid` or `offline_access` in `scope`. Auth0 refuses an exchange that asks for either one with HTTP 400 and the error `invalid_scope`, and the whole request fails, because it issues no ID tokens and no refresh tokens for an on behalf of exchange. A scope that no API defines is dropped rather than refused: Auth0 answers 200 with an empty `scope`, so a request for only such a scope fails with `DownscopedTokenError`.
 
 ```ts
 import { DownscopedTokenError, getCallerMcpClientOrThrow } from '@auth0/ai-mcp';
