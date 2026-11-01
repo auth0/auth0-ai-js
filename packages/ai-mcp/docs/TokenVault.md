@@ -43,6 +43,7 @@ The method rejects a result whose `expiresAt` is already in the past (or not a f
 
 - `clientId` and `clientSecret` on `createMcpClient`.
 - You enabled the Token Vault grant on that application, and you configured and enabled the federated connection for it.
+- The application is a Custom API client, like the exchange client in step 2 of [Set up your tenant](https://github.com/auth0/auth0-ai-js/tree/main/examples/ai-mcp-server#set-up-your-tenant) in the example README. The package sends the caller's access token as the subject of this exchange, and the setup we ran it with is that client with a token issued for its API. A regular application can be refused, and the sanitized error does not say why, so read the reason in the tenant logs.
 - The user has linked their external account through Auth0's connected accounts flow. Without a linked account the exchange fails.
 
 For the tenant setup, follow the Auth0 guides:
