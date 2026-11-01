@@ -56,4 +56,4 @@ This package does not cache connection tokens. Each call performs an exchange, s
 
 ## Errors
 
-Errors leave the request-scoped client with a fixed generic message, the original class and `code` of the core error, and the original error as `cause`. See [Errors](./Errors.md).
+Errors leave the request-scoped client with a fixed generic message, the class of the core error, and the original error as `cause`, where you find its `code`, `statusCode` and `headers`. See [Errors](./Errors.md).
