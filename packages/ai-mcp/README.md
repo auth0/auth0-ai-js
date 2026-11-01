@@ -79,7 +79,7 @@ npm install @auth0/ai-mcp @modelcontextprotocol/server
 
 `@modelcontextprotocol/server` (version 2.3 or later, from the MCP TypeScript SDK v2) is an optional peer dependency. Only the `@auth0/ai-mcp/mcp-sdk` entry point imports it, so install it when you use that entry point. The main entry point `@auth0/ai-mcp` never loads it.
 
-The MCP SDK v2 requires Node.js 20 or later, and tool input schemas use zod 4.2 or later. The package runs on Node.js and on runtimes that provide `node:async_hooks` with `AsyncLocalStorage`.
+The MCP SDK v2 requires Node.js 20 or later, and tool input schemas use zod 4.2 or later. Loading the CommonJS entry with `require` needs Node.js 20.19 or later, or 22.12 or later, because `@auth0/auth0-api-js` and `jose` depend on ES module only packages, which `require` can load only from those versions on. On Node.js 20.18, `require('@auth0/ai-mcp')` fails with `ERR_REQUIRE_ESM`; `import` works. The package runs on Node.js and on runtimes that provide `node:async_hooks` with `AsyncLocalStorage`.
 
 ### 2. Create the client
 
