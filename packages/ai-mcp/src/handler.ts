@@ -64,8 +64,10 @@ export interface McpHandlerBaseOptions {
   handler: (request: Request, authInfo: AuthInfo) => Promise<Response>;
   /**
    * Scopes every request must carry (all of them). Checked against the `scope` claim only.
-   * Like {@link requireScopes}, each entry is split on whitespace, so `"read write"` names two
-   * scopes, and a blank or non-string entry is a configuration error.
+   * Like `requireScopes`, each entry is split on whitespace, so `"read write"` names two
+   * scopes, and a blank or non-string entry is a configuration error. They are also sent as
+   * the `scope` of the challenge for a request without a credential, and published as
+   * `metadata.scopesSupported` unless you set that yourself.
    */
   requiredScopes?: readonly string[];
   /** Protection space reported as `realm` in challenges. */
@@ -84,7 +86,10 @@ export interface McpHandlerBaseOptions {
      * clients must read the document.
      */
     path?: string;
-    /** Scopes to publish as `scopes_supported`. */
+    /**
+     * Scopes to publish as `scopes_supported`. Defaults to `requiredScopes` when that is set,
+     * so a client that takes its scopes from the metadata asks for the ones every request needs.
+     */
     scopesSupported?: string[];
     /** Human readable name to publish as `resource_name`. */
     resourceName?: string;
@@ -248,7 +253,11 @@ export function createMcpHandler(
       client,
       resource,
       authorizationServers,
-      scopesSupported: rest.metadata?.scopesSupported,
+      // Without an explicit list, publish the scopes every request must carry, so a client
+      // that reads `scopes_supported` has something to ask for.
+      scopesSupported:
+        rest.metadata?.scopesSupported ??
+        (authenticator.requiredScopes.length > 0 ? authenticator.requiredScopes : undefined),
       resourceName: rest.metadata?.resourceName,
       resourceDocumentation: rest.metadata?.resourceDocumentation,
     }),

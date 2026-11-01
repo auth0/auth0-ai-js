@@ -27,7 +27,12 @@ export interface ChallengeOptions {
   error?: ChallengeErrorCode;
   /** Human readable, generic description. Never pass a raw library message. */
   errorDescription?: string;
-  /** Scopes to list in the `scope` parameter (`insufficient_scope` responses). */
+  /**
+   * Scopes to list in the `scope` parameter. With an `error`, the parameter goes on the
+   * challenge that carries it (`insufficient_scope` responses). Without an `error`, which is
+   * a request that carried no credential, it goes on every challenge, so a client that reads
+   * the scopes from the challenge asks for them when it authorizes.
+   */
   scope?: readonly string[];
   /** Protection space, emitted as `realm`. */
   realm?: string;
@@ -95,6 +100,8 @@ export function buildWwwAuthenticate(options: ChallengeOptions): string[] {
       params.push(`error="${options.error}"`);
       if (description !== "") params.push(`error_description="${description}"`);
       if (scope !== "") params.push(`scope="${scope}"`);
+    } else if (options.error === undefined && scope !== "") {
+      params.push(`scope="${scope}"`);
     }
     if (scheme === "DPoP" && algs !== "") params.push(`algs="${algs}"`);
     if (resourceMetadata !== "")
