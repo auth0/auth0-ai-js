@@ -17,6 +17,7 @@ import {
 } from '@modelcontextprotocol/server';
 import type { AuthInfo as SdkAuthInfo, OAuthTokenVerifier } from '@modelcontextprotocol/server';
 import type { McpClient } from './client.js';
+import { reportError } from './authenticate.js';
 import { createMcpHandler, resolveHandlerClient, resolveHandlerEndpoints } from './handler.js';
 import type { AuthInfo, McpHandlerBaseOptions, McpHandlerClientConfig, McpHandlerOptions } from './handler.js';
 
@@ -124,6 +125,13 @@ export interface NodeHandlerOptions {
   resource: string;
   /** Largest request body accepted, in bytes. Defaults to 1 MiB. Larger bodies get a 413. */
   maxBodyBytes?: number;
+  /**
+   * Called with the raw error whenever the adapter itself answers 500, that is, when something
+   * other than the web handler failed (the web handler turns its own failures into responses
+   * and reports them to its own `onError`). The error never reaches the response. A throwing
+   * hook, or one that returns a rejected promise, is ignored.
+   */
+  onError?: (error: unknown) => void;
 }
 
 const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
@@ -134,6 +142,7 @@ function genericResponse(
   error: string,
   description: string,
   close = false,
+  headers: Record<string, string> = {},
 ): void {
   if (res.headersSent) {
     res.destroy();
@@ -145,11 +154,17 @@ function genericResponse(
   if (close) res.setHeader('connection', 'close');
   res.setHeader('content-type', 'application/json');
   res.setHeader('cache-control', 'no-store');
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
   res.end(JSON.stringify({ error, error_description: description }));
 }
 
 class BodyTooLargeError extends Error {}
 class MalformedRequestError extends Error {}
+class MethodNotSupportedError extends Error {}
+
+/** Methods the Fetch API refuses to build a `Request` for. Compared case-insensitively. */
+const UNSUPPORTED_METHODS = new Set(['CONNECT', 'TRACE', 'TRACK']);
+const FORWARDED_METHODS = 'DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT';
 
 const VALID_PATH = /^\/(?![/\\])[^\s]*$/;
 
@@ -222,7 +237,9 @@ function readBody(req: IncomingMessage, limit: number): Promise<Uint8Array | und
  * already consumed the stream, the parsed `req.body` (string, Buffer or object) is
  * re-serialized (objects as JSON) with the same size limit, so the bytes the web
  * handler sees can differ from the original. An empty `{}` with no
- * non-zero `Content-Length` or `Transfer-Encoding` is the parser default and counts as no body. Any other error becomes a generic 500.
+ * non-zero `Content-Length` or `Transfer-Encoding` is the parser default and counts as no
+ * body. A method the Fetch API cannot build a request for (`CONNECT`, `TRACE`, `TRACK`) gets
+ * 405. Any other error becomes a generic 500 and is passed to `onError`.
  *
  * @param handle - The web handler to adapt.
  * @param options - Public resource identifier and body limit.
@@ -247,6 +264,8 @@ export function toNodeHandler(
         }
       }
       const method = req.method ?? 'GET';
+      // `new Request` throws for these, so they would end as an unexplained 500.
+      if (UNSUPPORTED_METHODS.has(method.toUpperCase())) throw new MethodNotSupportedError();
       const path = (req as IncomingMessage & { originalUrl?: string }).originalUrl ?? req.url ?? '/';
       // Only a single-slash path keeps the origin fixed; "//host" would be read as another authority.
       if (!VALID_PATH.test(path)) throw new MalformedRequestError();
@@ -326,6 +345,13 @@ export function toNodeHandler(
         genericResponse(res, 400, 'invalid_request', 'The request is malformed.', true);
         return;
       }
+      if (error instanceof MethodNotSupportedError) {
+        genericResponse(res, 405, 'invalid_request', 'The request method is not supported.', false, {
+          allow: FORWARDED_METHODS,
+        });
+        return;
+      }
+      reportError(options.onError, error);
       genericResponse(res, 500, 'server_error', 'Internal server error.');
     }
   };
@@ -358,6 +384,7 @@ export function createNodeMcpHandler(
   return toNodeHandler(createMcpSdkHandler({ ...rest, client, ...endpoints } as McpSdkHandlerOptions), {
     resource: endpoints.resource,
     maxBodyBytes,
+    onError: rest.onError,
   });
 }
 

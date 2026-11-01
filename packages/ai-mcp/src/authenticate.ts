@@ -403,15 +403,7 @@ export function createFailureResponder(settings: {
   }
 
   function report(error: unknown): void {
-    try {
-      const result: unknown = settings.onError?.(error);
-      if (isThenable(result)) {
-        // An async observer that rejects must not surface as an unhandled rejection.
-        result.then(undefined, () => {});
-      }
-    } catch {
-      // A failing observer must not change the response.
-    }
+    reportError(settings.onError, error);
   }
 
   /** Builds the failure response. Nothing in here may escape to the framework. */
@@ -431,6 +423,23 @@ export function createFailureResponder(settings: {
   }
 
   return { respond, fail };
+}
+
+/**
+ * Hands an error to an `onError` hook. A hook that throws, or returns a rejected promise,
+ * is ignored, so it can never change a response.
+ * @internal
+ */
+export function reportError(hook: ((error: unknown) => void) | undefined, error: unknown): void {
+  try {
+    const result: unknown = hook?.(error);
+    if (isThenable(result)) {
+      // An async observer that rejects must not surface as an unhandled rejection.
+      result.then(undefined, () => {});
+    }
+  } catch {
+    // A failing observer must not change the response.
+  }
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {

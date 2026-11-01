@@ -853,6 +853,100 @@ describe("Node adapter", () => {
     });
   });
 
+  it("passes an error it turns into a 500 to onError and keeps it out of the response", async () => {
+    const onError = vi.fn();
+    const url = await listen((req, res) => {
+      req.headers["x-bad"] = "a\nb";
+      return toNodeHandler(async () => new Response("ok"), { resource: AUDIENCE, onError })(req, res);
+    });
+    const response = await fetch(url);
+    const text = await response.text();
+
+    expect(response.status).toBe(500);
+    expect(JSON.parse(text)).toEqual({ error: "server_error", error_description: "Internal server error." });
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]![0]).toBeInstanceOf(TypeError);
+  });
+
+  it("ignores an onError hook that throws or rejects", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", record);
+    try {
+      for (const hook of [
+        () => {
+          throw new Error("hook failed");
+        },
+        () => Promise.reject(new Error("hook rejected")),
+      ]) {
+        const url = await listen((req, res) => {
+          req.headers["x-bad"] = "a\nb";
+          return toNodeHandler(async () => new Response("ok"), { resource: AUDIENCE, onError: hook })(req, res);
+        });
+        const response = await fetch(url);
+        expect(response.status).toBe(500);
+        await new Promise<void>((resolve) => http!.close(() => resolve()));
+        http = undefined;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", record);
+    }
+  });
+
+  it("passes the onError hook of createNodeMcpHandler to the adapter", async () => {
+    const onError = vi.fn();
+    const adapter = createNodeMcpHandler({
+      client: makeClient(),
+      resource: AUDIENCE,
+      authorizationServers: [tenant.issuer],
+      createServer: () => buildMcpServer([]),
+      onError,
+    });
+    const url = await listen((req, res) => {
+      req.headers["x-bad"] = "a\nb";
+      return adapter(req, res);
+    });
+    const response = await fetch(url);
+
+    expect(response.status).toBe(500);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["TRACE", "trace", "TRACK", "CONNECT"])(
+    "answers 405 for the %s method that a Request cannot carry, without calling the handler or onError",
+    async (method) => {
+      const handle = vi.fn(async () => new Response("x"));
+      const onError = vi.fn();
+      const adapter = toNodeHandler(handle, { resource: AUDIENCE, onError });
+      const url = await listen((req, res) => {
+        req.method = method;
+        return adapter(req, res);
+      });
+      const response = await fetch(url);
+
+      expect(response.status).toBe(405);
+      expect(response.headers.get("allow")).toBe("DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({
+        error: "invalid_request",
+        error_description: "The request method is not supported.",
+      });
+      expect(handle).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    },
+  );
+
+  it("answers 405 to a real TRACE request over HTTP", async () => {
+    const handle = vi.fn(async () => new Response("x"));
+    const url = await listen(toNodeHandler(handle, { resource: AUDIENCE }));
+    const reply = await rawRequest(url, ["TRACE /mcp HTTP/1.1", "Host: x", "Connection: close"]);
+
+    expect(reply).toMatch(/^HTTP\/1\.1 405 /);
+    expect(handle).not.toHaveBeenCalled();
+  });
+
   it("re-serializes a body a parser already consumed", async () => {
     let received = "";
     const handler = toNodeHandler(
