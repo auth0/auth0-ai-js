@@ -15,7 +15,7 @@ describe.each(WIRINGS)("session slot in the cache key (%s wiring)", (wiring) => 
     });
   }
 
-  const same = { sub: "user|1", claims: { client_id: "client-a" } };
+  const same = { sub: "user|1", claims: { azp: "client-a" } };
 
   it("serves the same session from the cache", async () => {
     const store = new MemoryIndexedTokenStore();
@@ -111,6 +111,25 @@ describe.each(WIRINGS)("session slot in the cache key (%s wiring)", (wiring) => 
       await delegateOnce(app, two);
       expect(rig().tenant.auth0.state.successfulExchangeCount).toBe(2);
       expect(store.size).toBe(2);
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it("keys on the token id, not a digest of the token: two tokens with one token id share an entry", async () => {
+    const store = new MemoryIndexedTokenStore();
+    const app = await serve(store);
+    try {
+      // Different `iat` makes the two tokens different strings, so a digest of the token would differ
+      // while the token id (and everything else in the key) is the same.
+      const one = await rig().token({ ...same, jti: "token-1", iat: 1_700_000_000 });
+      const two = await rig().token({ ...same, jti: "token-1", iat: 1_700_000_100 });
+      expect(one).not.toBe(two);
+      await delegateOnce(app, one);
+      await delegateOnce(app, two);
+
+      expect(rig().tenant.auth0.state.successfulExchangeCount).toBe(1);
+      expect(store.size).toBe(1);
     } finally {
       await app.stop();
     }
