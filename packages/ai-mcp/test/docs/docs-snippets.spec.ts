@@ -145,6 +145,22 @@ function anchorsOf(text: string): Set<string> {
   return anchors;
 }
 
+const exampleReadme = path.join(packageDir, "..", "..", "examples", "ai-mcp-server", "README.md");
+
+/** Hyphen, non-breaking hyphen, figure dash, en dash, em dash, horizontal bar, minus and look-alikes. */
+const UNICODE_DASHES = /[\u2010-\u2015\u2212\u2E3A\u2E3B\uFE58\uFE63\uFF0D]/;
+/** Two hyphens that are not part of a longer run, so a table rule (`---`) passes. */
+const DOUBLE_HYPHEN = /(?<!-)--(?!-)/;
+
+/** The prose of a Markdown file: without fenced code, inline code, link targets and bare URLs. */
+function proseOf(markdown: string): string {
+  return markdown
+    .replace(/^```[\s\S]*?^```$/gm, "")
+    .replace(/`[^`\n]*`/g, "")
+    .replace(/\]\([^)\s]*\)/g, "]")
+    .replace(/https?:\/\/\S+/g, "");
+}
+
 describe("documentation structure", () => {
   const files = documentPaths();
 
@@ -172,14 +188,47 @@ describe("documentation structure", () => {
     },
   );
 
-  it.each(files.map((f) => [path.relative(packageDir, f), f] as const))(
+  const proseFiles = [...files, exampleReadme];
+
+  it.each(proseFiles.map((f) => [path.relative(packageDir, f), f] as const))(
     "%s has no dashes used as punctuation",
     (_name, file) => {
-      const text = readFileSync(file, "utf8");
-      expect(text).not.toMatch(/\u2013|\u2014/);
-      expect(text).not.toMatch(/ -- /);
+      const prose = proseOf(readFileSync(file, "utf8"));
+      expect(prose).not.toMatch(UNICODE_DASHES);
+      expect(prose).not.toMatch(DOUBLE_HYPHEN);
     },
   );
+
+  it.each([
+    ["spaced double hyphen", "one -- two"],
+    ["double hyphen between words", "one--two"],
+    ["double hyphen at the end of a line", "one --\ntwo"],
+    ["em dash", "one \u2014 two"],
+    ["en dash", "one \u2013 two"],
+    ["figure dash", "one \u2012 two"],
+    ["horizontal bar", "one \u2015 two"],
+    ["non-breaking hyphen", "one\u2011two"],
+  ])("the rule catches a %s in prose", (_name, text) => {
+    const prose = proseOf(text);
+    expect(UNICODE_DASHES.test(prose) || DOUBLE_HYPHEN.test(prose)).toBe(true);
+  });
+
+  it("leaves code, flags, table rules and link targets alone", () => {
+    const text = [
+      "Run `npm install --no-save` first.",
+      "",
+      "```sh",
+      "npm install --no-save --no-package-lock",
+      "```",
+      "",
+      "| a | b |",
+      "| --- | --- |",
+      "",
+      "See [the page](https://example.com/a--b) or https://example.com/c--d.",
+    ].join("\n");
+    const prose = proseOf(text);
+    expect(UNICODE_DASHES.test(prose) || DOUBLE_HYPHEN.test(prose)).toBe(false);
+  });
 });
 
 describe("documentation targets the MCP SDK v2", () => {
