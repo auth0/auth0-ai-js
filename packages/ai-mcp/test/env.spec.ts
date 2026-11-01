@@ -24,8 +24,20 @@ describe('mcpClientOptionsFromEnv', () => {
     expect(mcpClientOptionsFromEnv({ AUTH0_DOMAIN: '', AUTH0_AUDIENCE: '   ', AUTH0_CLIENT_ID: '\t\n' })).toEqual({});
   });
 
-  it('returns values untrimmed', () => {
-    expect(mcpClientOptionsFromEnv({ AUTH0_DOMAIN: ' a.example.com ' })).toEqual({ domain: ' a.example.com ' });
+  it.each([
+    ['AUTH0_DOMAIN', 'domain', ' a.example.com \n'],
+    ['AUTH0_AUDIENCE', 'audience', 'https://mcp.example.com\n'],
+    ['AUTH0_CLIENT_ID', 'clientId', '\tclient-1 '],
+  ] as const)('trims the whitespace around %s', (variable, option, padded) => {
+    expect(mcpClientOptionsFromEnv({ [variable]: padded })).toEqual({ [option]: padded.trim() });
+  });
+
+  it('returns the client secret exactly as set', () => {
+    expect(mcpClientOptionsFromEnv({ AUTH0_CLIENT_SECRET: ' s3cret\n' })).toEqual({ clientSecret: ' s3cret\n' });
+  });
+
+  it('keeps whitespace inside a value', () => {
+    expect(mcpClientOptionsFromEnv({ AUTH0_AUDIENCE: ' urn:a b ' })).toEqual({ audience: 'urn:a b' });
   });
 
   it('reads process.env by default', () => {
@@ -60,6 +72,11 @@ describe('resolveMcpClientOptions', () => {
 
   it('lets the environment fill a blank explicit string', () => {
     expect(resolveMcpClientOptions({ domain: '  ' }, FULL).domain).toBe('tenant.example.com');
+  });
+
+  it('uses the trimmed environment audience when resolving', () => {
+    const resolved = resolveMcpClientOptions({}, { ...FULL, AUTH0_AUDIENCE: 'https://mcp.example.com\n' });
+    expect(resolved.audience).toBe('https://mcp.example.com');
   });
 
   describe('with a supplied apiClient', () => {

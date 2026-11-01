@@ -9,6 +9,9 @@ const ENV_NAMES = {
   clientSecret: 'AUTH0_CLIENT_SECRET',
 } as const;
 
+/** The options that name a tenant, an API or a client. A stray space or newline around one is never meant. */
+const IDENTIFIERS = ['domain', 'audience', 'clientId'] as const;
+
 /** A string that holds something other than whitespace, otherwise `undefined`. */
 function present(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
@@ -17,8 +20,10 @@ function present(value: unknown): string | undefined {
 /**
  * Reads client options from the environment: `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`,
  * `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`. A variable that is unset, empty or only
- * whitespace is left out of the result. Values are returned as they are, never trimmed,
- * logged or copied into an error.
+ * whitespace is left out of the result. Whitespace around the domain, the audience and the
+ * client id is removed, because a trailing newline from a secrets file or a shell would
+ * otherwise make every token fail the audience check with nothing pointing at the variable.
+ * The client secret is returned exactly as set. No value is logged or copied into an error.
  *
  * Nothing reads the environment implicitly: {@link createMcpClient} stays strictly
  * explicit. Call this, or pass no client configuration to a handler, to opt in.
@@ -30,7 +35,8 @@ export function mcpClientOptionsFromEnv(env: Record<string, string | undefined> 
   const options: Partial<McpClientOptions> = {};
   for (const name of Object.keys(ENV_NAMES) as Array<keyof typeof ENV_NAMES>) {
     const value = present(env[ENV_NAMES[name]]);
-    if (value !== undefined) options[name] = value;
+    if (value === undefined) continue;
+    options[name] = (IDENTIFIERS as readonly string[]).includes(name) ? value.trim() : value;
   }
   return options;
 }
