@@ -163,6 +163,19 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
       expect(failure!.seen[0]!.status).toBe(403);
     });
 
+    it("E-S-01 a request without credentials is told which scope to ask for, and the metadata document lists it", async () => {
+      const refused = await postInitialize(server);
+      expect(refused.status).toBe(401);
+      expect(refused.challenge?.params["error"]).toBeUndefined();
+      expect(refused.challenge?.params["scope"]).toBe("tool:delegate");
+      const advertised = new URL(refused.challenge!.params["resource_metadata"]!);
+      const response = await fetch(new URL(`${advertised.pathname}${advertised.search}`, server.origin), {
+        headers: { connection: "close" },
+      });
+      expect(response.status).toBe(200);
+      expect(((await response.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual(["tool:delegate"]);
+    });
+
     it("E-S-01 a caller with the scope is served", async () => {
       const session = await connect(server, userToken);
       try {

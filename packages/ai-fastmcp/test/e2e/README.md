@@ -58,7 +58,7 @@ needs a stateful one, and E-C-01 uses a stateless one.
 | E-I-02 | `isolation` | The session, the accessors and the bound client agree on the caller under concurrency. |
 | E-N-01 | `session-binding` | A second real user on the first user's session id gets 403. |
 | E-P-01 | `dpop` | A DPoP header, the DPoP scheme or a key-bound token gets a Bearer challenge before any tenant call. |
-| E-S-01 | `scopes` | The server-wide gate answers 403, the tool wrapper names the missing scope, and `canAccess` hides a tool. |
+| E-S-01 | `scopes` | The server-wide gate answers 403, a request without credentials gets a 401 that names the scope and a metadata document that lists it, the tool wrapper names the missing scope, and `canAccess` hides a tool. |
 | E-X-01 | `slow/expiry` | A caller token that expires inside a stateful session, or on a stateless server, gets a 401. |
 | E-X-02 | `slow/expiry` | A cached exchanged token past its expiry gives way to a new exchange. |
 
