@@ -75,6 +75,11 @@ describe("documentation snippets", () => {
   );
 });
 
+/** Markdown without fenced code. A fence inside a list item is indented, so the markers may follow whitespace. */
+function withoutFences(markdown: string): string {
+  return markdown.replace(/^[ \t]*```[\s\S]*?^[ \t]*```[ \t]*$/gm, "");
+}
+
 function slugify(heading: string): string {
   return heading
     .trim()
@@ -103,7 +108,7 @@ describe("documentation structure", () => {
     "%s has working relative links and anchors",
     (_name, file) => {
       const text = readFileSync(file, "utf8");
-      const prose = text.replace(/^```[\s\S]*?^```$/gm, "");
+      const prose = withoutFences(text);
       const broken: string[] = [];
       for (const match of prose.matchAll(/\]\((?!https?:|mailto:)([^)\s]+)\)/g)) {
         const target = match[1] ?? "";
@@ -129,7 +134,7 @@ describe("documentation structure", () => {
       const text = readFileSync(file, "utf8");
       expect(text).not.toMatch(/\u2013|\u2014/);
       expect(text).not.toMatch(/ -{2} /);
-      const prose = text.replace(/^```[\s\S]*?^```$/gm, "").replace(/`[^`]*`/g, "");
+      const prose = withoutFences(text).replace(/`[^`]*`/g, "");
       expect(prose).not.toContain("!");
     },
   );
@@ -143,5 +148,26 @@ describe("documentation structure", () => {
     const readme = readFileSync(path.join(packageDir, "README.md"), "utf8");
     const unlinked = guideNames().filter((name) => !readme.includes(`(./docs/${name}`));
     expect(unlinked).toEqual([]);
+  });
+
+  it("leaves fenced code alone, including a fence indented in a list item", () => {
+    const text = [
+      "Prose here.",
+      "",
+      "```sh",
+      "npm install --no-save",
+      "```",
+      "",
+      "- A step with a command:",
+      "",
+      "  ```sh",
+      "  npm install --no-save --no-package-lock",
+      "  ```",
+      "",
+      "Done.",
+    ].join("\n");
+    expect(withoutFences(text)).not.toContain("--no-save");
+    expect(withoutFences(text)).toContain("Done.");
+    expect(withoutFences(text)).toContain("A step with a command:");
   });
 });
