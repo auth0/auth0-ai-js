@@ -220,6 +220,19 @@ describe("example MCP server", () => {
     expect(missing.text).toBe("Order ORD-9999 was not found.");
   });
 
+  it("does not show or fulfill an order of another shopper", async () => {
+    const shown = await run("order_status_report", ALL_TOOLS, "user|nosy", { order_id: "ORD-9001" });
+    expect(shown.isError).toBe(true);
+    expect(shown.text).toBe("Order ORD-9001 was not found.");
+
+    const fulfilled = await run("fulfill_order", ALL_TOOLS, "user|nosy", { order_id: "ORD-9001" });
+    expect(fulfilled.isError).toBe(true);
+    expect(fulfilled.text).toBe("Order ORD-9001 was not found.");
+
+    const report = await run("order_status_report", ALL_TOOLS, "user|nosy");
+    expect(report.text).not.toContain("ORD-9001");
+  });
+
   it("fulfills an order once and changes stock", async () => {
     const first = await run("fulfill_order", ALL_TOOLS, "user|fulfill", {
       order_id: "ORD-1002",
@@ -370,6 +383,67 @@ describe("example store API", () => {
     expect((await post(writer, "not json")).status).toBe(400);
     expect((await post(writer, JSON.stringify({ qty: 0, order_id: "ORD-1003" }))).status).toBe(400);
     expect((await post(writer, JSON.stringify({ qty: 1, order_id: "ORD-0" }))).status).toBe(404);
+  });
+
+  describe("orders belong to the shopper who asks", () => {
+    interface OrderBody {
+      id: string;
+      customer: string;
+    }
+
+    function reserve(token: string, sku: string, orderId: string) {
+      return fetch(`http://127.0.0.1:${downstreamPort}/inventory/${sku}/reserve`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ qty: 1, order_id: orderId }),
+      });
+    }
+
+    it("lists only the orders of the caller, each owned by the caller", async () => {
+      const alice = await (await get("/orders", await mint(ORDERS, "read:orders", { sub: "user|alice" }))).json() as {
+        orders: OrderBody[];
+      };
+      const bob = await (await get("/orders", await mint(ORDERS, "read:orders", { sub: "user|bob" }))).json() as {
+        orders: OrderBody[];
+      };
+
+      expect(alice.orders.map((o) => o.id)).toEqual(["ORD-1001", "ORD-1002", "ORD-1003"]);
+      expect(alice.orders.every((o) => o.customer === "user|alice")).toBe(true);
+      expect(bob.orders.every((o) => o.customer === "user|bob")).toBe(true);
+      expect([...alice.orders, ...bob.orders].map((o) => o.id)).not.toContain("ORD-9001");
+    });
+
+    it("answers 404 for an order that belongs to someone else", async () => {
+      const token = await mint(ORDERS, "read:orders", { sub: "user|alice" });
+      expect((await get("/orders/ORD-9001", token)).status).toBe(404);
+      expect((await get("/orders/ORD-1001", token)).status).toBe(200);
+    });
+
+    it("does not let a shopper reserve stock for an order of someone else", async () => {
+      const writer = await mint(INVENTORY, "read:inventory write:inventory", { sub: "user|alice" });
+      expect((await reserve(writer, "SKU-DOCK-03", "ORD-9001")).status).toBe(404);
+    });
+
+    it("keeps reservations apart: the same order id of two shoppers reserves twice", async () => {
+      const stockAfter = async (sub: string) => {
+        const writer = await mint(INVENTORY, "read:inventory write:inventory", { sub });
+        const body = (await (await reserve(writer, "SKU-HEAD-01", "ORD-1001")).json()) as {
+          already_reserved: boolean;
+          stock_before: number;
+          stock_after: number;
+        };
+        return body;
+      };
+
+      const first = await stockAfter("user|carol");
+      const second = await stockAfter("user|dave");
+      const again = await stockAfter("user|carol");
+
+      expect(first.already_reserved).toBe(false);
+      expect(second.already_reserved).toBe(false);
+      expect(second.stock_before).toBe(first.stock_after);
+      expect(again.already_reserved).toBe(true);
+    });
   });
 
   it("serves analytics only to a service token", async () => {
