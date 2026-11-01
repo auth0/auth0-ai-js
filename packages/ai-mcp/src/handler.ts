@@ -227,7 +227,9 @@ function validateMetadataPath(path: string, origin: string): void {
  * The metadata document is served at the RFC 9728 path derived from `resource` and also
  * at the root `/.well-known/oauth-protected-resource`. Challenges point at the former.
  *
- * @throws {TypeError} When an explicit `resource` is not an absolute URL.
+ * @throws {TypeError} When an explicit `resource` is not an absolute URL and the audience comparison
+ * does not catch it, that is, when the audience is the same non-URL string or the client declares no
+ * audience. Against a URL audience, a non-URL `resource` is an `InvalidConfigurationError`.
  * @throws {InvalidConfigurationError} When `client` is combined with inline client options,
  * when a required client value is missing from both the options and the environment,
  * when an explicit `resource` differs from the client audience,

@@ -686,7 +686,9 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
  * @throws {InvalidConfigurationError} When `resource` cannot be derived or differs from the
  * client audience, `requiredScopes` has a blank or non-string entry, or `realm` is not usable in a
  * challenge.
- * @throws {TypeError} When an explicit `resource` is not an absolute URL.
+ * @throws {TypeError} When an explicit `resource` is not an absolute URL and the audience comparison
+ * does not catch it, that is, when the audience is the same non-URL string or the client declares no
+ * audience. Against a URL audience, a non-URL `resource` is an `InvalidConfigurationError`.
  */
 export async function authenticateRequest(
   request: Request,
