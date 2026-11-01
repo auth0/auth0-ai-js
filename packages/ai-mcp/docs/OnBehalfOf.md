@@ -4,7 +4,13 @@ A tool often needs to call a downstream API as the user who invoked it. Forwardi
 
 ## Prerequisites
 
-- `clientId` and `clientSecret` on `createMcpClient`. The application must be allowed to perform the exchange in your Auth0 tenant. See the [Auth0 documentation](https://auth0.com/docs) for how to enable it.
+- `clientId` and `clientSecret` on `createMcpClient`, for an application that may perform the exchange. In your Auth0 tenant that takes four things:
+  - The exchange is enabled on the tenant. This may need Auth0 support.
+  - The application is a Custom API client tied to your MCP API, with the profile allowed on it (`token_exchange.allow_any_profile_of_type` contains `on_behalf_of_token_exchange`). A regular application cannot exchange tokens.
+  - The client has a client grant to each downstream API, with `subject_type` set to `user` and the scopes you will request.
+  - Each downstream API allows the exchange without user consent (`skip_consent_for_verifiable_first_party_clients`).
+
+  [Set up your tenant](https://github.com/auth0/auth0-ai-js/tree/main/examples/ai-mcp-server#set-up-your-tenant) in the example README has a command for each step. When one is missing the tool sees only a generic failure, so read the reason in the tenant logs.
 - A request context. The exchange is available on the request-scoped client, which the handler binds to the request.
 
 ## Exchanging the caller's token
@@ -31,7 +37,7 @@ export async function listReports(): Promise<unknown> {
 | Option | Description |
 | --- | --- |
 | `audience` | Identifier of the downstream API the new token is for. |
-| `scope` | Optional, space-separated scopes to request. |
+| `scope` | Space-separated scopes to request. Optional for the package, but pass the scopes the downstream API needs: see below. |
 
 It resolves to an `OnBehalfOfTokenResult`:
 
@@ -58,7 +64,7 @@ Auth0 can grant fewer scopes than you asked for. When you request scopes and the
 
 The narrower token is still cached under the scopes it was actually granted. A later, narrower request can reuse it. See [Token caching](./TokenCaching.md).
 
-When you request no scopes, the package enforces nothing and returns whatever Auth0 granted.
+When you request no scopes, the package enforces nothing and returns whatever Auth0 granted. On the tenant we tested, an exchange that sends no `scope` is granted none: the response has no `scope` field and the token has no `scope` claim. The exchange does not fall back to the scopes of the client grant, as a client credentials request does. A downstream API that checks scopes then refuses the token, and the package does not complain, so always pass the `scope` the downstream API needs.
 
 ```ts
 import { DownscopedTokenError, getCallerMcpClientOrThrow } from '@auth0/ai-mcp';
