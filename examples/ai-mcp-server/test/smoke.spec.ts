@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -268,17 +268,26 @@ describe("example MCP server", () => {
       },
     };
     // A caller no earlier test used, so a cached exchange cannot hide the failure.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const response = await callTool(
       "order_status_report",
       await callerToken(ALL_TOOLS, "user|failing"),
     );
     const raw = await response.text();
+    const logLines = logged.mock.calls.map((call) => call.join(" "));
+    logged.mockRestore();
     const body = JSON.parse(raw) as ToolResult;
 
     expect(body.result?.isError).toBe(true);
     expect(body.result?.content[0]?.text).toBe("Could not reach the store API.");
     expect(raw).not.toContain("SECRET-INTERNAL-DETAIL");
     expect(raw).not.toContain("invalid_grant");
+
+    // The server log keeps what the tool result hides: the class, and the tenant's own answer.
+    expect(logLines).toHaveLength(1);
+    expect(logLines[0]).toContain("order_status_report failed TokenExchangeError");
+    expect(logLines[0]).toContain("invalid_grant");
+    expect(logLines[0]).toContain("SECRET-INTERNAL-DETAIL");
   });
 });
 
