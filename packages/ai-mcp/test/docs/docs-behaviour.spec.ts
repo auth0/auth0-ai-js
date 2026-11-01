@@ -909,3 +909,26 @@ describe("sanitized token errors (Errors.md, OnBehalfOf.md, RequestContext.md, T
     expect((error.cause as { statusCode: number; code: string }).code).toBe("rate_limited");
   });
 });
+
+describe("MCP client guide (McpClients.md)", () => {
+  it("publishes metadata.scopesSupported as scopes_supported, which the guide tells servers to set", async () => {
+    const handle = createMcpHandler({
+      client: stubClient(async () => ({ principal: principalWith([]) })),
+      resource: RESOURCE,
+      authorizationServers: ["https://your-tenant.us.auth0.com/"],
+      metadata: { scopesSupported: ["tool:one", "tool:two"] },
+      handler: async () => new Response("ok"),
+    });
+
+    const response = await handle(new Request("https://mcp.example.com/.well-known/oauth-protected-resource/mcp"));
+
+    expect(await response.json()).toMatchObject({ scopes_supported: ["tool:one", "tool:two"] });
+    expect(doc("docs", "McpClients.md")).toContain("metadata.scopesSupported");
+  });
+
+  it("keeps the error table to messages with a known source", () => {
+    const guide = doc("docs", "McpClients.md");
+    expect(guide).not.toContain("MCP endpoint not found");
+    expect(guide).toContain("Service not found");
+  });
+});
