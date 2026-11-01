@@ -8,6 +8,7 @@ import type { ApiClient } from "@auth0/auth0-api-js";
 import { describe, expect, it } from "vitest";
 import { McpServer } from "@modelcontextprotocol/server";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -1004,5 +1005,41 @@ describe("exact scope matching (ScopeEnforcement.md)", () => {
     const tool = withRequiredScopes("mcp:read", async () => "ran");
 
     expect(await runWithRequestContext(context, () => tool())).toBe("ran");
+  });
+});
+
+describe("Node.js versions (README.md)", () => {
+  /** Reads the manifest of the package that `entry` belongs to. */
+  function manifestOf(name: string, from: string): { type?: string; exports?: unknown } {
+    let dir = path.dirname(createRequire(from).resolve(name));
+    while (dir !== path.dirname(dir)) {
+      try {
+        const manifest = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
+          name?: string;
+          type?: string;
+          exports?: unknown;
+        };
+        if (manifest.name === name) return manifest;
+      } catch {
+        // No manifest in this directory: keep walking up.
+      }
+      dir = path.dirname(dir);
+    }
+    throw new Error(`No manifest found for ${name}`);
+  }
+
+  it("names the versions from which require() can load the ES module only dependencies", () => {
+    const core = createRequire(import.meta.url).resolve("@auth0/auth0-api-js");
+    for (const [name, from] of [
+      ["jose", import.meta.url],
+      ["oauth4webapi", core],
+    ] as const) {
+      const manifest = manifestOf(name, from);
+      expect(manifest.type, `${name} is an ES module package`).toBe("module");
+      expect(JSON.stringify(manifest.exports), `${name} offers no require entry`).not.toContain('"require"');
+    }
+    const readme = doc("README.md");
+    expect(readme).toContain("Node.js 20.19 or later, or 22.12 or later");
+    expect(readme).toContain("ERR_REQUIRE_ESM");
   });
 });
