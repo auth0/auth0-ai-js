@@ -74,8 +74,8 @@ Token exchange, caching (pass a `tokenStore` such as `MemoryIndexedTokenStore` t
 
 ## Scopes
 
-- **Server-wide.** `requiredScopes` on `createFastMcpAuth` applies before any tool runs. A token without one of them gets HTTP 403 with an `insufficient_scope` challenge that lists the missing scopes.
-- **Per tool.** `withAuth0Execute(execute, { requiredScopes })`, or `requireScopes(...)` from `@auth0/ai-mcp` inside the body, answers a missing scope with a tool error that names it, for example `Missing required scope: admin:all`. The HTTP status is 200 and the result has `isError: true`. The tool stays listed.
+- **Server-wide.** `requiredScopes` on `createFastMcpAuth` applies before any tool runs. A token without one of them gets HTTP 403 with an `insufficient_scope` challenge that lists the missing scopes. A request without credentials gets a 401 challenge whose `scope` parameter names all of them, and the metadata document publishes them as `scopes_supported` unless you set `metadata.scopesSupported`, so a client knows which scopes to ask for. Each entry is split on whitespace (`"read write"` is two scopes) and repeats count once. A blank or non-string entry makes `createFastMcpAuth` throw `InvalidConfigurationError`.
+- **Per tool.** `withAuth0Execute(execute, { requiredScopes })`, or `requireScopes(...)` from `@auth0/ai-mcp` inside the body, answers a missing scope with a tool error that names it (a blank entry in `requiredScopes` throws `InvalidConfigurationError` when you create the wrapper), for example `Missing required scope: admin:all`. The HTTP status is 200 and the result has `isError: true`. The tool stays listed.
 - **Hiding a tool.** FastMCP's own `canAccess: requireScopes("admin:all")` is the alternative. It removes the tool from the list for callers without the scope and answers a direct call with a JSON-RPC `Unknown tool` error, so the client cannot learn which scope it is missing.
 
 ## Errors inside tools
@@ -101,9 +101,9 @@ Other options:
 | `resource` | The public URL of the server. Defaults to the audience and must equal it. Its path must be empty or equal `endpoint`. |
 | `endpoint` | The path FastMCP serves the MCP route on. Defaults to `/mcp`. Pass the same value to `server.start({ httpStream: { endpoint } })`. |
 | `authorizationServers` | Issuer URLs for the metadata. Defaults to `https://<domain>/`. |
-| `requiredScopes` | Scopes every request must carry. |
+| `requiredScopes` | Scopes every request must carry. Also the default `scopes_supported` and the `scope` of the 401 challenge. |
 | `realm` | The `realm` of challenges. |
-| `metadata` | `scopesSupported`, `resourceName` and `resourceDocumentation` for the metadata document. |
+| `metadata` | `scopesSupported` (defaults to `requiredScopes`), `resourceName` and `resourceDocumentation` for the metadata document. |
 | `sessionBinding` | See below. |
 | `onError` | Called with the raw error whenever `authenticate` answers 500. |
 
