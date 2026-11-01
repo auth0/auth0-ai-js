@@ -90,7 +90,7 @@ Start `claude`, type `/mcp`, pick `store` and choose Authenticate. Sign in as th
 - `fulfill order ORD-1002`: stock for the keyboard goes from 12 to 11. Only the Inventory write token is new.
 - `run the sales analytics report`: the server fetches revenue with its own token.
 
-With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope. The server lists the three tool scopes as `scopes_supported` in its protected resource metadata, which is how a client learns to ask for them. A client that asks for no scope can get a token without them, and then every tool refuses the call. Remove the server again with `claude mcp remove store`.
+With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope. The server lists the three tool scopes as `scopes_supported` in its protected resource metadata, which is how a client learns to ask for them. A client that asks for no scope can get a token without them, and then every tool refuses the call. Scopes you list in `MCP_REQUIRED_SCOPES` are also sent as `scope` in the 401 challenge for a request without a credential. The tool scopes stay in `scopes_supported` either way. Remove the server again with `claude mcp remove store`.
 
 The `.env` file is read with Node's `--env-file` support, so no extra package is needed.
 
