@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidConfigurationError } from '@auth0/auth0-api-js';
+import { ApiClient, InvalidConfigurationError } from '@auth0/auth0-api-js';
+import { createMcpClient } from '../src/client.js';
 import { mcpClientOptionsFromEnv, resolveMcpClientOptions } from '../src/env.js';
 
 const FULL = {
@@ -59,6 +60,41 @@ describe('resolveMcpClientOptions', () => {
 
   it('lets the environment fill a blank explicit string', () => {
     expect(resolveMcpClientOptions({ domain: '  ' }, FULL).domain).toBe('tenant.example.com');
+  });
+
+  describe('with a supplied apiClient', () => {
+    const apiClient = () => new ApiClient({ domain: 'tenant.example.com', audience: 'https://mcp.example.com' });
+
+    it('does not take the client credentials from the environment', () => {
+      const resolved = resolveMcpClientOptions({ apiClient: apiClient() }, FULL);
+      expect(resolved.clientId).toBeUndefined();
+      expect(resolved.clientSecret).toBeUndefined();
+      expect('clientId' in resolved).toBe(false);
+      expect('clientSecret' in resolved).toBe(false);
+      expect(resolved.domain).toBe('tenant.example.com');
+      expect(resolved.audience).toBe('https://mcp.example.com');
+    });
+
+    it('produces options that createMcpClient accepts although the environment holds credentials', () => {
+      expect(() => createMcpClient(resolveMcpClientOptions({ apiClient: apiClient() }, FULL))).not.toThrow();
+    });
+
+    it('still passes credentials the caller gave explicitly, so the conflict is reported', () => {
+      const options = resolveMcpClientOptions({ apiClient: apiClient(), clientId: 'explicit' }, FULL);
+      expect(options.clientId).toBe('explicit');
+      expect(() => createMcpClient(options)).toThrow(InvalidConfigurationError);
+    });
+
+    it('drops a blank explicit credential instead of filling it from the environment', () => {
+      const resolved = resolveMcpClientOptions({ apiClient: apiClient(), clientSecret: '  ' }, FULL);
+      expect('clientSecret' in resolved).toBe(false);
+    });
+  });
+
+  it('fills the credentials from the environment when no apiClient is given', () => {
+    const resolved = resolveMcpClientOptions({}, FULL);
+    expect(resolved.clientId).toBe('client-from-env');
+    expect(resolved.clientSecret).toBe('secret-from-env');
   });
 
   it('passes other options through untouched', () => {

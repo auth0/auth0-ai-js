@@ -39,6 +39,9 @@ export function mcpClientOptionsFromEnv(env: Record<string, string | undefined> 
  * Combines explicit client options with the environment. Explicit values win. For
  * `domain`, `audience`, `clientId` and `clientSecret` a blank explicit string counts as
  * unset, so the environment fills it; every other option is taken from `explicit` as is.
+ * When `explicit` carries an `apiClient`, the environment supplies no `clientId` or
+ * `clientSecret`: that client already holds its credentials, and `createMcpClient` rejects
+ * the combination.
  *
  * @param explicit - Options given in code.
  * @param env - The environment to read. Defaults to `process.env`.
@@ -51,6 +54,10 @@ export function resolveMcpClientOptions(
   env: Record<string, string | undefined> = process.env
 ): McpClientOptions {
   const fromEnv = mcpClientOptionsFromEnv(env);
+  if (explicit.apiClient !== undefined) {
+    delete fromEnv.clientId;
+    delete fromEnv.clientSecret;
+  }
   const merged: Partial<McpClientOptions> = { ...fromEnv, ...explicit };
   for (const name of Object.keys(ENV_NAMES) as Array<keyof typeof ENV_NAMES>) {
     const value = present(explicit[name]) ?? fromEnv[name];
