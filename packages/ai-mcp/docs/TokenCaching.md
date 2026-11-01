@@ -48,9 +48,11 @@ The package, not the store, builds the keys. A key combines:
 - the audience you request, and
 - the normalized scope set.
 
-Because the subject is part of the key, one caller's token is never returned for another caller, and the session is part of the key, so separate sessions of the same user stay apart. Keys are opaque hashes that carry no claim value, but they are stable pseudonymous identifiers, so treat the store as sensitive.
+Because the subject is part of the key, one caller's token is never returned for another caller, and the session is part of the key, so separate sessions of the same user stay apart. What counts as a session depends on the claims of the access token, as described next. Keys are opaque hashes that carry no claim value, but they are stable pseudonymous identifiers, so treat the store as sensitive.
 
-**Revocation window.** The session part of the key outlives any single access token, so a delegated token minted earlier in a session is reused for later tokens from the same session. A session revoked at the authorization server does not invalidate an already cached delegated token before that token's own expiry. This is inherent to caching delegated tokens.
+**Which claim decides.** The session part is the `sid` claim when the access token has one. Every access token of that session then shares it, so a delegated token minted earlier in the session is reused for later access tokens. Without a `sid` it is the `jti`, and without that a digest of the whole token. Check which claims your access tokens carry: tokens that Auth0 issues for an API usually carry no `sid`, and carry a `jti` only with the RFC 9068 profile, with a different value for every token. In that case the key identifies one access token. A cached delegated token is reused only by calls that present the same inbound token, and a refreshed access token triggers a new exchange.
+
+**Revocation window.** A cached delegated token stays usable until its own expiry, whatever happens to the session or to the inbound token at the authorization server. With a `sid`, later access tokens of the same session can use it too. Without one, only calls with the same inbound token can. This is inherent to caching delegated tokens.
 
 ## Scope matching
 
@@ -130,13 +132,19 @@ A store on shared storage implements `TokenStore`, or `IndexedTokenStore` for `'
 import { createEncryptedTokenStore } from '@auth0/ai-mcp';
 import type { CachedToken, IndexedTokenStore, TokenIndexMember } from '@auth0/ai-mcp';
 
+interface RedisTransaction {
+  hset(key: string, field: string, value: string): RedisTransaction;
+  expireat(key: string, epochSeconds: number): RedisTransaction;
+  exec(): Promise<unknown>;
+}
+
 interface RedisLike {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<unknown>;
+  /** SET with EXAT writes the value and its expiry in one command. It needs Redis 6.2 or later. */
+  set(key: string, value: string, mode: 'EXAT', epochSeconds: number): Promise<unknown>;
   del(key: string): Promise<unknown>;
-  expireat(key: string, epochSeconds: number): Promise<unknown>;
-  hset(key: string, field: string, value: string): Promise<unknown>;
   hvals(key: string): Promise<string[]>;
+  multi(): RedisTransaction;
 }
 
 class RedisTokenStore implements IndexedTokenStore {
@@ -148,8 +156,8 @@ class RedisTokenStore implements IndexedTokenStore {
   }
 
   async set(key: string, value: CachedToken): Promise<void> {
-    await this.redis.set(`mcp:token:${key}`, JSON.stringify(value));
-    await this.redis.expireat(`mcp:token:${key}`, value.expiresAt);
+    // One command sets the value and its expiry, so a crash cannot leave an entry that never expires.
+    await this.redis.set(`mcp:token:${key}`, JSON.stringify(value), 'EXAT', value.expiresAt);
   }
 
   async delete(key: string): Promise<void> {
@@ -158,11 +166,11 @@ class RedisTokenStore implements IndexedTokenStore {
 
   async addIndexMember(indexKey: string, member: TokenIndexMember): Promise<void> {
     const key = `mcp:index:${indexKey}`;
-    await this.redis.hset(key, member.tokenKey, JSON.stringify(member));
     // Keep the index alive as long as its newest token.
     const members = await this.listIndexMembers(indexKey);
     const latest = Math.max(member.expiresAt, ...members.map((entry) => entry.expiresAt));
-    await this.redis.expireat(key, latest);
+    // The member and the index expiry go in one transaction.
+    await this.redis.multi().hset(key, member.tokenKey, JSON.stringify(member)).expireat(key, latest).exec();
   }
 
   async listIndexMembers(indexKey: string): Promise<TokenIndexMember[]> {
@@ -176,7 +184,7 @@ export function createSharedStore(redis: RedisLike, secret: string): IndexedToke
 }
 ```
 
-Stores must expire entries on their own: set a time to live that matches `expiresAt` when you write.
+Stores must expire entries on their own: set a time to live that matches `expiresAt` when you write. Write the value and its expiry in one command or one transaction, as the sketch does. If the process stops between a write and a separate expire call, the entry stays in Redis for ever.
 
 ## Observing exchanges
 

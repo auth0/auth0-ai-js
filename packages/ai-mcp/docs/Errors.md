@@ -8,7 +8,7 @@ All authentication errors extend `AuthError`, which carries a `code`, an optiona
 
 | Class | `statusCode` | `code` | Thrown when |
 | --- | --- | --- | --- |
-| `UnauthenticatedError` | 401 | `invalid_token` | Protected code runs without an authenticated caller, for example outside a request context, `withToken` receives an expired token, or a token exchange finds that the caller's token has expired or is about to expire. |
+| `UnauthenticatedError` | 401 | `invalid_token` | Protected code runs without an authenticated caller, for example outside a request context, `withToken` receives an expired token, or a token exchange with a `tokenStore` set finds that the caller's token has expired or is about to expire. |
 | `InsufficientScopeError` | 403 | `insufficient_scope` | The caller lacks a scope that `requireScopes` checks. |
 | `DownscopedTokenError` | 403 | `insufficient_scope` | An on-behalf-of token exchange succeeded but did not include every requested scope. A client credentials grant that falls short is a server configuration failure instead, see [On Behalf Of](./OnBehalfOf.md#client-credentials). |
 | `ForeignCallerError` | none | none | `McpClient.withToken` receives a handle that this client did not issue. This is a programming error. It extends `Error`, not `AuthError`, so it is never turned into a challenge. |

@@ -91,7 +91,7 @@ Concurrent identical exchanges from one `McpClient` share a single request to Au
 
 ## Errors from the exchange
 
-Errors leave the request-scoped client with a fixed generic message. The original error is kept as `cause` for server-side diagnostics and must not be serialized into a response. Core errors keep their class, so `instanceof` checks against the error classes of `@auth0/auth0-api-js` still work. Read the `code`, `statusCode` and `headers` of the failure from `cause`. The exception is `VerifyAccessTokenError`: when the caller's token has expired or is about to expire, the exchange reports `UnauthenticatedError` (HTTP 401 when it reaches the handler). Catch these in your tool and return an `isError` result, as the example in [Examples](../EXAMPLES.md) does.
+Errors leave the request-scoped client with a fixed generic message. The original error is kept as `cause` for server-side diagnostics and must not be serialized into a response. Core errors keep their class, so `instanceof` checks against the error classes of `@auth0/auth0-api-js` still work. Read the `code`, `statusCode` and `headers` of the failure from `cause`. The exception is `VerifyAccessTokenError`: when the exchange re-checks the caller's token and finds that it has expired or is about to expire, it reports `UnauthenticatedError` (HTTP 401 when it reaches the handler). The re-check runs when a `tokenStore` is set. Without a store, Auth0 refuses an expired token and the call fails with the generic error; see [known limitations](./KnownLimitations.md#a-token-in-its-last-seconds-passes-the-gate-but-may-not-be-exchanged). Catch these in your tool and return an `isError` result, as the example in [Examples](../EXAMPLES.md) does.
 
 ## Timeouts
 
