@@ -7,9 +7,5 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**"],
     testTimeout: 20000,
     hookTimeout: 20000,
-    coverage: {
-      provider: "v8",
-      include: ["src/**"],
-    },
   },
 });
