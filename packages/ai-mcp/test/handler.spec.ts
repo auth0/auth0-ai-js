@@ -14,6 +14,7 @@ import {
   exportJWK,
   generateKeyPair,
 } from "jose";
+import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import {
   ApiClient,
@@ -1362,6 +1363,42 @@ describe("onError observer failures", () => {
     } finally {
       process.off("unhandledRejection", listener);
     }
+  });
+});
+
+describe("outage of the authorization server", () => {
+  // Pins the documented limitation: the core library reports a failed key set fetch as an
+  // invalid token, so the response is a 401 and onError is silent. When the core library
+  // reports outages separately, change these expectations and the JSDoc together.
+  it("answers 401 invalid_token and does not call onError when the key set cannot be fetched", async () => {
+    useTenant();
+    const headers = await bearer();
+    server.use(http.get(tenant.jwksUri, () => new HttpResponse(null, { status: 503 })));
+    const onError = vi.fn();
+    const { handle, calls } = makeHandler({ onError });
+
+    const response = await handle(request(headers));
+
+    expect(response.status).toBe(401);
+    expect(wwwAuthenticate(response)).toContain('error="invalid_token"');
+    expect(onError).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("answers 401 invalid_token and does not call onError when the discovery document cannot be fetched", async () => {
+    useTenant();
+    const headers = await bearer();
+    server.use(
+      http.get("https://tenant.example.com/.well-known/openid-configuration", () => new HttpResponse(null, { status: 503 })),
+    );
+    const onError = vi.fn();
+    const { handle } = makeHandler({ onError });
+
+    const response = await handle(request(headers));
+
+    expect(response.status).toBe(401);
+    expect(wwwAuthenticate(response)).toContain('error="invalid_token"');
+    expect(onError).not.toHaveBeenCalled();
   });
 });
 
