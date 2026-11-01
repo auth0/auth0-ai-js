@@ -45,12 +45,13 @@ describe.each(WIRINGS)("cache and exchange isolation (%s wiring)", (wiring) => {
       createServer: serverFor(tenant),
     });
     try {
+      // Auth0's default token profile: the calling client is `azp`.
       const callers = [
-        { sub: "user|a", claims: { client_id: "client-a" } },
-        { sub: "user|b", claims: { client_id: "client-a" } },
-        { sub: "user|a", claims: { client_id: "client-a", org_id: "org_1" } },
-        { sub: "user|a", claims: { client_id: "client-a", org_id: "org_2" } },
-        { sub: "user|a", claims: { client_id: "client-b" } },
+        { sub: "user|a", claims: { azp: "client-a" } },
+        { sub: "user|b", claims: { azp: "client-a" } },
+        { sub: "user|a", claims: { azp: "client-a", org_id: "org_1" } },
+        { sub: "user|a", claims: { azp: "client-a", org_id: "org_2" } },
+        { sub: "user|a", claims: { azp: "client-b" } },
       ];
       const tokens = await Promise.all(callers.map((c) => rig().token(c)));
 
@@ -73,6 +74,9 @@ describe.each(WIRINGS)("cache and exchange isolation (%s wiring)", (wiring) => {
     }
   });
 
+  // Without a session id the key falls back to a digest of the whole token, so two callers get
+  // separate entries whatever else they share. Giving them the same session id leaves the other
+  // identity fields as the only thing that can keep them apart.
   it("keeps subjects, organizations and caller clients apart even when their session ids collide", async () => {
     const { tenant } = rig();
     rig().useTenant();
@@ -82,22 +86,29 @@ describe.each(WIRINGS)("cache and exchange isolation (%s wiring)", (wiring) => {
     });
     try {
       const callers = [
-        { sub: "user|a", claims: { client_id: "client-a", sid: "shared" } },
-        { sub: "user|b", claims: { client_id: "client-a", sid: "shared" } },
-        { sub: "user|a", claims: { client_id: "client-a", sid: "shared", org_id: "org_1" } },
-        { sub: "user|a", claims: { client_id: "client-b", sid: "shared" } },
+        { sub: "user|a", claims: { azp: "client-a", sid: "shared" } },
+        { sub: "user|b", claims: { azp: "client-a", sid: "shared" } },
+        { sub: "user|a", claims: { azp: "client-a", sid: "shared", org_id: "org_1" } },
+        // Same subject and session id, and the callers differ only by the calling client.
+        { sub: "user|a", claims: { azp: "client-b", sid: "shared" } },
+        // The same, for tokens that name their client in `client_id` instead.
+        { sub: "user|a", claims: { client_id: "client-c", sid: "shared" } },
+        { sub: "user|a", claims: { client_id: "client-d", sid: "shared" } },
       ];
       const tokens = await Promise.all(callers.map((c) => rig().token(c)));
 
+      const jtis = new Set<string | undefined>();
       for (let round = 0; round < 2; round++) {
         for (const [index, bearer] of tokens.entries()) {
           const outcome = await delegateOnce(app, bearer);
           expect(outcome.body.sub).toBe(callers[index]!.sub);
           expect(outcome.body.orgId).toBe((callers[index]!.claims as { org_id?: string }).org_id ?? null);
+          jtis.add(outcome.body.jti);
         }
       }
 
       expect(tenant.auth0.state.successfulExchangeCount).toBe(callers.length);
+      expect(jtis.size).toBe(callers.length);
     } finally {
       await app.stop();
     }
@@ -132,7 +143,7 @@ describe.each(WIRINGS)("cache and exchange isolation (%s wiring)", (wiring) => {
     }
   });
 
-  it("never shares a token between servers that trust different issuers", async () => {
+  it("never shares a token between servers that trust different issuers, even for the same session id", async () => {
     const { tenant } = rig();
     const other = await rig().addTenant("other.example.com");
     rig().useTenant(tenant);
@@ -147,9 +158,10 @@ describe.each(WIRINGS)("cache and exchange isolation (%s wiring)", (wiring) => {
       createServer: serverFor(other),
     });
     try {
-      // Same subject and client id at both issuers.
-      const tokenA = await rig().token({ sub: "user|same", tenant });
-      const tokenB = await rig().token({ sub: "user|same", tenant: other });
+      // Same subject, client and session id at both issuers: only the tenant and issuer tell them apart.
+      const claims = { azp: "client-a", sid: "shared" };
+      const tokenA = await rig().token({ sub: "user|same", tenant, claims });
+      const tokenB = await rig().token({ sub: "user|same", tenant: other, claims });
       for (let round = 0; round < 2; round++) {
         await delegateOnce(a, tokenA);
         await delegateOnce(b, tokenB);

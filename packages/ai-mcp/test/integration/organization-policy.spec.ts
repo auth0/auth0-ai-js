@@ -39,7 +39,7 @@ describe.each(WIRINGS)("organization policy at ingress (%s wiring)", (wiring) =>
   it("rejects a token from an organization that is not allowed", async () => {
     const app = await serve(allowList);
     try {
-      const bearer = await rig().token({ claims: { client_id: "client-a", org_id: "org_other" } });
+      const bearer = await rig().token({ claims: { azp: "client-a", org_id: "org_other" } });
 
       const error = await connectClient(app, bearer).then(
         () => undefined,
@@ -57,7 +57,7 @@ describe.each(WIRINGS)("organization policy at ingress (%s wiring)", (wiring) =>
   it("accepts a token from an allowed organization and carries it downstream", async () => {
     const app = await serve(allowList);
     try {
-      const bearer = await rig().token({ claims: { client_id: "client-a", org_id: "org_allowed" } });
+      const bearer = await rig().token({ claims: { azp: "client-a", org_id: "org_allowed" } });
       const session = await connectClient(app, bearer);
       try {
         const who = await callJson<{ orgId: string }>(session, "whoami");
@@ -78,7 +78,7 @@ describe.each(WIRINGS)("organization policy at ingress (%s wiring)", (wiring) =>
   it("accepts any organization when the policy is required without an allow list", async () => {
     const app = await serve({ organizationPolicy: "required" });
     try {
-      const bearer = await rig().token({ claims: { client_id: "client-a", org_id: "org_any" } });
+      const bearer = await rig().token({ claims: { azp: "client-a", org_id: "org_any" } });
 
       expect((await delegateOnce(app, bearer)).body.orgId).toBe("org_any");
       await expect(connectClient(app, await rig().token())).rejects.toMatchObject({ status: 401 });
