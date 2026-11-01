@@ -71,6 +71,17 @@ describe("an exchange without scope (OnBehalfOf.md)", () => {
   });
 });
 
+describe("the claims Auth0 puts in an access token for an API (TokenCaching.md)", () => {
+  it("says the default profile carries neither sid nor jti and that a jti needs the RFC 9068 profile", () => {
+    const text = guide("TokenCaching.md");
+    expect(text).toContain("default access token profile carry neither `sid` nor `jti`");
+    expect(text).toContain("the session part is a digest of the whole token");
+    expect(text).toContain("A `jti` appears only with the RFC 9068 access token profile, which we have not verified");
+    expect(text).not.toContain("usually carry no `sid`");
+    expect(text).toContain("`sid` claim, else `jti`, else a digest of the token");
+  });
+});
+
 describe("the session part of the cache key (TokenCaching.md)", () => {
   const request = { audience: DOWNSTREAM, scope: "read:reports" };
 
