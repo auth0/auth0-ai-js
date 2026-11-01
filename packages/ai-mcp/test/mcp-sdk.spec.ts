@@ -11,6 +11,7 @@ import {
   OAuthError,
   OAuthErrorCode,
   requireBearerAuth as requireBearerAuthGate,
+  verifyBearerToken,
 } from "@modelcontextprotocol/server";
 import type { AuthInfo as SdkAuthInfo } from "@modelcontextprotocol/server";
 import { requireBearerAuth } from "@modelcontextprotocol/express";
@@ -1334,6 +1335,48 @@ describe("asTokenVerifier", () => {
         scopes: ["read", "write"],
         extra: { sub: "user|1" },
       });
+    });
+
+    it("reports the audience as the resource, so expectedResource accepts a valid token", async () => {
+      useTenant();
+      const header = `Bearer ${await token()}`;
+      const verifier = asTokenVerifier(makeClient());
+
+      const info = await verifyBearerToken(header, { verifier, expectedResource: new URL(AUDIENCE) });
+
+      expect(info.resource?.href).toBe(new URL(AUDIENCE).href);
+    });
+
+    it("still rejects a token when expectedResource names another resource", async () => {
+      useTenant();
+      const error = await verifyBearerToken(`Bearer ${await token()}`, {
+        verifier: asTokenVerifier(makeClient()),
+        expectedResource: new URL("https://other.example.com"),
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(OAuthError);
+      expect((error as OAuthError).code).toBe(OAuthErrorCode.InvalidToken);
+    });
+
+    it("gives every call its own resource object", async () => {
+      useTenant();
+      const verifier = asTokenVerifier(makeClient());
+      const header = await token();
+      const first = (await verifier.verifyAccessToken(header)).resource!;
+      first.pathname = "/evil";
+      const second = (await verifier.verifyAccessToken(header)).resource!;
+
+      expect(second.href).toBe(new URL(AUDIENCE).href);
+    });
+
+    it("leaves the resource out when the audience is not an http or https URL", async () => {
+      useTenant();
+      const urn = "urn:example:mcp";
+      const info = await asTokenVerifier(makeClient({ audience: urn })).verifyAccessToken(
+        await token("read", { aud: urn }),
+      );
+
+      expect(info).not.toHaveProperty("resource");
     });
 
     // The v2 middleware maps only its own OAuthError to 401 and 403. A verifier that

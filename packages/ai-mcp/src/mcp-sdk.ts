@@ -17,7 +17,7 @@ import {
 } from '@modelcontextprotocol/server';
 import type { AuthInfo as SdkAuthInfo, OAuthTokenVerifier } from '@modelcontextprotocol/server';
 import type { McpClient } from './client.js';
-import { reportError } from './authenticate.js';
+import { reportError, resourceFromAudience } from './authenticate.js';
 import { createMcpHandler, resolveHandlerClient, resolveHandlerEndpoints } from './handler.js';
 import type { AuthInfo, McpHandlerBaseOptions, McpHandlerClientConfig, McpHandlerOptions } from './handler.js';
 
@@ -407,6 +407,11 @@ export function createNodeMcpHandler(
  * request-scoped client exists. To get them back, call `client.verifyAccessToken`
  * yourself in a wrapper and use `runWithRequestContext`, or switch to the handler.
  *
+ * `AuthInfo.resource` is the client audience when that is an absolute http or https URL, so
+ * the SDK's `expectedResource` option can be used with the same value. For any other
+ * audience (a URN, for example) `resource` is left out and `expectedResource` rejects every
+ * token, so do not set it.
+ *
  * Errors are mapped with generic messages: any failed verification becomes the
  * SDK's `OAuthError` with code `invalid_token`, a 403 from the core becomes an
  * `OAuthError` with code `insufficient_scope`, and everything else is rethrown so
@@ -434,9 +439,13 @@ export function asTokenVerifier(client: McpClient): OAuthTokenVerifier {
         throw error;
       }
       const principal = caller.principal;
+      // Tokens are only accepted for the client audience, so it is the resource the token was
+      // issued for. A new URL each time: a caller may change the object it receives.
+      const resource = resourceFromAudience(client.audience);
       return {
         token: '',
         clientId: principal.clientId ?? '',
+        ...(resource !== undefined && { resource: new URL(resource) }),
         scopes: [...principal.scopes],
         expiresAt: principal.expiresAt,
         extra: {
