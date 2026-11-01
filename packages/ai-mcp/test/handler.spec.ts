@@ -744,6 +744,7 @@ describe("protected resource metadata route", () => {
     const response = await handle(request({}, { method: "GET" }, PRM));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("cache-control")).toBe("public, max-age=3600");
     expect(await bodyOf(response)).toEqual({
       resource: AUDIENCE,
       authorization_servers: [tenant.issuer],
