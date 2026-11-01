@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { MemoryIndexedTokenStore, UnauthenticatedError, createMcpClient } from "../../src/index.js";
+import { readFileSync } from "node:fs";
+import { MemoryIndexedTokenStore, UnauthenticatedError, createMcpClient, createMcpHandler } from "../../src/index.js";
 import type { McpClient, TokenStore } from "../../src/index.js";
 import { createAuth0Handlers, createTestKey, mintAccessToken, scopeMode } from "../support/index.js";
 import type { MintAccessTokenOptions, TestKey } from "../support/index.js";
@@ -12,6 +14,10 @@ import type { MintAccessTokenOptions, TestKey } from "../support/index.js";
  */
 
 const AUDIENCE = "https://mcp.example.com/mcp";
+
+function guide(name: string): string {
+  return readFileSync(new URL(`../../docs/${name}`, import.meta.url), "utf8");
+}
 const DOWNSTREAM = "https://reports-api.example.com";
 
 let key: TestKey;
@@ -27,6 +33,7 @@ beforeAll(async () => {
 afterEach(() => {
   vi.useRealTimers();
   tenant.state.reset();
+  server.resetHandlers(...tenant.handlers);
 });
 afterAll(() => server.close());
 
@@ -161,5 +168,65 @@ describe("calls after the caller's token has expired (RequestContext.md)", () =>
     await expect(scoped.getClientCredentialsToken(request)).resolves.toMatchObject({
       grantedScopes: ["read:reports"],
     });
+  });
+});
+
+describe("a failed token request (Errors.md, OnBehalfOf.md, RequestContext.md, TokenVault.md)", () => {
+  const request = { audience: DOWNSTREAM, scope: "read:reports" };
+
+  it("keeps code, statusCode and a copy of the headers on the sanitized error, and nothing of the body", async () => {
+    const scoped = await callerFor(makeClient());
+    server.use(
+      http.post(tenant.tokenEndpoint, () =>
+        HttpResponse.json(
+          { error: "too_many_requests", error_description: "upstream detail that must not leak" },
+          { status: 429, headers: { "Retry-After": "7" } },
+        ),
+      ),
+    );
+
+    const error = (await scoped.getTokenOnBehalfOf(request).catch((reason: unknown) => reason)) as Error & {
+      code?: string;
+      statusCode?: number;
+      headers?: Headers | Record<string, string>;
+      cause?: { headers?: unknown };
+    };
+
+    expect(error.message).toBe("The token operation failed.");
+    expect(error.statusCode).toBe(429);
+    expect(typeof error.code).toBe("string");
+    const retryAfter =
+      error.headers instanceof Headers ? error.headers.get("retry-after") : error.headers?.["retry-after"];
+    expect(retryAfter).toBe("7");
+    expect(error.headers).not.toBe(error.cause?.headers);
+    expect(JSON.stringify(error)).not.toContain("upstream detail");
+    for (const name of ["Errors.md", "OnBehalfOf.md", "RequestContext.md", "TokenVault.md"]) {
+      expect(guide(name), name).not.toContain("from `cause`");
+    }
+    expect(guide("Errors.md")).toContain("`Retry-After`");
+  });
+});
+
+describe("an outage of the tenant (KnownLimitations.md)", () => {
+  it("answers 401 invalid_token and stays silent for onError when the key set cannot be fetched", async () => {
+    const client = makeClient();
+    const accessToken = await mintAccessToken(key, {
+      iss: tenant.issuer,
+      aud: AUDIENCE,
+      sub: "user|1",
+      scope: "mcp:access",
+    });
+    server.use(http.get(tenant.jwksUri, () => new HttpResponse(null, { status: 503 })));
+    const seen: unknown[] = [];
+    const handle = createMcpHandler({ client, onError: (error) => seen.push(error), handler: async () => new Response("ok") });
+
+    const response = await handle(
+      new Request(AUDIENCE, { method: "POST", headers: { authorization: `Bearer ${accessToken}` } }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+    expect(seen).toEqual([]);
+    expect(guide("KnownLimitations.md")).toContain("A tenant outage answers 401");
   });
 });
