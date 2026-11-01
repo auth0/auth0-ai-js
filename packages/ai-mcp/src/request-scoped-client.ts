@@ -124,14 +124,23 @@ function withCause<T extends Error>(error: T, cause: unknown): T {
 }
 
 /**
- * Rejects a token the authorization server issued that is already expired, so it is never
- * returned to tool code. The failure carries the generic message and a diagnostic `cause`
- * that holds no token data. `expiresAt` is epoch seconds, the convention of the core client.
+ * Rejects a token the authorization server issued that is already expired, or that came
+ * back without a usable expiry, so it is never returned to tool code. The failure carries
+ * the generic message and a diagnostic `cause` that holds no token data and says which of
+ * the two happened. `expiresAt` is epoch seconds, the convention of the core client. The
+ * core client computes it from `expires_in`, so a response without that field arrives here
+ * as `NaN`.
  * The core client stores an exchange result before this check runs and its cache treats an
  * expired entry as a miss, so an expired entry may remain in a store but is never served.
  */
 function assertNotExpired(expiresAt: number): void {
-  if (!Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) {
+  if (!Number.isFinite(expiresAt)) {
+    throw withCause(
+      new Error(GENERIC_FAILURE_MESSAGE),
+      new Error('The token endpoint issued a token without a usable expiry (expires_in is missing or invalid).')
+    );
+  }
+  if (expiresAt <= Math.floor(Date.now() / 1000)) {
     throw withCause(new Error(GENERIC_FAILURE_MESSAGE), new Error('The token endpoint issued an already expired token.'));
   }
 }

@@ -30,7 +30,12 @@ async function scopedClient(expiresIn: number, tokenStore?: TokenStore) {
     clientSecret: 'secret',
     ...(tokenStore !== undefined && { tokenStore }),
   });
-  const accessToken = await mintAccessToken(key, { iss: tenant.issuer, aud: AUDIENCE, sub: 'user|1', scope: 'openid' });
+  const accessToken = await mintAccessToken(key, {
+    iss: tenant.issuer,
+    aud: AUDIENCE,
+    sub: 'user|1',
+    scope: 'openid',
+  });
   return client.withToken(await client.verifyAccessToken({ accessToken }));
 }
 
@@ -41,6 +46,13 @@ async function failure(promise: Promise<unknown>): Promise<Error> {
     return error as Error;
   }
   throw new Error('expected the call to reject');
+}
+
+/** The innermost `cause`, where the diagnostic of a rejected token response ends up. */
+function rootCause(error: Error): Error {
+  let current = error;
+  while (current.cause instanceof Error) current = current.cause;
+  return current;
 }
 
 describe('request-scoped client: already expired results', () => {
@@ -88,5 +100,47 @@ describe('request-scoped client: already expired results', () => {
     const scoped = await scopedClient(3600);
     const result = await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM });
     expect(result.expiresAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
+  });
+});
+
+describe('request-scoped client: a token response without an expiry', () => {
+  /** Answers every token request with a token that has no `expires_in`. */
+  function omitExpiry() {
+    server.use(
+      http.post(tenant.tokenEndpoint, () =>
+        HttpResponse.json({ access_token: 'secret-token-value', token_type: 'Bearer', scope: 'read:a' })
+      )
+    );
+  }
+
+  function expectMissingExpiry(error: Error) {
+    expect(error.message).toBe('The token operation failed.');
+    expect(rootCause(error).message).toMatch(/without a usable expiry/);
+    expect(rootCause(error).message).not.toMatch(/already expired/);
+    expect(JSON.stringify(error)).not.toContain('secret-token-value');
+  }
+
+  it('reports a missing expiry on an on-behalf-of exchange, not an expired token', async () => {
+    const scoped = await scopedClient(3600);
+    omitExpiry();
+    expectMissingExpiry(await failure(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM })));
+  });
+
+  it('reports a missing expiry on a client credentials grant', async () => {
+    const scoped = await scopedClient(3600);
+    omitExpiry();
+    expectMissingExpiry(await failure(scoped.getClientCredentialsToken({ audience: DOWNSTREAM })));
+  });
+
+  it('reports a missing expiry on a connection token', async () => {
+    const scoped = await scopedClient(3600);
+    omitExpiry();
+    expectMissingExpiry(await failure(scoped.getTokenForConnection({ connection: 'github' })));
+  });
+
+  it('keeps the expired cause for an expiry of zero', async () => {
+    const scoped = await scopedClient(0);
+    const error = await failure(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM }));
+    expect(rootCause(error).message).toMatch(/already expired/);
   });
 });
