@@ -44,7 +44,7 @@ describe("MCP SDK version", () => {
     expect(
       ok,
       `${SDK} ${version} resolved from ${dir}, but this example needs >= ${MIN.join(".")}. ` +
-        `Install a newer copy next to the example without touching the lockfile, see the README.`,
+        `Run npm install at the repository root to get a newer copy.`,
     ).toBe(true);
   });
 });
