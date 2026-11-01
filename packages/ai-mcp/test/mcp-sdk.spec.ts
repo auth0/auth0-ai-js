@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import type { Server as HttpServer } from "node:http";
@@ -887,6 +888,66 @@ describe("Node adapter", () => {
     await fetch(url);
 
     expect(seenUrl).toBe(ENDPOINT);
+  });
+
+  describe("behind express.json()", () => {
+    // express has no type declarations in this package, and the test only needs its middleware.
+    const express = createRequire(import.meta.url)("express") as {
+      (): ((req: unknown, res: unknown) => void) & {
+        use(...handlers: unknown[]): void;
+        all(path: string, handler: unknown): void;
+      };
+      json(): unknown;
+    };
+
+    async function mount(withAsyncMiddleware: boolean, handle: Parameters<typeof toNodeHandler>[0]) {
+      const app = express();
+      app.use(express.json());
+      if (withAsyncMiddleware) {
+        app.use(async (_req: unknown, _res: unknown, next: () => void) => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          next();
+        });
+      }
+      app.all("/mcp", toNodeHandler(handle, { resource: AUDIENCE }));
+      return listen(app);
+    }
+
+    it.each([false, true])(
+      "treats a POST with Content-Length 0 as no body (async middleware: %s)",
+      async (withAsyncMiddleware) => {
+        const received: Array<string | null> = [];
+        const url = await mount(withAsyncMiddleware, async (request) => {
+          received.push(request.body === null ? null : await request.text());
+          return new Response("ok");
+        });
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          signal: AbortSignal.timeout(2000),
+        });
+
+        expect(response.status).toBe(200);
+        expect(received).toEqual([null]);
+      },
+    );
+
+    it("re-serializes a JSON body the parser consumed", async () => {
+      const received: string[] = [];
+      const url = await mount(false, async (request) => {
+        received.push(await request.text());
+        return new Response("ok");
+      });
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: '{"a": 1}',
+        signal: AbortSignal.timeout(2000),
+      });
+
+      expect(response.status).toBe(200);
+      expect(received).toEqual(['{"a":1}']);
+    });
   });
 
   it("forwards repeated headers and streams bodies", async () => {
