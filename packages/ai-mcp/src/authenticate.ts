@@ -277,8 +277,9 @@ export function classifyDownstream(error: unknown, held: readonly string[]): Fai
  * string, not an absolute http or https URL, or carrying a fragment or
  * credentials. The value is returned unchanged so it keeps matching the API
  * identifier byte for byte.
+ * @internal
  */
-function resourceFromAudience(audience: unknown): string | undefined {
+export function resourceFromAudience(audience: unknown): string | undefined {
   if (typeof audience !== "string" || audience === "" || audience !== audience.trim()) {
     return undefined;
   }
@@ -463,7 +464,7 @@ export interface AuthenticateRequestOptions {
   resource?: string;
   /**
    * Scopes every request must carry (all of them). Checked against the `scope` claim only.
-   * Like {@link requireScopes}, each entry is split on whitespace, so `"read write"` names two
+   * Like `requireScopes`, each entry is split on whitespace, so `"read write"` names two
    * scopes, and a blank or non-string entry is a configuration error.
    */
   requiredScopes?: readonly string[];
