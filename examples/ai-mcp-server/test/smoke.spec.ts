@@ -33,6 +33,8 @@ let downstreamPort: number;
 let failingUpstream: Server;
 let failingMcp: Server;
 let failingMcpPort: number;
+let scopedMcp: Server;
+let scopedMcpPort: number;
 
 /** What a failing store API says. It must never reach a tool result. */
 const UPSTREAM_SECRET = "UPSTREAM-SECRET-TEXT";
@@ -100,13 +102,18 @@ beforeAll(async () => {
   const failingApp = createMcpApp({ ...mcpConfig, storeApiUrl: `http://127.0.0.1:${failingUpstreamPort}` });
   failingMcp = createServer((req, res) => void failingApp(req, res));
   failingMcpPort = await listen(failingMcp);
+
+  // A third MCP server that needs a scope on every request.
+  const scopedApp = createMcpApp({ ...mcpConfig, requiredScopes: ["store:read"] });
+  scopedMcp = createServer((req, res) => void scopedApp(req, res));
+  scopedMcpPort = await listen(scopedMcp);
 });
 
 afterEach(() => tenant.state.reset());
 afterAll(async () => {
   msw.close();
   await Promise.all(
-    [mcp, downstream, failingMcp, failingUpstream].map((s) => new Promise((resolve) => s.close(resolve))),
+    [mcp, downstream, failingMcp, failingUpstream, scopedMcp].map((s) => new Promise((resolve) => s.close(resolve))),
   );
 });
 
@@ -188,6 +195,22 @@ describe("example MCP server", () => {
     const refused = await callTool("order_status_report");
     const advertised = /resource_metadata="([^"]+)"/.exec(refused.headers.get("www-authenticate") ?? "")?.[1];
     expect(advertised).toBe("https://mcp.example.com/.well-known/oauth-protected-resource/mcp");
+  });
+
+  it("sends the required scopes in the challenge for a request without a credential and keeps the tool scopes in the metadata", async () => {
+    const refused = await callTool("order_status_report", undefined, {}, scopedMcpPort);
+    const challenge = refused.headers.get("www-authenticate") ?? "";
+    expect(refused.status).toBe(401);
+    expect(challenge).toMatch(/^Bearer /);
+    expect(challenge).toContain('scope="store:read"');
+    expect(challenge).toContain("resource_metadata=");
+
+    const metadata = await fetch(`http://127.0.0.1:${scopedMcpPort}/.well-known/oauth-protected-resource/mcp`);
+    expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual([
+      "tool:order_status_report",
+      "tool:fulfill_order",
+      "tool:sales_analytics_report",
+    ]);
   });
 
   it("lists recent orders with two exchanged tokens", async () => {
