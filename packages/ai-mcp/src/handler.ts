@@ -99,6 +99,11 @@ export interface McpHandlerBaseOptions {
   /**
    * Called with the raw error whenever the handler answers 500. The error never
    * reaches the response. A throwing hook, or one that returns a rejected promise, is ignored.
+   *
+   * It is not called for authentication failures. In particular, a failed discovery or JWKS
+   * fetch of the authorization server is reported by the core library as an invalid token, so
+   * during an outage of the tenant the client gets a 401 `invalid_token` and this hook stays
+   * silent. A 503 for that case, with a call to this hook, needs a change in the core library.
    */
   onError?: (error: unknown) => void;
 }
@@ -207,6 +212,12 @@ function validateMetadataPath(path: string, origin: string): void {
  * DPoP `htu` is checked against `request.url`. Behind a proxy that rewrites the
  * URL, pass a `Request` whose URL is the public one the client used; the handler
  * has no option to override it. The metadata route sends no CORS headers.
+ *
+ * Known limitation: when the tenant's discovery document or key set cannot be fetched, the
+ * core library reports the token as invalid, so the handler answers 401 `invalid_token`
+ * and does not call `onError`. A client usually treats a 401 as a reason to authorize again,
+ * so during such an outage a user may be asked to sign in again although the token is fine.
+ * Answering 503 for this case needs a change in the core library.
  *
  * `resource` and `authorizationServers` are optional. They default to the client's
  * audience and to `https://<domain>/`; see {@link McpHandlerBaseOptions}. An explicit
