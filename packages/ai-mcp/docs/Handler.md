@@ -55,6 +55,8 @@ export const handle = createMcpHandler({
 
 `handle` is a plain function, so it plugs into anything that speaks the Fetch API, for example `export default { fetch: handle }` on a Workers-style runtime.
 
+`authInfo` carries `token` (always an empty string, because the bearer stays inside the request-scoped client), `clientId` (the `azp` claim, else the `client_id` claim, else an empty string), `scopes` (a copy), `expiresAt` (epoch seconds), `resource` and `extra` (`sub`, plus `orgId` and `permissions` when the token has them). `resource` is a `URL` for the resource the handler serves. Every request gets its own object, so a handler that edits it changes nothing for the next request.
+
 ### Options
 
 | Option | Description |
@@ -63,13 +65,13 @@ export const handle = createMcpHandler({
 | `resource` | Absolute URL that identifies this server. It is the `resource` of the metadata document. Optional: defaults to the `audience` of the client when that is an absolute `http` or `https` URL. If you set it, it must equal the audience. See [resource and audience](#resource-and-audience). |
 | `authorizationServers` | Issuer URLs of the authorization servers that issue tokens for this server. Optional: defaults to `https://<domain>/`, built from the `domain` of the client. |
 | `handler` | Serves the authenticated request. It runs inside the request context. |
-| `requiredScopes` | Scopes every request must carry. The token needs all of them. |
+| `requiredScopes` | Scopes every request must carry. The token needs all of them. Each entry is split on whitespace, so `'read write'` names two scopes, and duplicates count once. A blank or non-string entry throws `InvalidConfigurationError` when you create the handler, and an empty list means no requirement. The scopes are also sent as the `scope` of the 401 challenge for a request without a credential, and they are the default of `metadata.scopesSupported`. |
 | `realm` | Protection space reported as `realm` in challenges. Must be a non-empty string without quotes, backslashes or control characters. |
 | `metadata.path` | Replaces the suffixed metadata route. It must be an absolute, normalized path without query or fragment. The root route `/.well-known/oauth-protected-resource` is served regardless. |
-| `metadata.scopesSupported`, `metadata.resourceName`, `metadata.resourceDocumentation` | Extra fields published in the metadata document. |
+| `metadata.scopesSupported`, `metadata.resourceName`, `metadata.resourceDocumentation` | Extra fields published in the metadata document. Without `metadata.scopesSupported` the document lists `requiredScopes` as `scopes_supported`, so a client that reads it has something to ask for. Set it to publish more scopes than every request needs, such as the scopes of single tools. |
 | `onError` | Observer for internal errors. It receives the raw error whenever the handler itself answers 500, for example when a custom `handler` throws an error that is not one of this package's three. It is not called for 401 and 403 answers, and not for errors thrown inside tools served by `createMcpSdkHandler` or `createNodeMcpHandler`, because the MCP SDK turns those into tool results. Log those inside the tool. The handler ignores a hook that throws. |
 
-`createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, for `client` combined with inline client options, and for an explicit `resource` that differs from the audience, which includes a `resource` that is not a URL when the audience is a URL. One case slips past that comparison: when the audience itself is not an absolute URL (for example `my-api`) and you pass the same string as `resource`, the two match, and creating the handler then fails with a bare `TypeError: Invalid URL` that does not name the option. Use a URL as the audience instead (see [Resource and audience](#resource-and-audience)). The handler also throws `InvalidConfigurationError`, naming the option, when you omit `resource` or `authorizationServers` and the client cannot supply a usable default (see below). All of this happens when you create the handler, not on the first request.
+`createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, for `client` combined with inline client options, and for an explicit `resource` that differs from the audience, which includes a `resource` that is not a URL when the audience is a URL. Two cases slip past that comparison and fail with a bare `TypeError: Invalid URL` that does not name the option: the audience itself is not an absolute URL (for example `my-api`) and you pass the same string as `resource`, so the two match, or the client you pass declares no audience, so there is nothing to compare with. Use a URL as the audience instead (see [Resource and audience](#resource-and-audience)). The handler also throws `InvalidConfigurationError`, naming the option, when you omit `resource` or `authorizationServers` and the client cannot supply a usable default (see below). All of this happens when you create the handler, not on the first request.
 
 ### Resource and audience
 
@@ -119,7 +121,9 @@ Failures that happen before your handler runs use a generic JSON body (`error` a
 | A custom `createMcpHandler` handler throws `InsufficientScopeError` or `DownscopedTokenError` | 403 | `insufficient_scope` |
 | Anything else | 500 | no challenge, generic body |
 
-A missing credential gets a challenge without an `error` value, because RFC 6750 section 3.1 reserves error values for requests that did carry authentication. The challenge always advertises the schemes the DPoP mode accepts and the `resource_metadata` URL.
+A missing credential gets a challenge without an `error` value, because RFC 6750 section 3.1 reserves error values for requests that did carry authentication. The challenge always advertises the schemes the DPoP mode accepts and the `resource_metadata` URL. When `requiredScopes` is set it also carries them as `scope`, which tells a client what to request when it authorizes. Read challenge parameters by name: their order is not part of the contract.
+
+Every failure response, including the 500, carries `cache-control: no-store`, so no cache keeps a rejection. The metadata document carries `cache-control: public, max-age=3600`.
 
 Every path other than the metadata paths goes through authentication. The handler does not route, so mount it only on the path that serves MCP, and also on the metadata paths. It answers `GET` on two of them with the same document, and `405` with an `Allow: GET` header for any other method:
 
@@ -240,13 +244,14 @@ const listener = toNodeHandler(web, {
 createServer((req, res) => void listener(req, res)).listen(3000);
 ```
 
-`toNodeHandler` only converts messages. All authentication stays in the web handler. It has no client to take defaults from, so its `resource` is required. `createNodeMcpHandler` applies the same defaults and the same three configuration tiers as `createMcpHandler` (it builds the client once and shares it with the endpoint defaults) and uses the resulting `resource` for the origin.
+`toNodeHandler` only converts messages. All authentication stays in the web handler. Its `onError` option receives the raw error whenever the adapter itself answers 500, that is, when something other than the web handler failed; the web handler reports its own failures to its own `onError`. A hook that throws is ignored, and the error never reaches the response. `createNodeMcpHandler` passes its `onError` to both layers. It has no client to take defaults from, so its `resource` is required. `createNodeMcpHandler` applies the same defaults and the same three configuration tiers as `createMcpHandler` (it builds the client once and shares it with the endpoint defaults) and uses the resulting `resource` for the origin.
 
 - It rebuilds the absolute request URL from the origin of `resource`, so the `Host` header of the incoming request is never trusted.
 - Headers, including `Authorization` and `DPoP`, pass through unchanged.
 - The body is read up to `maxBodyBytes` (1 MiB by default). A larger body gets a 413 and the adapter closes the connection. A malformed `Content-Length`, or a path that does not start with a single `/`, gets a 400.
-- Mount it before body-parsing middleware. If a parser already consumed the stream, the adapter serializes the parsed `req.body` again with the same size limit, so the bytes the handler sees can differ from the original.
-- The returned function never rejects. Any other error becomes a generic 500.
+- Mount it before body-parsing middleware. If a parser already consumed the stream, the adapter serializes the parsed `req.body` again with the same size limit, so the bytes the handler sees can differ from the original. It does not read the stream twice, and an empty `{}` that a parser left on a request without a body counts as no body.
+- A method the Fetch API cannot build a `Request` for (`CONNECT`, `TRACE`, `TRACK`) gets a 405 with an `Allow` header that lists the methods the adapter forwards.
+- The returned function never rejects. Any other error becomes a generic 500 and is passed to `onError`.
 
 ## Writing your own adapter
 

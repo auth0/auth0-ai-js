@@ -185,7 +185,7 @@ The client behind a handler can be configured in three ways. All three give the 
 | `AUTH0_CLIENT_ID` | `clientId` | only to exchange tokens |
 | `AUTH0_CLIENT_SECRET` | `clientSecret` | only to exchange tokens |
 
-A variable that is unset, empty or only whitespace counts as unset. A missing `domain` or `audience` throws `InvalidConfigurationError` with a message such as `Missing MCP client option "domain": pass it explicitly or set the AUTH0_DOMAIN environment variable.`
+A variable that is unset, empty or only whitespace counts as unset. Whitespace around `AUTH0_DOMAIN`, `AUTH0_AUDIENCE` and `AUTH0_CLIENT_ID` is removed, because a trailing newline from a secrets file would otherwise make every token fail the audience check. `AUTH0_CLIENT_SECRET` is used exactly as set. A client you build with your own `apiClient` holds its own credentials, so the environment supplies no client id or secret for it. A missing `domain` or `audience` throws `InvalidConfigurationError` with a message such as `Missing MCP client option "domain": pass it explicitly or set the AUTH0_DOMAIN environment variable.`
 
 To build a client from the environment yourself, use the helpers. `createMcpClient` itself never reads the environment.
 

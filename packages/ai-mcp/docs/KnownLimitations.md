@@ -9,6 +9,8 @@ The two cases differ in the error a tool sees:
 - **With a `tokenStore`.** A request that arrives with a token in its last five seconds passes authentication and runs your tool, but any token exchange inside that tool fails as `UnauthenticatedError` before a request reaches Auth0. Under the MCP SDK adapters that is a tool result with `isError: true` and HTTP 200.
 - **Without a `tokenStore`.** The five second rule does not run. A token with three seconds left is exchanged normally. A token that expires before Auth0 handles the request is refused by Auth0, and the call fails with the generic token operation error, not `UnauthenticatedError`.
 
+A handle whose token has already expired is refused earlier: `McpClient.withToken` throws `UnauthenticatedError` for it. The handler never hits this, because it calls `withToken` right after verification, but code that keeps a `VerifiedCaller` around (a queue consumer, for example) does.
+
 The client recovers by refreshing its access token and retrying. This does not affect tools that do not exchange tokens. This package adds no workaround, so plan for it in the error path of tools that call downstream APIs.
 
 ## Verified claims cannot cross a process boundary
@@ -28,6 +30,7 @@ If one process verifies a request and a different process needs to exchange the 
 - **No request context.** `requireBearerAuth` does not run this package's context binding. Inside your routes `getRequestContext()`, `getCallerPrincipal()` and `getCallerMcpClient()` return `undefined`, and no request-scoped client exists. To get them back, call `client.verifyAccessToken` and `client.withToken` in your own wrapper and use `runWithRequestContext`, or switch to the handler.
 - **The SDK's challenge behavior.** The middleware answers a missing credential with `error="invalid_token"`, although RFC 6750 section 3.1 says to send no error value in that case. It echoes the SDK's own messages in `error_description` and lists the configured scopes instead of only the missing ones.
 - **Bearer only.** The shim does not know DPoP. A DPoP-bound token fails verification.
+- **`resource` and `expectedResource`.** `AuthInfo.resource` is the client audience when that is an absolute `http` or `https` URL, so the SDK's `expectedResource` option can take the same value. For any other audience, such as a URN, the shim leaves `resource` out and `expectedResource` rejects every token, so do not set it. Each call returns a new `URL`, which a caller may change without affecting later calls.
 
 Failed verification maps to the SDK's `OAuthError` with code `invalid_token`, a 403 from the core maps to an `OAuthError` with code `insufficient_scope`, and everything else is rethrown so the middleware answers 500. The v2 middleware answers 500 for any error that is not an `OAuthError`, so a verifier of your own must throw `OAuthError`, not the error classes of the v1 SDK.
 
@@ -41,6 +44,14 @@ Failed verification maps to the SDK's `OAuthError` with code `invalid_token`, a 
 - Tools that depend on state kept inside an SDK session must keep that state elsewhere.
 
 If you need sessions or streaming, use `createMcpHandler` and manage the transport yourself.
+
+## The MCP SDK adapter speaks only the earlier handshake
+
+`createMcpSdkHandler` and `createNodeMcpHandler` serve the `initialize` handshake. They do not serve the 2026-07-28 protocol revision, and this package makes no claim of support for it. A `server/discover` request gets a JSON-RPC `Method not found` error. A client that negotiates the revision on its own has to fall back to `initialize`, and a client pinned to the 2026-07-28 revision cannot connect. The SDK's own `createMcpHandler` serves both revisions. Moving the adapters to it is a follow-up.
+
+## A tenant outage answers 401
+
+When the discovery document or the key set of your tenant cannot be fetched (the request fails, times out or gets an error status), the core client reports the token as invalid. The handler answers 401 with `error="invalid_token"` and does not call `onError`. During an outage a client can therefore start a new authorization although its token is fine, and alerts on 5xx responses or on `onError` stay silent. A 503 for this case needs a change in the core library. A key set fetch also stops after 5 seconds at most, because the JWT library caps it there, so a larger `requestTimeoutMs` does not lengthen it; see [Timeouts](./OnBehalfOf.md#timeouts).
 
 ## Other things to know
 
