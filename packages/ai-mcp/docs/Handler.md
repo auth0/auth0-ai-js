@@ -69,7 +69,7 @@ export const handle = createMcpHandler({
 | `metadata.scopesSupported`, `metadata.resourceName`, `metadata.resourceDocumentation` | Extra fields published in the metadata document. |
 | `onError` | Observer for internal errors. It receives the raw error whenever the handler itself answers 500, for example when a custom `handler` throws an error that is not one of this package's three. It is not called for 401 and 403 answers, and not for errors thrown inside tools served by `createMcpSdkHandler` or `createNodeMcpHandler`, because the MCP SDK turns those into tool results. Log those inside the tool. The handler ignores a hook that throws. |
 
-`createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, for `client` combined with inline client options, and for an explicit `resource` that differs from the audience. It throws a `TypeError` when an explicit `resource` is not an absolute URL. It also throws `InvalidConfigurationError`, naming the option, when you omit `resource` or `authorizationServers` and the client cannot supply a usable default (see below). All of this happens when you create the handler, not on the first request.
+`createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, for `client` combined with inline client options, and for an explicit `resource` that differs from the audience, which includes a `resource` that is not a URL when the audience is a URL. One case slips past that comparison: when the audience itself is not an absolute URL (for example `my-api`) and you pass the same string as `resource`, the two match, and creating the handler then fails with a bare `TypeError: Invalid URL` that does not name the option. Use a URL as the audience instead (see [Resource and audience](#resource-and-audience)). The handler also throws `InvalidConfigurationError`, naming the option, when you omit `resource` or `authorizationServers` and the client cannot supply a usable default (see below). All of this happens when you create the handler, not on the first request.
 
 ### Resource and audience
 
@@ -281,11 +281,14 @@ const client = createMcpClient({
 });
 
 const METADATA_URL = 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp';
+const METADATA_PATHS = new Set(['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp']);
 const metadata = buildProtectedResourceMetadata({ client, scopesSupported: ['mcp:access', 'tool:admin'] });
 
 export async function handle(request: Request): Promise<Response> {
-  if (new URL(request.url).pathname.startsWith('/.well-known/oauth-protected-resource')) {
-    return Response.json(metadata);
+  if (METADATA_PATHS.has(new URL(request.url).pathname)) {
+    return request.method === 'GET'
+      ? Response.json(metadata)
+      : new Response(null, { status: 405, headers: { allow: 'GET' } });
   }
 
   const result = await authenticateRequest(request, {

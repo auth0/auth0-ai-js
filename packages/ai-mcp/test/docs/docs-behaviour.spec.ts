@@ -932,3 +932,33 @@ describe("MCP client guide (McpClients.md)", () => {
     expect(guide).toContain("Service not found");
   });
 });
+
+describe("an explicit resource that is not a URL (Handler.md)", () => {
+  const clientFor = (audience: string): McpClient => ({
+    ...stubClient(async () => ({ principal: principalWith([]) })),
+    domain: "your-tenant.us.auth0.com",
+    audience,
+  });
+  const create = (client: McpClient, resource: string) =>
+    createMcpHandler({ client, resource, handler: async () => new Response("ok") });
+
+  it("throws InvalidConfigurationError when the audience is a URL and the resource differs", () => {
+    expect(() => create(clientFor(RESOURCE), "not-a-url")).toThrow(InvalidConfigurationError);
+  });
+
+  it("throws a bare TypeError when a non-URL audience and the resource are the same string", () => {
+    const attempt = () => create(clientFor("my-api"), "my-api");
+    expect(attempt).toThrow(TypeError);
+    expect(attempt).not.toThrow(InvalidConfigurationError);
+  });
+});
+
+describe("the custom adapter example (Handler.md)", () => {
+  it("serves the metadata only for GET on the exact paths and answers other methods with 405", () => {
+    const section = doc("docs", "Handler.md").split("## Writing your own adapter")[1] ?? "";
+    expect(section).toContain("METADATA_PATHS.has(new URL(request.url).pathname)");
+    expect(section).toContain("request.method === 'GET'");
+    expect(section).toContain("status: 405");
+    expect(section).not.toContain("startsWith('/.well-known");
+  });
+});
