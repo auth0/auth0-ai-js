@@ -25,6 +25,19 @@ describe("example structure", () => {
     }
   });
 
+  it("lists the answers Auth0 gives to a rejected exchange and claims none that was not seen", () => {
+    const readme = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8");
+
+    expect(readme).toContain("`Client must be a Custom API Client with resource_server_id`");
+    expect(readme).toContain("`This client cannot exchange access tokens for this audience.`");
+    expect(readme).toContain(
+      '`The API must have "Allow Skipping User Consent for Verifiable First-Party Clients" enabled.`',
+    );
+    expect(readme).toContain('A reported 403 `unauthorized_client` with a "Profile not enabled" text');
+    expect(readme).toContain("has not been reproduced");
+    expect(readme).not.toContain("error named `on_behalf_of_token_exchange`");
+  });
+
   it("tells the reader to build the package first, by its real name, and keeps no scratch install", () => {
     const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
     const readme = readFileSync(here("../README.md"), "utf8");
