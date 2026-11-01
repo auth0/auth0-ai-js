@@ -3,6 +3,7 @@ import { MemoryIndexedTokenStore } from "@auth0/ai-mcp";
 import { createNodeMcpHandler } from "@auth0/ai-mcp/mcp-sdk";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { McpServerConfig } from "./config.js";
+import { TOOL_SCOPES } from "./scopes.js";
 
 /**
  * Returns a Node request listener that authenticates every request with Auth0 and serves MCP
@@ -28,7 +29,9 @@ export function createAuthenticatedHandler(
     // Reuses exchanged tokens for repeat calls by the same caller.
     tokenStore: new MemoryIndexedTokenStore(),
     requiredScopes: config.requiredScopes,
-    metadata: { resourceName: "Store example" },
+    // MCP clients ask for the scopes the server lists here. A client that finds none asks for
+    // none, gets a token without the tool scopes, and every tool then refuses the call.
+    metadata: { resourceName: "Store example", scopesSupported: [...TOOL_SCOPES] },
     onError: (error) =>
       console.error(
         "request failed",
