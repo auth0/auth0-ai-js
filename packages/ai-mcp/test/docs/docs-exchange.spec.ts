@@ -2,7 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { readFileSync } from "node:fs";
-import { MemoryIndexedTokenStore, UnauthenticatedError, createMcpClient, createMcpHandler } from "../../src/index.js";
+import {
+  DownscopedTokenError,
+  MemoryIndexedTokenStore,
+  UnauthenticatedError,
+  createMcpClient,
+  createMcpHandler,
+} from "../../src/index.js";
 import type { McpClient, TokenStore } from "../../src/index.js";
 import { createAuth0Handlers, createTestKey, mintAccessToken, scopeMode } from "../support/index.js";
 import type { MintAccessTokenOptions, TestKey } from "../support/index.js";
@@ -79,6 +85,41 @@ describe("the claims Auth0 puts in an access token for an API (TokenCaching.md)"
     expect(text).toContain("A `jti` appears only with the RFC 9068 access token profile, which we have not verified");
     expect(text).not.toContain("usually carry no `sid`");
     expect(text).toContain("`sid` claim, else `jti`, else a digest of the token");
+  });
+});
+
+describe("an exchange answered with an empty scope (OnBehalfOf.md)", () => {
+  it("fails with DownscopedTokenError when the requested scope is dropped from the grant", async () => {
+    tenant.state.scope = scopeMode.empty;
+    const scoped = await callerFor(makeClient());
+
+    await expect(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: "e2e:undefined" })).rejects.toBeInstanceOf(
+      DownscopedTokenError,
+    );
+    expect(tenant.state.lastExchangeRequest?.params["scope"]).toBe("e2e:undefined");
+  });
+
+  it("states what Auth0 answers for no scope, for openid or offline_access and for a scope no API defines", () => {
+    const text = guide("OnBehalfOf.md");
+    expect(text).toContain("Auth0 grants no scope to an exchange that sends none");
+    expect(text).not.toContain("On the tenant we tested");
+    expect(text).toContain("Do not put `openid` or `offline_access` in `scope`");
+    expect(text).toContain("HTTP 400 and the error `invalid_scope`");
+    expect(text).toContain("A scope that no API defines is dropped rather than refused");
+    expect(text).toContain("answers 200 with an empty `scope`");
+    expect(text).toContain("fails with `DownscopedTokenError`");
+  });
+
+  it("lists the rejections of an exchange that Auth0 answers with 400 invalid_request", () => {
+    const text = guide("OnBehalfOf.md");
+    expect(text).toContain("`Client must be a Custom API Client with resource_server_id`");
+    expect(text).toContain("`This client cannot exchange access tokens for this audience.`");
+    expect(text).toContain(
+      '`The API must have "Allow Skipping User Consent for Verifiable First-Party Clients" enabled.`',
+    );
+    expect(text).toContain("400 `invalid_target` with `Invalid audience specified.`");
+    expect(text).toContain("has not been reproduced");
+    expect(text).not.toContain("error named `on_behalf_of_token_exchange`");
   });
 });
 
