@@ -14,6 +14,7 @@ Find the symptom, then read the cause and the fix. The messages are the ones the
 | `Invalid configuration: the path of "resource" ("/mcp") must equal "endpoint" ("/other") or be empty` | FastMCP serves the metadata document at the well-known path followed by `endpoint`, so the path of the resource must be the endpoint. Set `endpoint` to the path of the resource, and pass the same value to `server.start`. |
 | `Invalid configuration: "endpoint" must be a normalized absolute path such as "/mcp"` | The endpoint is `/`, has no leading slash, ends in a slash, or has a query or fragment. |
 | `Invalid configuration: "realm" must be a non-empty string without quotes, backslashes or control characters.` | The realm cannot be written into a challenge. |
+| `Invalid configuration: every entry of "requiredScopes" must be a non-blank string.` | An entry of `requiredScopes` is empty, only whitespace, or not a string. The server-wide list and the list of `withAuth0Execute` follow the same rule, so a typo cannot leave a route open. |
 | `Invalid configuration: "sessionBinding.maxSessions" must be a positive number.` | A binding limit is zero, negative or not a number. The same message exists for `ttlMs`. |
 | `Invalid configuration: DPoP mode "required" is not supported by the FastMCP adapter` | The adapter accepts Bearer tokens only. Use the default DPoP mode. See [DPoP](./DPoP.md). |
 
@@ -80,7 +81,7 @@ The tool has `canAccess: requireScopes(...)` and the caller lacks the scope. Fas
 The wrapper replaced an error that it does not show to the client. The original error goes to the `onError` option of `withAuth0Execute`, so add one and read it:
 
 - A `MissingClientAuthError` means the exchange needs `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` (or `clientId` and `clientSecret`), and the server has none.
-- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `cause` holds the tenant's answer. Check that the application has permission to exchange tokens for that audience, and that the audience is an API of your tenant.
+- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error. Check that the application has permission to exchange tokens for that audience, and that the audience is an API of your tenant.
 - Another error is a bug in your tool or a failure of a service it calls.
 
 ## A UserError shows up as Tool execution failed.

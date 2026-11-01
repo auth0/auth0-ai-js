@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { HttpResponse, http } from "msw";
-import { UnauthenticatedError, getCallerMcpClientOrThrow, getCallerPrincipal } from "@auth0/ai-mcp";
+import { InvalidConfigurationError, UnauthenticatedError, getCallerMcpClientOrThrow, getCallerPrincipal } from "@auth0/ai-mcp";
 import { createFastMcpAuth, withAuth0Execute } from "../../src/index.js";
 import type { Auth0Session } from "../../src/index.js";
 import {
@@ -325,6 +325,13 @@ describe("Tools.md: scopes for one tool", () => {
       await server.stop();
     }
     documented("Tools.md", "It takes one scope, a space-delimited string, or an array. The caller needs all of them.");
+  });
+
+  it("refuses a blank requiredScopes entry when the wrapper is created", () => {
+    for (const bad of ["", [""], ["read", "  "]]) {
+      expect(() => withAuth0Execute(async () => "ran", { requiredScopes: bad })).toThrow(InvalidConfigurationError);
+    }
+    documented("Tools.md", "A blank entry throws `InvalidConfigurationError` when you create the wrapper, because it would otherwise read as no requirement.");
   });
 
   it("turns a failed requireScopes of @auth0/ai-mcp inside the function into the same result", async () => {

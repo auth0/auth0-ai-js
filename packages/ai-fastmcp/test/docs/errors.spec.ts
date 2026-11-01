@@ -165,6 +165,21 @@ describe("Errors.md: authentication failures", () => {
     documented("Errors.md", "so the header reads `Bearer resource_metadata=\"...\"`");
   });
 
+  it("adds the required scopes to the challenge of a missing credential", async () => {
+    await withServer({ auth: { requiredScopes: ["a:one", "b:two"] } }, async (server) => {
+      const response = await rawRequest(server, { body: INITIALIZE_BODY });
+      expect(response.status).toBe(401);
+      const challenge = parseChallenge(response.headers.get("www-authenticate"));
+      expect(challenge.params["error"]).toBeUndefined();
+      expect(challenge.params["scope"]).toBe("a:one b:two");
+      expect(challenge.params["resource_metadata"]).toBe(`${server.origin}/.well-known/oauth-protected-resource/mcp`);
+    });
+    documented(
+      "Errors.md",
+      'When you set `requiredScopes`, the same 401 also carries `scope="..."` with all of them, so a client knows what to ask for when it authorizes. The metadata document publishes the same scopes as `scopes_supported`.',
+    );
+  });
+
   it("answers a session mismatch with 403 forbidden and no challenge", async () => {
     await withServer({ stateless: false }, async (server) => {
       const created = await rawRequest(server, {
@@ -429,7 +444,7 @@ describe("Errors.md: errors inside tools", () => {
     documented("Errors.md", "The hook runs on the server and the wrapper ignores its return value. The wrapper also ignores a hook that throws or returns a rejected promise.");
   });
 
-  it("sanitizes errors of the request-scoped client: the message is replaced and the original error is the cause", async () => {
+  it("sanitizes errors of the request-scoped client: the message is replaced, code, status and headers stay, the original error is the cause", async () => {
     const errors: unknown[] = [];
     const server = await toolServer(errors);
     try {
@@ -438,12 +453,17 @@ describe("Errors.md: errors inside tools", () => {
       const error = errors[0] as Error & { cause?: unknown };
       expect(error.message).toBe("The token operation failed.");
       expect(error.cause).toBeDefined();
+      const details = error as Error & { code?: unknown; statusCode?: unknown; headers?: unknown };
+      expect(details.statusCode).toBe(400);
+      expect(typeof details.code).toBe("string");
+      expect(typeof details.headers).toBe("object");
+      expect(JSON.stringify(details.headers)).not.toContain("tenant detail");
     } finally {
       await server.stop();
     }
     documented(
       "Errors.md",
-      "it replaces the message with `The token operation failed.` and attaches the original error as `cause`. Do not send `cause` to a client.",
+      "it replaces the message with `The token operation failed.`, keeps the class, and attaches the original error as `cause`. The sanitized error keeps the `code`, the `statusCode` and a copy of the `headers` of the failed token request, so a tool can read `Retry-After` from a rate limit answer. The response body is never copied. Do not send `cause` to a client.",
     );
   });
 

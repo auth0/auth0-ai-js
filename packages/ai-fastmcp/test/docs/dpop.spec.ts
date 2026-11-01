@@ -96,7 +96,13 @@ describe("DPoP.md: what the server does", () => {
         expect(header.toLowerCase()).not.toContain("dpop");
       }
       const document = (await (await socketFetch(`${server.origin}/.well-known/oauth-protected-resource/mcp`)).json()) as Record<string, unknown>;
-      expect(Object.keys(document).sort()).toEqual(["authorization_servers", "bearer_methods_supported", "resource"]);
+      expect(Object.keys(document).sort()).toEqual([
+        "authorization_servers",
+        "bearer_methods_supported",
+        "resource",
+        "scopes_supported",
+      ]);
+      expect(Object.keys(document).filter((key) => key.includes("dpop"))).toEqual([]);
     });
     documented(
       "DPoP.md",

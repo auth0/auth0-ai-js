@@ -103,7 +103,7 @@ The metadata document tells clients which authorization server to use.
 | --- | --- | --- |
 | `resource` | `resource` | The audience. |
 | `authorizationServers` | `authorization_servers` | `["https://<domain>/"]`, built from the tenant domain. |
-| `metadata.scopesSupported` | `scopes_supported` | Left out. |
+| `metadata.scopesSupported` | `scopes_supported` | The `requiredScopes`, or left out when there are none. |
 | `metadata.resourceName` | `resource_name` | Left out. |
 | `metadata.resourceDocumentation` | `resource_documentation` | Left out. |
 
@@ -126,7 +126,9 @@ The document and the `WWW-Authenticate` challenge are built from the same resour
 
 ## Required scopes
 
-`requiredScopes` lists scopes every request must carry. A token that lacks one gets HTTP 403 before any tool runs. The challenge has `error="insufficient_scope"` and a `scope` parameter that lists only the missing scopes. A token with all of them passes.
+`requiredScopes` lists scopes every request must carry. A token that lacks one gets HTTP 403 before any tool runs. The challenge has `error="insufficient_scope"` and a `scope` parameter that lists only the missing scopes. A token with all of them passes. A request without credentials gets a 401 whose challenge names all of them in `scope`, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`, so the challenge and the document always agree.
+
+Each entry is split on whitespace, so `"read write"` means two scopes, and a repeated scope counts once. A blank entry or one that is not a string makes `createFastMcpAuth` throw `InvalidConfigurationError`.
 
 ```ts
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
@@ -166,7 +168,7 @@ export const auth = createFastMcpAuth({
 | `resource` | Public URL of the server. Defaults to the audience and must equal it. |
 | `endpoint` | Path of the MCP route. Defaults to `/mcp`. |
 | `authorizationServers` | Issuers published in the metadata document. |
-| `requiredScopes` | Scopes every request must carry. |
+| `requiredScopes` | Scopes every request must carry. Also the default `scopes_supported` and the `scope` of the 401 challenge. |
 | `realm` | The `realm` of challenges. |
 | `metadata` | `scopesSupported`, `resourceName` and `resourceDocumentation` for the document. |
 | `sessionBinding` | `false`, or `{ maxSessions, ttlMs }`. |

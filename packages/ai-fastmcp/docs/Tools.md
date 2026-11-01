@@ -64,7 +64,7 @@ The wrapper keeps the argument types FastMCP infers from `parameters`. It also t
 
 ## Scopes for one tool
 
-`requiredScopes` on `createFastMcpAuth` applies to every request. For a scope that only one tool needs, pass `requiredScopes` to `withAuth0Execute`. It takes one scope, a space-delimited string, or an array. The caller needs all of them.
+`requiredScopes` on `createFastMcpAuth` applies to every request. For a scope that only one tool needs, pass `requiredScopes` to `withAuth0Execute`. It takes one scope, a space-delimited string, or an array. The caller needs all of them. A blank entry throws `InvalidConfigurationError` when you create the wrapper, because it would otherwise read as no requirement.
 
 ```ts
 import { FastMCP } from "fastmcp";

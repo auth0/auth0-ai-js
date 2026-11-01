@@ -27,6 +27,7 @@ WWW-Authenticate: Bearer error="invalid_token", error_description="The access to
 Details of the challenges:
 
 - The 401 for a missing credential has no `error` value, as RFC 6750 asks, so the header reads `Bearer resource_metadata="..."`.
+- When you set `requiredScopes`, the same 401 also carries `scope="..."` with all of them, so a client knows what to ask for when it authorizes. The metadata document publishes the same scopes as `scopes_supported`.
 - The 403 for a missing scope adds `scope="..."`, which lists only the scopes the token lacks.
 - A `realm` option adds `realm="..."` to each challenge.
 - Challenges name the `Bearer` scheme only.
@@ -83,7 +84,7 @@ The hook runs on the server and the wrapper ignores its return value. The wrappe
 
 ## Errors from the request-scoped client
 
-`@auth0/ai-mcp` sanitizes errors thrown by `session.mcpClient` before they reach your code: it replaces the message with `The token operation failed.` and attaches the original error as `cause`. Do not send `cause` to a client. Whatever your function lets escape is then mapped by the table above.
+`@auth0/ai-mcp` sanitizes errors thrown by `session.mcpClient` before they reach your code: it replaces the message with `The token operation failed.`, keeps the class, and attaches the original error as `cause`. The sanitized error keeps the `code`, the `statusCode` and a copy of the `headers` of the failed token request, so a tool can read `Retry-After` from a rate limit answer. The response body is never copied. Do not send `cause` to a client. Whatever your function lets escape is then mapped by the table above.
 
 ## Configuration errors
 

@@ -312,7 +312,7 @@ describe("Configuration.md: metadata", () => {
     );
     documented(
       "Configuration.md",
-      "| `metadata.scopesSupported` | `scopes_supported` | Left out. |",
+      "| `metadata.scopesSupported` | `scopes_supported` | The `requiredScopes`, or left out when there are none. |",
       "| `metadata.resourceName` | `resource_name` | Left out. |",
       "| `metadata.resourceDocumentation` | `resource_documentation` | Left out. |",
     );
@@ -357,6 +357,40 @@ describe("Configuration.md: required scopes, realm and the error observer", () =
       "A token with all of them passes.",
       'The challenge has `error="insufficient_scope"` and a `scope` parameter that lists only the missing scopes.',
     );
+  });
+
+  it("names every required scope in the 401 challenge and publishes them as scopes_supported", async () => {
+    await withServer({ auth: { requiredScopes: ["mcp:access  mcp:more", "mcp:access"] } }, async (server) => {
+      const refused = await rawRequest(server, { body: LIST });
+      expect(refused.status).toBe(401);
+      expect(parseChallenge(refused.headers.get("www-authenticate")).params["scope"]).toBe("mcp:access mcp:more");
+      const document = (await (await socketFetch(`${server.origin}/.well-known/oauth-protected-resource/mcp`)).json()) as {
+        scopes_supported?: string[];
+      };
+      expect(document.scopes_supported).toEqual(["mcp:access", "mcp:more"]);
+    });
+    await withServer(
+      { auth: { requiredScopes: ["mcp:access"], metadata: { scopesSupported: ["other"] } } },
+      async (server) => {
+        const document = (await (await socketFetch(`${server.origin}/.well-known/oauth-protected-resource/mcp`)).json()) as {
+          scopes_supported?: string[];
+        };
+        expect(document.scopes_supported).toEqual(["other"]);
+      },
+    );
+    documented(
+      "Configuration.md",
+      "A request without credentials gets a 401 whose challenge names all of them in `scope`, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`, so the challenge and the document always agree.",
+      "Each entry is split on whitespace, so `\"read write\"` means two scopes, and a repeated scope counts once.",
+      "| `requiredScopes` | Scopes every request must carry. Also the default `scopes_supported` and the `scope` of the 401 challenge. |",
+    );
+  });
+
+  it("refuses a blank or non-string requiredScopes entry when createFastMcpAuth is called", () => {
+    for (const bad of [[""], ["read", "   "], [7]]) {
+      expect(() => createFastMcpAuth({ client: stubClient(), requiredScopes: bad as never })).toThrow(InvalidConfigurationError);
+    }
+    documented("Configuration.md", "A blank entry or one that is not a string makes `createFastMcpAuth` throw `InvalidConfigurationError`.");
   });
 
   it("puts the realm into the challenges and refuses a realm that cannot be written into one", async () => {

@@ -70,6 +70,11 @@ describe("Troubleshooting.md: the server does not start", () => {
         true,
       ],
       [
+        () => createFastMcpAuth({ client: client(), requiredScopes: ["read", " "] }),
+        'Invalid configuration: every entry of "requiredScopes" must be a non-blank string.',
+        true,
+      ],
+      [
         () => createFastMcpAuth({ client: client(), sessionBinding: { maxSessions: 0 } }),
         'Invalid configuration: "sessionBinding.maxSessions" must be a positive number.',
         true,
@@ -271,6 +276,8 @@ describe("Troubleshooting.md: the other symptoms", () => {
       const refused = errors.pop() as Error & { cause?: unknown };
       expect(refused.constructor.name).toBe("TokenExchangeError");
       expect(refused.cause).toBeDefined();
+      expect((refused as Error & { statusCode?: unknown }).statusCode).toBe(400);
+      expect(typeof (refused as Error & { code?: unknown }).code).toBe("string");
 
       rig().tenant.auth0.state.failure = null;
       rig().tenant.auth0.state.scope = scopeMode.fixed("other:scope");
@@ -282,7 +289,7 @@ describe("Troubleshooting.md: the other symptoms", () => {
     documented(
       GUIDE,
       "- A `MissingClientAuthError` means the exchange needs `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`",
-      "- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `cause` holds the tenant's answer.",
+      "- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error.",
       "## The token exchange did not grant the requested scopes.",
     );
   });
