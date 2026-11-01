@@ -270,7 +270,9 @@ export function toNodeHandler(
           if (bytes.byteLength > limit) throw new BodyTooLargeError();
           body = bytes as unknown as BodyInit;
           headers.delete('content-length');
-        } else {
+        } else if (!emptyParserDefault) {
+          // A parser that saw an unframed request has already finished the stream, so
+          // waiting for its `end` event would never return.
           const bytes = await readBody(req, limit);
           if (bytes !== undefined) body = bytes as unknown as BodyInit;
         }
