@@ -932,6 +932,15 @@ describe("MCP client guide (McpClients.md)", () => {
     expect(guide).not.toContain("MCP endpoint not found");
     expect(guide).toContain("Service not found");
   });
+
+  it("says the identifier match is exact and what direct token requests report", () => {
+    const guide = doc("docs", "McpClients.md");
+    expect(guide).toContain("character for character");
+    expect(guide).toContain("a trailing slash or a different case in the scheme or host makes it a different value");
+    expect(guide).toContain('`invalid_request` ("invalid audience specified for password grant exchange")');
+    expect(guide).toContain('`invalid_target` ("Invalid audience specified.")');
+    expect(guide).toContain("reported to show this text, which we have not seen");
+  });
 });
 
 describe("an explicit resource that is not a URL (Handler.md)", () => {
