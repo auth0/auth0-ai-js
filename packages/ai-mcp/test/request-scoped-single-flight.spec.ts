@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';
 import type { CachedToken } from '@auth0/auth0-api-js';
 import { createMcpClient } from '../src/client.js';
@@ -306,6 +307,21 @@ describe('single flight on getTokenOnBehalfOf', () => {
     expect(settled.every((r) => r.status === 'rejected' && r.reason instanceof DownscopedTokenError)).toBe(true);
   });
 
+  it('gives each waiter its own error object when the grant is narrower than requested', async () => {
+    useTenant(scopeMode.fixed('read:a'));
+    const client = makeClient();
+    const c = await scoped(client);
+
+    const settled = await Promise.allSettled(
+      Array.from({ length: 5 }, () => c.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: 'read:a write:a' }))
+    );
+    const errors = settled.map((r) => (r.status === 'rejected' ? (r.reason as DownscopedTokenError) : undefined));
+
+    expect(tenant.state.exchangeCount).toBe(1);
+    expect(errors.every((e) => e instanceof DownscopedTokenError)).toBe(true);
+    expect(new Set(errors).size).toBe(5);
+  });
+
   it('gives each waiter its own result object', async () => {
     useTenant();
     const client = makeClient();
@@ -319,5 +335,56 @@ describe('single flight on getTokenOnBehalfOf', () => {
 
     expect(tenant.state.exchangeCount).toBe(1);
     expect(second.grantedScopes).toEqual(['read:a']);
+  });
+});
+
+describe('single flight does not apply to connection tokens', () => {
+  /** Answers connection (Token Vault) exchanges with a distinct token per request, slowly enough to overlap. */
+  function connectionEndpoint() {
+    const subjects: string[] = [];
+    server.use(
+      http.post(tenant.tokenEndpoint, async ({ request }) => {
+        const params = Object.fromEntries(new URLSearchParams(await request.text()));
+        if (!params['requested_token_type']) return undefined;
+        const n = subjects.push(params['subject_token'] ?? '');
+        await delay(30);
+        return HttpResponse.json({
+          access_token: `connection-token-${n}`,
+          expires_in: 3600,
+          scope: 'repo',
+          token_type: 'Bearer',
+        });
+      })
+    );
+    return subjects;
+  }
+
+  it('gives two concurrent callers on one connection a token each', async () => {
+    useTenant();
+    const subjects = connectionEndpoint();
+    const client = makeClient();
+    const alice = await scoped(client, 'user|alice');
+    const bob = await scoped(client, 'user|bob');
+
+    const [a, b] = await Promise.all([
+      alice.getTokenForConnection({ connection: 'github' }),
+      bob.getTokenForConnection({ connection: 'github' }),
+    ]);
+
+    expect(subjects).toHaveLength(2);
+    expect(new Set(subjects).size).toBe(2);
+    expect(a.accessToken).not.toBe(b.accessToken);
+  });
+
+  it('exchanges every concurrent call of one caller separately', async () => {
+    useTenant();
+    const subjects = connectionEndpoint();
+    const client = makeClient();
+    const c = await scoped(client);
+
+    const results = await Promise.all(Array.from({ length: 3 }, () => c.getTokenForConnection({ connection: 'github' })));
+
+    expect(subjects).toHaveLength(3);
+    expect(new Set(results.map((r) => r.accessToken)).size).toBe(3);
   });
 });
