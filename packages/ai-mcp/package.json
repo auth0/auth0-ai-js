@@ -53,7 +53,6 @@
     "@eslint/compat": "^1.2.7",
     "@eslint/js": "^9.18.0",
     "@types/node": "^22.10.6",
-    "@vitest/coverage-v8": "^3.0.9",
     "eslint": "^9.22.0",
     "globals": "^15.11.0",
     "msw": "^2.0.0",
