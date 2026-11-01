@@ -85,7 +85,7 @@ Concurrent identical exchanges from one `McpClient` share a single request to Au
 
 ## Errors from the exchange
 
-Errors leave the request-scoped client with a fixed generic message. The original error is kept as `cause` for server-side diagnostics and must not be serialized into a response. Core errors keep their class, `code`, `statusCode` and `headers`, so `instanceof` checks against the error classes of `@auth0/auth0-api-js` still work. The exception is `VerifyAccessTokenError`: when the caller's token has expired or is about to expire, the exchange reports `UnauthenticatedError` (HTTP 401 when it reaches the handler). Catch these in your tool and return an `isError` result, as the example in [Examples](../EXAMPLES.md) does.
+Errors leave the request-scoped client with a fixed generic message. The original error is kept as `cause` for server-side diagnostics and must not be serialized into a response. Core errors keep their class, so `instanceof` checks against the error classes of `@auth0/auth0-api-js` still work. Read the `code`, `statusCode` and `headers` of the failure from `cause`. The exception is `VerifyAccessTokenError`: when the caller's token has expired or is about to expire, the exchange reports `UnauthenticatedError` (HTTP 401 when it reaches the handler). Catch these in your tool and return an `isError` result, as the example in [Examples](../EXAMPLES.md) does.
 
 ## Timeouts
 

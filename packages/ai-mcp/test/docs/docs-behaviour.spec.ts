@@ -873,3 +873,39 @@ describe("organization failures through the handler (OrganizationPolicy.md)", ()
     expect(notAllowed.seen).toEqual([]);
   });
 });
+
+describe("sanitized token errors (Errors.md, OnBehalfOf.md, RequestContext.md, TokenVault.md)", () => {
+  it("replaces the message and keeps the original failure, with its status, on cause", async () => {
+    const original = Object.assign(new Error("slow down, tenant detail"), {
+      statusCode: 429,
+      code: "rate_limited",
+    });
+    const claims = {
+      iss: "https://your-tenant.us.auth0.com/",
+      sub: "auth0|user-1",
+      aud: RESOURCE,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000),
+      scope: "mcp:access",
+      client_id: "client-1",
+    };
+    const apiClient = {
+      verifyAccessToken: async () => claims,
+      getTokenOnBehalfOf: async () => {
+        throw original;
+      },
+    } as unknown as ApiClient;
+    const client = createMcpClient({ domain: "your-tenant.us.auth0.com", audience: RESOURCE, apiClient });
+    const caller = await client.verifyAccessToken({ accessToken: "t", scheme: "bearer" });
+
+    const error = (await client
+      .withToken(caller)
+      .getTokenOnBehalfOf({ audience: "https://reports-api.example.com", scope: "read:reports" })
+      .catch((reason: unknown) => reason)) as Error & { cause?: unknown };
+
+    expect(error.message).toBe("The token operation failed.");
+    expect(error.cause).toBe(original);
+    expect((error.cause as { statusCode: number; code: string }).statusCode).toBe(429);
+    expect((error.cause as { statusCode: number; code: string }).code).toBe("rate_limited");
+  });
+});

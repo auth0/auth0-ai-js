@@ -59,7 +59,7 @@ These come from `@auth0/auth0-api-js` and keep their class when they pass throug
 
 `MissingOrganizationError` and `OrganizationNotAllowedError` extend `VerifyAccessTokenError`. Their `code` is for application logic and is never written to the challenge. Failures from the token endpoint, such as `TokenExchangeError` and `TokenByClientCredentialsError`, are also core classes.
 
-A request-scoped client method sanitizes the errors it throws: it replaces the message with `The token operation failed.`, keeps the class, `code`, `statusCode` and `headers`, and attaches the original error as `cause`. One exception: a core `VerifyAccessTokenError` raised during an exchange, which means the caller's token expired or is about to expire, is reported as `UnauthenticatedError` (HTTP 401 when it reaches the handler). The package's own errors above pass through unchanged. Never serialize `cause` into a response.
+A request-scoped client method sanitizes the errors it throws: it replaces the message with `The token operation failed.`, keeps the class, and attaches the original error as `cause`. Read the `code`, `statusCode` and `headers` of the failure from `cause`, for example to see that the token endpoint answered 429. One exception: a core `VerifyAccessTokenError` raised during an exchange, which means the caller's token expired or is about to expire, is reported as `UnauthenticatedError` (HTTP 401 when it reaches the handler). The package's own errors above pass through unchanged. Never serialize `cause` into a response.
 
 ## Configuration errors
 
