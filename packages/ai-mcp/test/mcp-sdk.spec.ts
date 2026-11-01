@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { connect } from "node:net";
@@ -600,6 +600,86 @@ describe("Node adapter", () => {
 
     expect(response.status).toBe(413);
     expect(handle).not.toHaveBeenCalled();
+  });
+
+  describe("body size limit boundary", () => {
+    const LIMIT = 16;
+    let seenLength: number[];
+    let adapter: ReturnType<typeof toNodeHandler>;
+    beforeEach(() => {
+      seenLength = [];
+      adapter = toNodeHandler(
+        async (request) => {
+          seenLength.push((await request.arrayBuffer()).byteLength);
+          return new Response("ok");
+        },
+        { resource: AUDIENCE, maxBodyBytes: LIMIT },
+      );
+    });
+
+    function chunked(size: number): RequestInit {
+      const stream = new ReadableStream({
+        start(controller) {
+          // Two chunks, so the running total is what crosses the limit.
+          controller.enqueue(new Uint8Array(Math.ceil(size / 2)).fill(120));
+          controller.enqueue(new Uint8Array(Math.floor(size / 2)).fill(120));
+          controller.close();
+        },
+      });
+      return { method: "POST", body: stream, duplex: "half" } as RequestInit;
+    }
+
+    it("accepts a declared length equal to the limit and rejects one byte more", async () => {
+      const url = await listen(adapter);
+      const accepted = await fetch(url, { method: "POST", body: "x".repeat(LIMIT) });
+      const rejected = await fetch(url, { method: "POST", body: "x".repeat(LIMIT + 1) });
+
+      expect(accepted.status).toBe(200);
+      expect(rejected.status).toBe(413);
+      expect(seenLength).toEqual([LIMIT]);
+    });
+
+    it("rejects a declared length over the limit before reading any body", async () => {
+      const url = await listen(adapter);
+      // The body never arrives: only the declared length can decide this.
+      const reply = await Promise.race([
+        rawRequest(url, [
+          "POST /mcp HTTP/1.1",
+          "Host: x",
+          "Connection: close",
+          `Content-Length: ${LIMIT + 1}`,
+        ]),
+        new Promise<string>((resolve) => setTimeout(() => resolve("timeout"), 2000)),
+      ]);
+
+      expect(reply).toMatch(/^HTTP\/1\.1 413 /);
+      expect(seenLength).toEqual([]);
+    });
+
+    it("accepts a streamed body equal to the limit and rejects one byte more", async () => {
+      const url = await listen(adapter);
+      const accepted = await fetch(url, chunked(LIMIT));
+      const rejected = await fetch(url, chunked(LIMIT + 1));
+
+      expect(accepted.status).toBe(200);
+      expect(rejected.status).toBe(413);
+      expect(seenLength).toEqual([LIMIT]);
+    });
+
+    it("accepts a parsed body equal to the limit and rejects one byte more", async () => {
+      const bodies: unknown[] = [Buffer.alloc(LIMIT, 120), Buffer.alloc(LIMIT + 1, 120)];
+      let index = 0;
+      const url = await listen((req, res) => {
+        (req as unknown as { body: unknown }).body = bodies[index++];
+        return adapter(req, res);
+      });
+      const accepted = await fetch(url, { method: "POST", body: "{}" });
+      const rejected = await fetch(url, { method: "POST", body: "{}" });
+
+      expect(accepted.status).toBe(200);
+      expect(rejected.status).toBe(413);
+      expect(seenLength).toEqual([LIMIT]);
+    });
   });
 
   function rawRequest(url: string, lines: string[]): Promise<string> {
