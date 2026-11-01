@@ -51,7 +51,7 @@ curl -s -X POST http://localhost:3001/mcp \
 
 `whoami` works with any such token. `list_orders` and `cancel_order` exchange the token on behalf of a user, so they need a token that a user signed in for, because the grants use `subject_type` `user`.
 
-With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope.
+With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope. With it set, the 401 challenge of a request without credentials names the scopes and the metadata document lists them as `scopes_supported`.
 
 ## Check
 

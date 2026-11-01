@@ -329,6 +329,11 @@ describe("example MCP server", () => {
       expect(without.headers.get("www-authenticate")).toContain('scope="mcp:access"');
       const withScope = await callTool("whoami", await callerToken("openid mcp:access", "user|gate", gated.url), {}, gated.url);
       expect(withScope.status).toBe(200);
+      const anonymous = await callTool("whoami", undefined, {}, gated.url);
+      expect(anonymous.status).toBe(401);
+      expect(anonymous.headers.get("www-authenticate")).toContain('scope="mcp:access"');
+      const metadata = await socketFetch(`${new URL(gated.url).origin}/.well-known/oauth-protected-resource/mcp`);
+      expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual(["mcp:access"]);
     } finally {
       await gated.stop();
     }
