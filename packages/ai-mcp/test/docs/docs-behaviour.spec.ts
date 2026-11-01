@@ -4,6 +4,7 @@ import {
 } from "@auth0/auth0-api-js";
 import type { ApiClient } from "@auth0/auth0-api-js";
 import { describe, expect, it } from "vitest";
+import { McpServer } from "@modelcontextprotocol/server";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,12 +18,14 @@ import {
   createEncryptedTokenStore,
   createMcpClient,
   createMcpHandler,
+  getCallerMcpClientOrThrow,
   getCallerPrincipal,
   mcpClientOptionsFromEnv,
   requireScopes,
   runWithRequestContext,
   withRequiredScopes,
 } from "../../src/index.js";
+import { createMcpSdkHandler } from "../../src/mcp-sdk.js";
 import type {
   McpClient,
   Principal,
@@ -740,5 +743,98 @@ describe("renamed connection method (README.md, docs)", () => {
       expect(doc(...file), file.join("/")).not.toMatch(/getTokenForService|ServiceTokenResult|TokenForServiceOptions/);
     }
     expect(doc("docs", "TokenVault.md")).toContain("getTokenForConnection");
+  });
+});
+
+describe("errors thrown in a tool and onError (Errors.md, Handler.md, OnBehalfOf.md)", () => {
+  const authenticated = () => stubClient(async () => ({ principal: principalWith([]) }));
+  const authorizationServers = ["https://your-tenant.us.auth0.com/"];
+
+  function toolCall(): Request {
+    return new Request(RESOURCE, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer abc.def.ghi",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "report", arguments: {} },
+      }),
+    });
+  }
+
+  it("becomes an isError result with HTTP 200 and never reaches onError under the SDK adapter", async () => {
+    const seen: unknown[] = [];
+    const handle = createMcpSdkHandler({
+      client: authenticated(),
+      resource: RESOURCE,
+      authorizationServers,
+      onError: (error) => seen.push(error),
+      createServer: () => {
+        const server = new McpServer({ name: "docs", version: "1.0.0" });
+        server.registerTool("report", { description: "Fails the way a rejected grant does." }, async () => {
+          // The stub request-scoped client rejects every token method, like a failed grant.
+          await getCallerMcpClientOrThrow().getClientCredentialsToken({ audience: "https://api.example.com" });
+          return { content: [{ type: "text" as const, text: "unreachable" }] };
+        });
+        return server;
+      },
+    });
+
+    const response = await handle(toolCall());
+    const body = (await response.json()) as { result?: { isError?: boolean } };
+
+    expect(response.status).toBe(200);
+    expect(body.result?.isError).toBe(true);
+    expect(seen).toEqual([]);
+  });
+
+  it("is a 500 that onError receives when the same error escapes a custom createMcpHandler handler", async () => {
+    const seen: unknown[] = [];
+    const handle = createMcpHandler({
+      client: authenticated(),
+      resource: RESOURCE,
+      authorizationServers,
+      onError: (error) => seen.push(error),
+      handler: async () => {
+        await getCallerMcpClientOrThrow().getClientCredentialsToken({ audience: "https://api.example.com" });
+        return new Response("unreachable");
+      },
+    });
+
+    const response = await handle(toolCall());
+
+    expect(response.status).toBe(500);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("does not report a 401 or a 403 to onError", async () => {
+    const seen: unknown[] = [];
+    const rejecting = stubClient(async () => {
+      throw new VerifyAccessTokenError("expired");
+    });
+    const unauthorized = await createMcpHandler({
+      client: rejecting,
+      resource: RESOURCE,
+      authorizationServers,
+      onError: (error) => seen.push(error),
+      handler: async () => new Response("ok"),
+    })(toolCall());
+    const forbidden = await createMcpHandler({
+      client: authenticated(),
+      resource: RESOURCE,
+      authorizationServers,
+      requiredScopes: ["mcp:access"],
+      onError: (error) => seen.push(error),
+      handler: async () => new Response("ok"),
+    })(toolCall());
+
+    expect(unauthorized.status).toBe(401);
+    expect(forbidden.status).toBe(403);
+    expect(seen).toEqual([]);
   });
 });

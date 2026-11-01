@@ -67,7 +67,7 @@ export const handle = createMcpHandler({
 | `realm` | Protection space reported as `realm` in challenges. Must be a non-empty string without quotes, backslashes or control characters. |
 | `metadata.path` | Replaces the suffixed metadata route. It must be an absolute, normalized path without query or fragment. The root route `/.well-known/oauth-protected-resource` is served regardless. |
 | `metadata.scopesSupported`, `metadata.resourceName`, `metadata.resourceDocumentation` | Extra fields published in the metadata document. |
-| `onError` | Observer for internal errors. The handler ignores a hook that throws. |
+| `onError` | Observer for internal errors. It receives the raw error whenever the handler itself answers 500, for example when a custom `handler` throws an error that is not one of this package's three. It is not called for 401 and 403 answers, and not for errors thrown inside tools served by `createMcpSdkHandler` or `createNodeMcpHandler`, because the MCP SDK turns those into tool results. Log those inside the tool. The handler ignores a hook that throws. |
 
 `createMcpHandler` throws `InvalidConfigurationError` for an invalid `metadata.path` or `realm`, for `client` combined with inline client options, and for an explicit `resource` that differs from the audience. It throws a `TypeError` when an explicit `resource` is not an absolute URL. It also throws `InvalidConfigurationError`, naming the option, when you omit `resource` or `authorizationServers` and the client cannot supply a usable default (see below). All of this happens when you create the handler, not on the first request.
 
@@ -178,7 +178,7 @@ The verified caller reaches your tools in two ways: as `ctx.http?.authInfo` in e
 
 The verified caller reaches your tools in the ways above, but the raw access token does not: `ctx.http?.authInfo?.token` is intentionally an empty string. Call downstream APIs through the request-scoped client (`getCallerMcpClient()`), never with a token you read yourself. The MCP SDK still exposes the raw request headers, including `Authorization`, to tools through `ctx.http?.req.headers`, a standard `Request`, so tool code must not log or forward headers.
 
-A downscoped token exchange inside a tool is not an HTTP failure on this adapter. The SDK turns the error into a tool result with `isError: true` and the error's message (generic for this error), and the response stays HTTP 200. The 403 `insufficient_scope` response applies only when the error escapes a custom `createMcpHandler` handler, as in the table above. A request to the MCP endpoint with any method other than `POST` gets a 405 with `Allow: POST`.
+A downscoped token exchange inside a tool is not an HTTP failure on this adapter. The SDK turns the error into a tool result with `isError: true` and the error's message (generic for this error), and the response stays HTTP 200. `onError` is not called for it, as for any error thrown inside a tool. The 403 `insufficient_scope` response applies only when the error escapes a custom `createMcpHandler` handler, as in the table above. A request to the MCP endpoint with any method other than `POST` gets a 405 with `Allow: POST`.
 
 `createServer` runs once per request, and the adapter closes the server when the request ends. Register tools inside it and keep expensive setup outside of it.
 
