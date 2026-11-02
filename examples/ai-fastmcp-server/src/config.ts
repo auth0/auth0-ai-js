@@ -38,6 +38,22 @@ function positiveInt(env: NodeJS.ProcessEnv, name: string, fallback: number): nu
   return parsed;
 }
 
+/**
+ * The port to listen on: `MCP_PORT` when set, else the port in `AUTH0_AUDIENCE` (the public URL
+ * of this server), else 3001. Reading it from the audience keeps one value for the URL and the
+ * port. Set `MCP_PORT` only when a proxy makes the public port differ from the listening port.
+ */
+function listenPort(env: NodeJS.ProcessEnv): number {
+  if (env["MCP_PORT"]?.trim()) return port(env, "MCP_PORT", 3001);
+  try {
+    const fromAudience = new URL(env["AUTH0_AUDIENCE"] ?? "").port;
+    if (fromAudience !== "") return Number(fromAudience);
+  } catch {
+    // The audience is read and checked by createFastMcpAuth.
+  }
+  return 3001;
+}
+
 export interface AppConfig {
   /** Scopes every request to the MCP server must carry. Empty means none. */
   requiredScopes: string[];
@@ -62,7 +78,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ordersAudience: required(env, "ORDERS_AUDIENCE"),
     ordersApiUrl: required(env, "ORDERS_API_URL"),
     downstreamTimeoutMs: positiveInt(env, "DOWNSTREAM_TIMEOUT_MS", 5000),
-    port: port(env, "MCP_PORT", 3001),
+    port: listenPort(env),
   };
 }
 

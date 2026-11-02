@@ -21,7 +21,7 @@ describe("example structure", () => {
 
   it("spreads the options of createAuth into FastMCP and registers the tools", () => {
     const app = source("app.ts");
-    expect(app).toContain("...createAuth(config)");
+    expect(app).toContain("...(options.auth ?? createAuth(config))");
     expect(app).toContain("registerTools(server, config)");
   });
 
@@ -37,6 +37,18 @@ describe("example structure", () => {
 
   it("serves in the stateless HTTP mode", () => {
     expect(source("server.ts")).toContain("stateless: true");
+  });
+
+  it("takes the route from auth.endpoint and the port from the audience", () => {
+    expect(source("server.ts")).toContain("endpoint: auth.endpoint");
+    expect(source("config.ts")).toContain('env["AUTH0_AUDIENCE"]');
+    expect(readFileSync(fileURLToPath(new URL("../.env.example", import.meta.url)), "utf8")).not.toMatch(/^MCP_PORT=/m);
+  });
+
+  it("publishes the scope of cancel_order, which only that tool checks", () => {
+    const auth = source("auth.ts");
+    expect(auth).toContain("scopesSupported");
+    expect(auth).toContain("SCOPE_CANCEL_ORDER");
   });
 
   it("does not use FastMCP's own auth option", () => {

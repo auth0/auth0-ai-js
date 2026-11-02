@@ -47,11 +47,6 @@ interface OrderBody {
   status: string;
 }
 
-/** Logs the error name and never its message, which can carry details that are not for logs. */
-function logFailure(tool: string): (error: unknown) => void {
-  return (error) => console.error(`${tool} failed`, error instanceof Error ? error.name : "unknown");
-}
-
 /**
  * Registers the tools. They contain no Auth0 setup: `withAuth0Execute` hands them the caller that
  * `authenticate` verified, and the session client exchanges that caller's token for a token to
@@ -93,7 +88,6 @@ export function registerTools(server: FastMCP<Auth0Session>, config: AppConfig):
         const lines = orders.map((order) => `- ${order.id} ${order.item} x${order.qty}, ${order.status}`);
         return [`Orders of ${String((call.body["verified"] as { subject: string }).subject)}:`, ...lines, checkedBy(call)].join("\n");
       },
-      { onError: logFailure("list_orders") },
     ),
   });
 
@@ -124,7 +118,7 @@ export function registerTools(server: FastMCP<Auth0Session>, config: AppConfig):
             : `Order ${orderId} cancelled`;
         return [headline, checkedBy(call)].join("\n");
       },
-      { requiredScopes: SCOPE_CANCEL_ORDER, onError: logFailure("cancel_order") },
+      { requiredScopes: SCOPE_CANCEL_ORDER },
     ),
   });
 }

@@ -285,9 +285,12 @@ describe("example MCP server", () => {
       expect(body.result?.content[0]?.text).toBe("Tool execution failed.");
       expect(raw).not.toContain("SECRET-INTERNAL-DETAIL");
       expect(raw).not.toContain("invalid_grant");
-      // The tool logs the error name and never the message.
-      expect(log).toHaveBeenCalledWith("list_orders failed", "TokenExchangeError");
-      expect(JSON.stringify(log.mock.calls)).not.toContain("SECRET-INTERNAL-DETAIL");
+      // The wrapper writes one line to the server log: the error name, and what Auth0 returned.
+      expect(log).toHaveBeenCalledTimes(1);
+      const line = String(log.mock.calls[0]?.[0]);
+      expect(line).toMatch(/^\[ai-fastmcp\] Tool failed: \w+/);
+      expect(line).toContain("auth0_error=invalid_grant");
+      expect(line).not.toMatch(/Bearer|\bsecret\b/);
     } finally {
       log.mockRestore();
     }
@@ -312,13 +315,18 @@ describe("example MCP server", () => {
       expect(body.result?.isError).toBe(true);
       expect(body.result?.content[0]?.text).toBe("Tool execution failed.");
       expect(Date.now() - started).toBeLessThan(1800);
-      expect(log).toHaveBeenCalledWith("list_orders failed", expect.stringMatching(/Timeout|Abort/));
+      expect(String(log.mock.calls[0]?.[0])).toMatch(/^\[ai-fastmcp\] Tool failed: (TimeoutError|AbortError)/);
     } finally {
       log.mockRestore();
       await impatient.stop();
       for (const socket of sockets) socket.destroy();
       await new Promise((resolve) => silent.close(resolve));
     }
+  });
+
+  it("publishes the scope of cancel_order, which only that tool checks, as scopes_supported", async () => {
+    const metadata = await socketFetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource/mcp`);
+    expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual(["tool:cancel_order"]);
   });
 
   it("applies MCP_REQUIRED_SCOPES to every request before any tool runs", async () => {
@@ -333,7 +341,10 @@ describe("example MCP server", () => {
       expect(anonymous.status).toBe(401);
       expect(anonymous.headers.get("www-authenticate")).toContain('scope="mcp:access"');
       const metadata = await socketFetch(`${new URL(gated.url).origin}/.well-known/oauth-protected-resource/mcp`);
-      expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual(["mcp:access"]);
+      expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual([
+        "mcp:access",
+        "tool:cancel_order",
+      ]);
     } finally {
       await gated.stop();
     }

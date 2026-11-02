@@ -4,11 +4,11 @@ A small MCP server built with FastMCP and `@auth0/ai-fastmcp`. It plays an order
 
 ## What it shows
 
-- `src/auth.ts` holds all the Auth0 wiring: one `createFastMcpAuth` call with a token store. The tenant settings come from the environment (`AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`), so the call passes none of them. `src/app.ts` spreads the two options it returns into `new FastMCP({...})`, and `src/tools.ts` holds only the tools. The server runs in the stateless HTTP mode. A request without a valid token gets a `WWW-Authenticate` challenge before any tool runs, and the server publishes its protected resource metadata (RFC 9728).
+- `src/auth.ts` holds all the Auth0 wiring: one `createFastMcpAuth` call with a token store. The tenant settings come from the environment (`AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`), so the call passes none of them. `src/app.ts` spreads the two options it returns into `new FastMCP({...})`, and `src/tools.ts` holds only the tools. The route comes from the audience: `auth.endpoint` is its path, and `src/server.ts` passes it to `server.start`, so the path appears once. The server runs in the stateless HTTP mode. A request without a valid token gets a `WWW-Authenticate` challenge before any tool runs, and the server publishes its protected resource metadata (RFC 9728).
 - `whoami` needs no scope beyond a valid token. It reports the subject, the client and the scopes of the caller.
 - `list_orders` exchanges the caller's token for a token to the orders API with the `read:orders` scope, through `getCallerMcpClientOrThrow()`, and lists the orders. A second call with the same access token reuses the saved token.
-- `cancel_order` (required argument `order_id`) needs the scope `tool:cancel_order`, set with `requiredScopes` on `withAuth0Execute`. A caller without it gets an error result for that tool only (HTTP 200) and no exchange takes place. With the scope, the tool exchanges for a token with `write:orders`, through `session.mcpClient`, and cancels the order.
-- Only the exchanged token goes to the orders API, never the caller's own token. Expected failures, such as an unknown order, reach the caller as a `UserError` with a fixed message. Anything unexpected becomes `Tool execution failed.`, and the tool logs the error name and never its message. Each call stops after `DOWNSTREAM_TIMEOUT_MS`.
+- `cancel_order` (required argument `order_id`) needs the scope `tool:cancel_order`, set with `requiredScopes` on `withAuth0Execute`. A scope that only one tool checks is not published on its own, so `src/auth.ts` lists it in `metadata.scopesSupported` and an OAuth client asks for it when it signs in. A caller without it gets an error result for that tool only (HTTP 200) and no exchange takes place. With the scope, the tool exchanges for a token with `write:orders`, through `session.mcpClient`, and cancels the order.
+- Only the exchanged token goes to the orders API, never the caller's own token. Expected failures, such as an unknown order, reach the caller as a `UserError` with a fixed message. Anything unexpected becomes `Tool execution failed.`, and the wrapper writes one line to the server log with the error name, its code and status, and the `error` and `error_description` Auth0 returned, never the message of the error. Each call stops after `DOWNSTREAM_TIMEOUT_MS`.
 - `src/orders-api.ts` verifies every token (RS256 signature from the tenant JWKS, issuer, the audience of the orders API, expiry, subject and scope) before it returns data. Each answer includes a `verified` block that names the audience, the scope and the acting client of the token if it carries an `act` claim, never the token itself.
 
 Seed data lives in memory and resets on restart: ord_1001 (shipped), ord_1002 and ord_1003 (processing).
@@ -34,10 +34,10 @@ A real MCP client signs in through your tenant, so the tenant has to accept that
 ```sh
 cp .env.example .env   # fill in the domain, client id and secret
 npm run start:api      # orders API on port 3003
-npm run start          # MCP server on port 3001, in a second terminal
+npm run start          # MCP server, in a second terminal
 ```
 
-Node's `--env-file` support reads the `.env` file, so you need no extra package. The MCP URL ends in `/mcp`.
+Node's `--env-file` support reads the `.env` file, so you need no extra package. The MCP server listens on the port of `AUTH0_AUDIENCE` (3001 in `.env.example`) and serves the route at its path (`/mcp`), so the URL is set in one place. Set `MCP_PORT` only when a proxy makes the public port differ from the listening port.
 
 To call the server without an MCP client, send a request with an access token issued for `AUTH0_AUDIENCE`:
 
@@ -51,7 +51,7 @@ curl -s -X POST http://localhost:3001/mcp \
 
 `whoami` works with any such token. `list_orders` and `cancel_order` exchange the token on behalf of a user, so they need a token that a user signed in for, because the grants use `subject_type` `user`.
 
-With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope. With it set, the 401 challenge of a request without credentials names the scopes and the metadata document lists them as `scopes_supported`.
+With `MCP_REQUIRED_SCOPES` unset, any signed-in caller reaches the server and each tool checks its own scope; the metadata document lists `tool:cancel_order` as `scopes_supported`. With it set, the 401 challenge of a request without credentials names the scopes, and the metadata document lists them next to `tool:cancel_order`.
 
 ## Check
 
