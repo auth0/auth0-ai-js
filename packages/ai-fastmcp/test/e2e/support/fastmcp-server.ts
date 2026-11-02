@@ -186,6 +186,21 @@ function registerTools(server: FastMCP<Auth0Session>, deps: ToolDeps): void {
     }, { onError }),
   });
 
+  // No onError here, on purpose: the failure goes to the default log line or to the hook of createFastMcpAuth.
+  server.addTool({
+    name: "delegate_unobserved",
+    description: "Exchanges the caller's token and returns the downstream status. No error hook.",
+    parameters: z.object({ scope: z.string().optional(), audience: z.string().optional() }),
+    execute: withAuth0Execute(async (args, ctx) => {
+      const exchanged = await ctx.session.mcpClient.getTokenOnBehalfOf({
+        audience: args.audience ?? deps.env.downstreamAudience,
+        scope: args.scope ?? deps.env.downstreamScope,
+      });
+      const response = await fetch(deps.downstreamUrl, { headers: { authorization: `Bearer ${exchanged.accessToken}` } });
+      return json({ status: response.status });
+    }),
+  });
+
   server.addTool({
     name: "delegate_via_accessor",
     description: "The same exchange, reaching the client through the accessor instead of the session.",
