@@ -51,8 +51,12 @@ export interface FastMcpAuthBaseOptions {
    */
   sessionBinding?: false | SessionBindingOptions;
   /**
-   * Called with the raw error whenever `authenticate` answers 500. The error never reaches the
-   * response. A throwing hook, or one that returns a rejected promise, is ignored.
+   * Called with the raw error whenever `authenticate` answers 500, and for every tool wrapped with
+   * `withAuth0Execute` that has no `onError` of its own. A tool's own `onError` replaces this one.
+   * The error never reaches the client; the hook runs on the server only, and the error it
+   * receives can carry Auth0 response details, so treat it as sensitive. While a hook is in
+   * effect, the default log line for tool failures is not written. A throwing hook, or one that
+   * returns a rejected promise, is ignored.
    */
   onError?: (error: unknown) => void;
 }

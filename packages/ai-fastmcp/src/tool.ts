@@ -7,7 +7,8 @@ import {
 } from "@auth0/ai-mcp";
 import { UserError } from "fastmcp";
 import { normalizeRequiredScopes } from "./scopes.js";
-import { isAuth0Session } from "./session.js";
+import { describeFailure } from "./log.js";
+import { errorHookOf, isAuth0Session } from "./session.js";
 import type { Auth0Session } from "./session.js";
 
 /**
@@ -33,8 +34,11 @@ export interface WithAuth0ExecuteOptions {
    */
   requiredScopes?: string | readonly string[];
   /**
-   * Called with the raw error whenever a caught error is replaced by a generic result. The error
-   * never reaches the client. A throwing hook, or one that returns a rejected promise, is ignored.
+   * Called with the raw error whenever a caught error is replaced by a generic result. It replaces
+   * the `onError` given to `createFastMcpAuth` for this tool. The error never reaches the client,
+   * and it can carry Auth0 response details, so the hook is the place to report it on the server.
+   * Without a hook here or in `createFastMcpAuth`, one log line is written instead (see
+   * {@link withAuth0Execute}). A throwing hook, or one that returns a rejected promise, is ignored.
    */
   onError?: (error: unknown) => void;
 }
@@ -79,6 +83,19 @@ function safely(hook: ((error: unknown) => void) | undefined, error: unknown): v
 }
 
 /**
+ * Writes the default log line for a failure nobody asked to handle. It goes to the server's own
+ * standard error stream and not to `context.log`, because FastMCP sends `context.log` to the
+ * connected client as a logging notification, and this line can carry Auth0's error description.
+ */
+function reportFailure(error: unknown): void {
+  try {
+    console.error(describeFailure(error));
+  } catch {
+    // Logging must not change the result.
+  }
+}
+
+/**
  * Turns an error thrown inside a tool into a result that is safe to show. FastMCP copies the
  * message of a thrown error into the result, so anything that is not meant for the client is
  * replaced here by fixed text. `UserError` is the one exception: FastMCP defines it as the error
@@ -96,7 +113,9 @@ function toToolResult(error: unknown, session: Auth0Session, options: WithAuth0E
   if (error instanceof UnauthenticatedError) {
     return textResult("Authentication is required.", "invalid_token");
   }
-  safely(options.onError, error);
+  const hook = options.onError ?? errorHookOf(session);
+  if (hook !== undefined) safely(hook, error);
+  else reportFailure(error);
   if (error instanceof AuthError) {
     return textResult("The token operation failed.", "server_error");
   }
@@ -115,6 +134,13 @@ function toToolResult(error: unknown, session: Auth0Session, options: WithAuth0E
  * The wrapper also turns failures into safe tool results (see {@link ToolErrorResult}):
  * a missing scope names the scope, a failed token exchange or any other error becomes fixed text,
  * and nothing from the original message reaches the client. A FastMCP `UserError` passes through.
+ *
+ * When such an error is replaced and no `onError` is in effect (neither in `options` nor in
+ * `createFastMcpAuth`), one line goes to the server's standard error stream: the error name, its
+ * `code` and `statusCode`, and the `error` and `error_description` Auth0 returned when they are
+ * found in the `cause` chain, cut to 300 characters. It never holds a token, a secret, a header or
+ * a request body. A missing scope, a downscoped exchange and a missing session are expected
+ * outcomes and are not logged.
  *
  * ```ts
  * server.addTool({

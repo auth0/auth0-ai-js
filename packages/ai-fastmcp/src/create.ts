@@ -137,7 +137,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
     if (bindings !== undefined && sessionId !== undefined && !bindings.accept(sessionId, principal.sub)) {
       throw sessionMismatchResponse();
     }
-    return createSession(principal, mcpClient);
+    return createSession(principal, mcpClient, rest.onError);
   }
 
   async function authenticate(req: IncomingMessage): Promise<Auth0Session> {

@@ -34,11 +34,30 @@ export function isAuth0Session(value: unknown): value is Auth0Session {
   );
 }
 
+/**
+ * The server-level `onError` of the `createFastMcpAuth` call that created a session. The session is
+ * frozen and its type is public, so the hook is kept next to it, keyed by the object itself: it is
+ * invisible to `Object.keys`, spreads, JSON and the type, and a copy of the session loses it, which
+ * only makes the tool fall back to the default log line.
+ */
+const errorHooks = new WeakMap<object, (error: unknown) => void>();
+
+/** The server-level error hook that belongs to this session, if any. */
+export function errorHookOf(session: Auth0Session): ((error: unknown) => void) | undefined {
+  return errorHooks.get(session);
+}
+
 /** Builds the session for a verified caller. The result is frozen. */
-export function createSession(principal: Principal, mcpClient: RequestScopedMcpClient): Auth0Session {
-  return Object.freeze({
+export function createSession(
+  principal: Principal,
+  mcpClient: RequestScopedMcpClient,
+  onError?: (error: unknown) => void,
+): Auth0Session {
+  const session = Object.freeze({
     principal,
     scopes: Object.freeze([...principal.scopes]),
     mcpClient,
   });
+  if (typeof onError === "function") errorHooks.set(session, onError);
+  return session;
 }
