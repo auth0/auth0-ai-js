@@ -61,6 +61,25 @@ describe("the default log line of a failed tool", () => {
     documented("README.md", LINE);
   });
 
+  it.each([
+    [401, "access_denied", "Unauthorized", "a wrong client secret"],
+    [400, "invalid_target", "Invalid audience specified.", "an audience the tenant does not know"],
+  ] as const)("shows %i %s for %s, as Troubleshooting.md reads", async (status, code, description, what) => {
+    await withServer({ tools: (server) => exchangeTool(server) }, async (server) => {
+      rig().tenant.auth0.state.failure = { status, body: { error: code, error_description: description } };
+      const session = await connect(server, await rig().token(server));
+      try {
+        await callTool(session, "invoices");
+      } finally {
+        await session.close();
+      }
+    });
+    expect(error).toHaveBeenCalledTimes(1);
+    const line = String(error.mock.calls[0]![0]);
+    expect(line, what).toContain(` statusCode=${status} auth0_error=${code} auth0_error_description="${description}"`);
+    documented("Troubleshooting.md", `\`statusCode=${status} auth0_error=${code} auth0_error_description="${description}"\``);
+  });
+
   it("is not written by authenticate: an unexpected fault there answers 500 and is silent without an onError", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
