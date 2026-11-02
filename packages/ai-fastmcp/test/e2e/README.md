@@ -54,6 +54,8 @@ needs a stateful one, and E-C-01 uses a stateless one.
 | E-C-01 | `configuration` | The client, inline, env and partial tiers publish the same metadata and exchange for a real user. |
 | E-D-01 | `metadata` | The challenge's metadata URL, fetched from the running server, returns the document with the right resource and tenant. The MCP SDK's discovery helpers follow it to the tenant's authorization server metadata. |
 | E-F-01 | `faults` | A key or discovery outage answers 401 with fixed text and recovers on the next call. |
+| E-G-01 | `diagnostics` | A wrong client secret and an audience the tenant does not know give the client the fixed text `Tool execution failed.` and write one log line that carries the tenant's `error` and `error_description` and no secret or token. |
+| E-G-02 | `diagnostics` | The `onError` of `createFastMcpAuth` receives the raw error of a tool that has no hook of its own, the tenant's answer is in `error.cause.cause`, and the log line is not written. |
 | E-I-01 | `isolation` | Four distinct callers at once never see each other, and the store keeps each exchange under its own caller. |
 | E-I-02 | `isolation` | The session, the accessors and the bound client agree on the caller under concurrency. |
 | E-N-01 | `session-binding` | A second real user on the first user's session id gets 403. |
@@ -75,6 +77,8 @@ When one fails, look at the dependency before suspecting the adapter.
 
 - A client that is not allowed to exchange for a user, an audience the tenant does not know and a wrong exchange
   client secret all surface as the fixed text `Tool execution failed.`.
+- A wrong exchange client secret is answered with 401 `access_denied` ("Unauthorized"), and an audience the tenant does not
+  know with 400 `invalid_target` ("Invalid audience specified."). The log line shows both.
 - A bearer value with no token, or with two words, is a malformed request (400 `invalid_request`). Any other scheme counts
   as no credential (401, no error code).
 - A key or discovery outage gets 401 `invalid_token`, because the core client reports every verification
