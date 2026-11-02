@@ -8,6 +8,7 @@ import {
   assertRealm,
   assertSessionBinding,
   bearerOnly,
+  defaultEndpoint,
   resolveClient,
   resolveEndpoint,
   resolveMetadataUrl,
@@ -27,6 +28,39 @@ export interface FastMcpAuth {
   authenticate: (request: IncomingMessage) => Promise<Auth0Session>;
   /** FastMCP's `oauth` option: serves the RFC 9728 protected resource metadata. */
   oauth: FastMcpOAuthOptions;
+  /**
+   * The path FastMCP must serve the MCP route on: the `endpoint` option, else the path of the
+   * resource, else `/mcp`. Pass it to `server.start({ httpStream: { endpoint: auth.endpoint } })`.
+   * It is not enumerable, so `...auth` does not hand it to `new FastMCP({...})`.
+   */
+  readonly endpoint: `/${string}`;
+}
+
+const WELL_KNOWN_ROOT = "/.well-known/";
+// Routes FastMCP serves next to the MCP endpoint and authenticates with the same hook.
+const LEGACY_SSE_ROUTES = new Set(["/sse", "/messages"]);
+const MAX_WARNED_PATHS = 20;
+const warnedPaths = new Set<string>();
+
+/**
+ * Writes one warning per process and distinct path when a request reaches `authenticate` on a path
+ * that is not the configured endpoint, which means `server.start` was given another endpoint.
+ * Only the path is read: the query string never reaches the log. It never changes a response.
+ */
+function warnOnUnexpectedPath(url: string | undefined, endpoint: string): void {
+  try {
+    if (url === undefined) return;
+    const path = new URL(url, "http://localhost").pathname;
+    if (path === endpoint || path.startsWith(WELL_KNOWN_ROOT) || LEGACY_SSE_ROUTES.has(path)) return;
+    if (warnedPaths.has(path) || warnedPaths.size >= MAX_WARNED_PATHS) return;
+    warnedPaths.add(path);
+    const shown = path.length > 100 ? `${path.slice(0, 97)}...` : path;
+    console.warn(
+      `[ai-fastmcp] A request arrived on "${shown}", but the configured endpoint is "${endpoint}", so the metadata URL in the challenge names "${endpoint}". Pass the same endpoint to server.start({ httpStream: { endpoint } }), for example endpoint: auth.endpoint.`,
+    );
+  } catch {
+    // A warning must never change the response.
+  }
 }
 
 const DPOP_UNSUPPORTED = "DPoP is not supported by this server.";
@@ -80,22 +114,26 @@ function safely(hook: ((error: unknown) => void) | undefined, error: unknown): v
  * Do not combine the result with FastMCP's own `auth` option, which makes FastMCP an OAuth proxy
  * that issues its own tokens.
  *
+ * Call it with no argument to read the client configuration from the environment.
+ *
  * @throws {InvalidConfigurationError} When the client configuration is invalid or incomplete,
  * when `client` is combined with inline client options, when the client requires DPoP, when
  * `resource` differs from the client audience or cannot be derived, when the path of `resource`
- * does not match `endpoint`, or when `endpoint`, `realm` or `sessionBinding` is unusable.
+ * ends in a slash or does not match `endpoint`, or when `endpoint`, `realm` or `sessionBinding`
+ * is unusable.
  * @throws {TypeError} When an explicit `resource` is not an absolute URL.
  */
-export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
+export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth {
   const { client, rest } = resolveClient(options);
   const bearerClient = bearerOnly(client);
-  const endpoint = resolveEndpoint(rest.endpoint);
+  const explicitEndpoint = rest.endpoint === undefined ? undefined : resolveEndpoint(rest.endpoint);
   assertRealm(rest.realm);
   assertSessionBinding(rest.sessionBinding);
   const requiredScopes = normalizeRequiredScopes(rest.requiredScopes, "requiredScopes");
 
   const protectedResource = buildProtectedResource(bearerClient, { ...rest, requiredScopes });
   const resource = protectedResource.resource;
+  const endpoint = (explicitEndpoint ?? defaultEndpoint(resource)) as `/${string}`;
   const metadataUrl = resolveMetadataUrl(resource, endpoint);
 
   const authOptions: AuthenticateRequestOptions = {
@@ -141,6 +179,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
   }
 
   async function authenticate(req: IncomingMessage): Promise<Auth0Session> {
+    warnOnUnexpectedPath(req.url, endpoint);
     try {
       return await authenticateOrThrow(req);
     } catch (error) {
@@ -150,5 +189,8 @@ export function createFastMcpAuth(options: FastMcpAuthOptions): FastMcpAuth {
     }
   }
 
-  return { authenticate, oauth: { enabled: true, protectedResource } };
+  const auth = { authenticate, oauth: { enabled: true as const, protectedResource } };
+  // Not enumerable, so `...auth` in `new FastMCP({...})` does not pass an option FastMCP does not know.
+  Object.defineProperty(auth, "endpoint", { value: endpoint, enumerable: false, writable: false, configurable: false });
+  return auth as FastMcpAuth;
 }

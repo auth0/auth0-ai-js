@@ -474,7 +474,6 @@ describe("createFastMcpAuth", () => {
     it("names the same metadata URL that @auth0/ai-mcp derives from the resource by itself", async () => {
       const audiences = [
         "https://mcp.example.com/mcp",
-        "https://mcp.example.com/mcp/",
         "https://mcp.example.com",
         "https://mcp.example.com/",
         "http://127.0.0.1:4000/api/mcp",

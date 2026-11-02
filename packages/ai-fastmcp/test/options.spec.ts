@@ -149,10 +149,11 @@ describe("resolveMetadataUrl", () => {
     );
   });
 
-  it("ignores a trailing slash on the resource path", () => {
-    expect(resolveMetadataUrl("https://mcp.example.com/mcp/", "/mcp")).toBe(
-      "https://mcp.example.com/.well-known/oauth-protected-resource/mcp",
-    );
+  it("refuses a trailing slash on the resource path and names the fix", () => {
+    const attempt = () => resolveMetadataUrl("https://mcp.example.com/mcp/", "/mcp");
+    expect(attempt).toThrow(InvalidConfigurationError);
+    expect(attempt).toThrow(/ends with a slash/);
+    expect(attempt).toThrow(/without the trailing slash \("https:\/\/mcp\.example\.com\/mcp"\)/);
   });
 
   it("keeps the port of the resource", () => {

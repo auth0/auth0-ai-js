@@ -15,8 +15,10 @@ export interface FastMcpAuthBaseOptions {
   resource?: string;
   /**
    * The path FastMCP serves the MCP route on. Pass the same value to
-   * `server.start({ httpStream: { endpoint } })`.
-   * @defaultValue `"/mcp"`
+   * `server.start({ httpStream: { endpoint } })`; the object `createFastMcpAuth` returns exposes
+   * the chosen value as `auth.endpoint` for that purpose.
+   * @defaultValue The path of the resource when it has one (`/orders` for `https://host/orders`),
+   * otherwise `"/mcp"`.
    */
   endpoint?: `/${string}`;
   /**
@@ -69,6 +71,8 @@ export interface FastMcpAuthBaseOptions {
  * with an inline client option throws `InvalidConfigurationError`.
  */
 export type FastMcpAuthOptions = McpHandlerClientConfig & FastMcpAuthBaseOptions;
+
+const DEFAULT_ENDPOINT = "/mcp";
 
 const CLIENT_OPTION_NAMES = [
   "domain",
@@ -148,11 +152,11 @@ export function bearerOnly(client: McpClient): McpClient {
 const WELL_KNOWN_PRM = "/.well-known/oauth-protected-resource";
 
 /**
- * Validates the endpoint.
+ * Validates an explicit endpoint.
  * @throws {InvalidConfigurationError} When it is not a normalized absolute path other than `/`.
  */
 export function resolveEndpoint(endpoint: string | undefined): string {
-  const value = endpoint ?? "/mcp";
+  const value = endpoint ?? DEFAULT_ENDPOINT;
   let normalized: string | undefined;
   if (value.startsWith("/")) {
     try {
@@ -170,17 +174,53 @@ export function resolveEndpoint(endpoint: string | undefined): string {
 }
 
 /**
+ * The path of the resource: empty for an origin-only resource, otherwise the path.
+ *
+ * @throws {InvalidConfigurationError} When the path ends in a slash. FastMCP serves `/mcp` and not
+ * `/mcp/`, so the resource would publish a URL the server answers with 404.
+ */
+function resourcePath(resource: string): string {
+  const { pathname } = new URL(resource);
+  if (pathname === "/") return "";
+  if (pathname.endsWith("/")) {
+    const fixed = resource.replace(/\/+$/, "");
+    throw new InvalidConfigurationError(
+      `Invalid configuration: the resource "${resource}" ends with a slash, but FastMCP serves "${pathname.replace(/\/+$/, "")}" and not "${pathname}", so the published URL would answer 404. Use the audience without the trailing slash ("${fixed}"), here and in the API identifier in Auth0.`,
+    );
+  }
+  return pathname;
+}
+
+/**
+ * The endpoint to serve when none is given: the path of the resource when it has one, otherwise
+ * `/mcp`. A trailing slash on the resource path is an error (see {@link resolveMetadataUrl}).
+ *
+ * @throws {InvalidConfigurationError} When the resource path ends in a slash or is not a normalized path.
+ */
+export function defaultEndpoint(resource: string): string {
+  const path = resourcePath(resource);
+  if (path === "") return DEFAULT_ENDPOINT;
+  try {
+    return resolveEndpoint(path);
+  } catch {
+    throw new InvalidConfigurationError(
+      `Invalid configuration: the path of "resource" ("${path}") cannot be used as the MCP endpoint. Use an audience whose path is a normalized absolute path such as "/mcp".`,
+    );
+  }
+}
+
+/**
  * The URL of the metadata document the challenge names, and the check that FastMCP serves it.
  *
  * FastMCP serves the document at the well-known path and at the well-known path followed by the
  * endpoint. The RFC 9728 URL of a resource is the well-known path followed by the resource path,
  * so a resource with a path is reachable only when that path is the endpoint.
  *
- * @throws {InvalidConfigurationError} When the resource path is neither empty nor the endpoint.
+ * @throws {InvalidConfigurationError} When the resource path ends in a slash, or is neither empty nor the endpoint.
  */
 export function resolveMetadataUrl(resource: string, endpoint: string): string {
   const url = new URL(resource);
-  const path = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+  const path = resourcePath(resource);
   if (path !== "" && path !== endpoint) {
     throw new InvalidConfigurationError(
       `Invalid configuration: the path of "resource" ("${path}") must equal "endpoint" ("${endpoint}") or be empty, because FastMCP serves the metadata document at ${WELL_KNOWN_PRM}${endpoint}. Set "endpoint" to the path of "resource".`,
