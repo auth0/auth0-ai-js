@@ -93,6 +93,16 @@ describe("default log line for a failed tool", () => {
     expect(() => describeFailure(Object.assign(new Error("x"), { cause: a }))).not.toThrow();
   });
 
+  it("does not use context.log, which FastMCP sends to the connected client", async () => {
+    const log = { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() };
+    const wrapped = withAuth0Execute(async () => {
+      throw exchangeFailure();
+    });
+    await wrapped({}, { session: sessionFor(), log } as { session: Auth0Session });
+    expect(error).toHaveBeenCalledTimes(1);
+    for (const method of Object.values(log)) expect(method).not.toHaveBeenCalled();
+  });
+
   it("is silent when the per-tool onError is set, and calls it with the raw error", async () => {
     const raw = exchangeFailure();
     const onError = vi.fn();
