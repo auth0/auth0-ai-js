@@ -12,6 +12,7 @@ Find the symptom, then read the cause and the fix. The messages are the ones the
 | `Invalid configuration: "client" cannot be combined with "domain". Pass either a client or client options.` | You passed `client` and an inline client option. Use one of the two. The message names the option. |
 | `Invalid configuration: "resource" must equal the client audience` | `resource` and the audience differ, so clients would be sent to a server that refuses their tokens. Remove `resource`, or make it equal the audience. A trailing slash counts as a difference. |
 | `Invalid configuration: the path of "resource" ("/mcp") must equal "endpoint" ("/other") or be empty` | FastMCP serves the metadata document at the well-known path followed by `endpoint`, so the path of the resource must be the endpoint. Set `endpoint` to the path of the resource, and pass the same value to `server.start`. |
+| `Invalid configuration: the resource "https://mcp.example.com/mcp/" ends with a slash, but FastMCP serves "/mcp" and not "/mcp/"` | The audience path ends in a slash, so the published resource would answer 404. Use the audience without the trailing slash, in the environment or options and in the API identifier in Auth0. |
 | `Invalid configuration: "endpoint" must be a normalized absolute path such as "/mcp"` | The endpoint is `/`, has no leading slash, ends in a slash, or has a query or fragment. |
 | `Invalid configuration: "realm" must be a non-empty string without quotes, backslashes or control characters.` | The realm cannot be written into a challenge. |
 | `Invalid configuration: every entry of "requiredScopes" must be a non-blank string.` | An entry of `requiredScopes` is empty, only whitespace, or not a string. The server-wide list and the list of `withAuth0Execute` follow the same rule, so a typo cannot leave a route open. |
@@ -78,10 +79,10 @@ The tool has `canAccess: requireScopes(...)` and the caller lacks the scope. Fas
 
 ## Tool execution failed.
 
-The wrapper replaced an error that it does not show to the client. The original error goes to the `onError` option of `withAuth0Execute`, so add one and read it:
+The wrapper replaced an error that it does not show to the client. Look in the server log first: unless an `onError` is in effect, the wrapper wrote one line for it, for example `[ai-fastmcp] Tool failed: TokenExchangeError code=token_exchange_error statusCode=403 auth0_error=access_denied auth0_error_description="Unauthorized"`. The line gives the error name, `code`, `statusCode` and what Auth0 returned (`access_denied` with `Unauthorized` is a wrong client secret or an application without permission for the audience). For the raw error, set the `onError` of `withAuth0Execute` for one tool or the `onError` of `createFastMcpAuth` for all of them, and read it:
 
 - A `MissingClientAuthError` means the exchange needs `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` (or `clientId` and `clientSecret`), and the server has none.
-- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error. Check that the application has permission to exchange tokens for that audience, and that the audience is an API of your tenant.
+- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error, whose own `cause` holds the body Auth0 returned (`error` and `error_description`). Check that the application has permission to exchange tokens for that audience, and that the audience is an API of your tenant.
 - Another error is a bug in your tool or a failure of a service it calls.
 
 ## A UserError shows up as Tool execution failed.
@@ -98,11 +99,11 @@ A stateful server received a valid token for one subject on a session that anoth
 
 ## The accessors return undefined, or No authenticated request context.
 
-The tool is not wrapped. `getCallerPrincipal()` and `getCallerMcpClient()` return `undefined`, and `getCallerMcpClientOrThrow()` throws `No authenticated request context.`, outside `withAuth0Execute`. Wrap the `execute` function, or read `context.session` instead. See [Tools](./Tools.md#withauth0execute).
+The tool is not wrapped. `getCallerPrincipal()` and `getCallerMcpClient()` return `undefined`, and `getCallerMcpClientOrThrow()` throws `No authenticated request context.`, outside `withAuth0Execute`. The message does not mean the request lacked authentication: the request passed `authenticate` and `context.session` is set. Only the binding of the accessors is missing. Wrap the `execute` function, or read `context.session` instead. See [Tools](./Tools.md#withauth0execute).
 
 ## The resource_metadata URL in a challenge returns 404
 
-The challenge points at `/.well-known/oauth-protected-resource` followed by the endpoint you gave `createFastMcpAuth`, while FastMCP serves the document at that path followed by the endpoint you gave `server.start`. The two endpoints differ. Pass the same value to both.
+The challenge points at `/.well-known/oauth-protected-resource` followed by the endpoint of `createFastMcpAuth` (`auth.endpoint`), while FastMCP serves the document at that path followed by the endpoint you gave `server.start`. The two endpoints differ. Pass `auth.endpoint` to `server.start`. The server also writes one warning, such as `[ai-fastmcp] A request arrived on "/orders", but the configured endpoint is "/mcp"`, when a request reaches `authenticate` on another path. See [Configuration](./Configuration.md#a-request-on-another-path).
 
 ## Calls to the tenant hang
 

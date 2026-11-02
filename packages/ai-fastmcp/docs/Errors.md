@@ -36,7 +36,7 @@ The descriptions are fixed. A verification failure always gets the same text, wh
 
 ### 500 and onError
 
-A 500 means something on the server failed: a thrown error that is not an authentication error, a client that raised an unexpected fault. The body never names the cause. `onError` receives the raw error, so log it there.
+A 500 means something on the server failed: a thrown error that is not an authentication error, a client that raised an unexpected fault. The body never names the cause. `onError` of `createFastMcpAuth` receives the raw error, so log it there. Unlike the log line for tools, `authenticate` writes nothing by itself.
 
 ### A tenant that cannot be reached
 
@@ -58,14 +58,14 @@ All of these results have `isError: true` and the HTTP status 200. The error `_m
 
 One kind of error is not replaced: a FastMCP `UserError`. FastMCP defines it as the error whose message is meant for the user, so the wrapper passes it through and the client sees its message. Do not put secrets in a `UserError`.
 
-For every row except the first three, `withAuth0Execute` hands the raw error to its `onError` option:
+For every row except the first three, `withAuth0Execute` hands the raw error to the `onError` of the tool or, when the tool has none, to the `onError` of `createFastMcpAuth`:
 
 ```ts
 import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 server.addTool({
   name: "invoices",
@@ -81,6 +81,18 @@ server.addTool({
 ```
 
 The hook runs on the server and the wrapper ignores its return value. The wrapper also ignores a hook that throws or returns a rejected promise.
+
+### The default log line
+
+When a replaced error has no hook, neither on the tool nor on `createFastMcpAuth`, the wrapper writes one line to the standard error stream of the server, so a failed token exchange is never silent:
+
+```text
+[ai-fastmcp] Tool failed: TokenExchangeError code=token_exchange_error statusCode=403 auth0_error=access_denied auth0_error_description="Unauthorized"
+```
+
+The line holds the error name, its `code` and `statusCode`, and the `error` and `error_description` that Auth0 returned. It never holds the message of the error, a token, a secret, a header or a request body. It is one line and at most 300 characters. The wrapper does not use `context.log` for it, because FastMCP sends `context.log` to the connected client. The wrapper treats a missing scope, a downscoped exchange, a missing session and a `UserError` as expected outcomes and does not log them. While a hook is in effect the line is not written.
+
+Auth0's answer sits two levels down in the raw error: `error.cause` is the original error, and its `cause` holds the body of the answer with `error` and `error_description`. A hook that wants them reads `error.cause.cause`.
 
 ## Errors from the request-scoped client
 

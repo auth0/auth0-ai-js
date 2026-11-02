@@ -31,7 +31,7 @@ import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const auth = createFastMcpAuth({});
+const auth = createFastMcpAuth();
 const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
 
 server.addTool({
@@ -41,10 +41,10 @@ server.addTool({
   execute: withAuth0Execute(async (_args, { session }) => session.principal.sub),
 });
 
-await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });
+await server.start({ transportType: "httpStream", httpStream: { endpoint: auth.endpoint, port: 3000, stateless: true } });
 ```
 
-`createFastMcpAuth` returns two FastMCP options, `authenticate` and `oauth`. Spreading them into `new FastMCP({...})` is all the wiring there is. Passing `{}` means the settings come from the environment: you must set `AUTH0_DOMAIN` and `AUTH0_AUDIENCE`, and `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` matter only to tools that exchange tokens. [Configuration](./Configuration.md) shows the other two ways to pass them.
+`createFastMcpAuth` returns two FastMCP options, `authenticate` and `oauth`. Spreading them into `new FastMCP({...})` is all the wiring there is. The result also carries `endpoint`, the path of the audience (`/mcp` here), which `server.start` takes so the route and the metadata name the same path. It is not enumerable, so the spread does not hand it to FastMCP. Calling it with no argument means the settings come from the environment: you must set `AUTH0_DOMAIN` and `AUTH0_AUDIENCE`, and `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` matter only to tools that exchange tokens. [Configuration](./Configuration.md) shows the other two ways to pass them.
 
 Do not set FastMCP's own `auth` option as well. FastMCP documents it as a provider that configures `authenticate` and `oauth` itself, and this package already supplies both.
 
@@ -104,6 +104,28 @@ curl -s http://localhost:3000/.well-known/oauth-protected-resource/mcp
 ```json
 {"resource":"http://localhost:3000/mcp","authorization_servers":["https://your-tenant.us.auth0.com/"],"bearer_methods_supported":["header"]}
 ```
+
+## 6. Ask for a scope
+
+A tool can require a scope with `requiredScopes`. That scope reaches an OAuth client only through the metadata document or the challenge, and a scope that only one tool checks is not published automatically. List it in `metadata.scopesSupported`:
+
+```ts
+import { FastMCP } from "fastmcp";
+import { z } from "zod";
+import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
+
+const auth = createFastMcpAuth({ metadata: { scopesSupported: ["read:orders"] } });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
+
+server.addTool({
+  name: "list_orders",
+  description: "Lists the caller's orders.",
+  parameters: z.object({}),
+  execute: withAuth0Execute(async () => "No orders yet.", { requiredScopes: "read:orders" }),
+});
+```
+
+The metadata document then lists `read:orders` as `scopes_supported`. Without it a client asks for no scope, gets a token without `read:orders`, and every call to the tool answers `Missing required scope: read:orders`. To require a scope on every request instead, use `requiredScopes` on `createFastMcpAuth`, which also publishes it.
 
 ## Next steps
 

@@ -23,7 +23,7 @@ import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const auth = createFastMcpAuth({});
+const auth = createFastMcpAuth({ metadata: { scopesSupported: ["read:orders"] } });
 const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
 
 server.addTool({
@@ -35,10 +35,17 @@ server.addTool({
   }),
 });
 
-await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });
+await server.start({
+  transportType: "httpStream",
+  httpStream: { endpoint: auth.endpoint, port: 3000, stateless: true },
+});
 ```
 
-This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. Do not set FastMCP's own `auth` option as well: FastMCP documents it as a provider that configures `authenticate` and `oauth` itself, and this package supplies both.
+This serves `POST /mcp`, requires a valid Auth0 access token for the audience, and publishes the protected resource metadata. `auth.endpoint` is the path of the audience (`/mcp` here), so the route you start and the route the metadata names come from one value.
+
+`list_orders` needs the scope `read:orders`. An OAuth client asks only for the scopes it finds in the metadata document or in the challenge, and a scope that only one tool checks is not published automatically. `metadata.scopesSupported` is how it reaches the client. Without it the client asks for no scope and every call to the tool answers `Missing required scope: read:orders`.
+
+Do not set FastMCP's own `auth` option as well: FastMCP documents it as a provider that configures `authenticate` and `oauth` itself, and this package supplies both.
 
 ## Documentation
 
@@ -78,7 +85,7 @@ import { z } from "zod";
 import { getCallerMcpClientOrThrow } from "@auth0/ai-mcp";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 server.addTool({
   name: "invoices",
@@ -101,12 +108,12 @@ Token exchange, caching (pass a `tokenStore` such as `MemoryIndexedTokenStore` t
 ## Scopes
 
 - **Server-wide.** `requiredScopes` on `createFastMcpAuth` applies before any tool runs. A token without one of them gets HTTP 403 with an `insufficient_scope` challenge whose `scope` parameter lists every required scope, not only the missing ones, so a client that authorizes again keeps what it already holds. A request without credentials gets a 401 challenge whose `scope` parameter names all of them, and the metadata document publishes them as `scopes_supported` unless you set `metadata.scopesSupported`, so a client knows which scopes to ask for. Each entry is split on whitespace (`"read write"` is two scopes) and repeats count once. A blank or non-string entry makes `createFastMcpAuth` throw `InvalidConfigurationError`.
-- **Per tool.** `withAuth0Execute(execute, { requiredScopes })`, or `requireScopes(...)` from `@auth0/ai-mcp` inside the body, answers a missing scope with a tool error that names it (a blank entry in `requiredScopes` throws `InvalidConfigurationError` when you create the wrapper), for example `Missing required scope: admin:all`. The HTTP status is 200 and the result has `isError: true`. The tool stays listed.
+- **Per tool.** `withAuth0Execute(execute, { requiredScopes })`, or `requireScopes(...)` from `@auth0/ai-mcp` inside the body, answers a missing scope with a tool error that names it (a blank entry in `requiredScopes` throws `InvalidConfigurationError` when you create the wrapper), for example `Missing required scope: admin:all`. The HTTP status is 200 and the result has `isError: true`. The tool stays listed. Per-tool scopes are not published automatically: list them in `metadata.scopesSupported`, or a client that reads the metadata asks for none.
 - **Hiding a tool.** FastMCP's own `canAccess: requireScopes("admin:all")` is the alternative. It removes the tool from the list for callers without the scope and fails a direct call with a JSON-RPC error whose message contains `Unknown tool`, so the client cannot learn which scope it is missing.
 
 ## Errors inside tools
 
-FastMCP copies the message of an error thrown by a tool into the result, so a message with a secret in it reaches the client. `withAuth0Execute` closes that gap: a missing scope, a downscoped exchange and an authentication error become fixed texts, and every other error becomes `Tool execution failed.` with `isError: true`. Pass `onError` to see the original error on the server. Without one, each failure writes a single line to the server's standard error stream (not to `context.log`, which FastMCP sends to the client): `[ai-fastmcp] Tool failed: <error name> code=<code> statusCode=<status> auth0_error=<error> auth0_error_description="<text>"`, with the fields that exist, cut to 300 characters on one line. It never holds the message, a token, a header or a request body. A missing scope, a downscoped exchange and a missing session are expected outcomes and are not logged. A 500 from `authenticate` writes the same kind of line, starting `[ai-fastmcp] Authentication failed:`. A FastMCP `UserError` passes through unchanged, because FastMCP defines it as the error meant for the user.
+FastMCP copies the message of an error thrown by a tool into the result, so a message with a secret in it reaches the client. `withAuth0Execute` closes that gap: a missing scope, a downscoped exchange and an authentication error become fixed texts, and every other error becomes `Tool execution failed.` with `isError: true`. Without an `onError`, the wrapper writes one line to the server's standard error stream for each replaced error, for example `[ai-fastmcp] Tool failed: TokenExchangeError code=token_exchange_error statusCode=403 auth0_error=access_denied auth0_error_description="Unauthorized"`. Pass `onError` to `createFastMcpAuth` to handle the raw error of every wrapped tool, or to `withAuth0Execute` to override it for one tool. While a hook is in effect the line is not written, and the hook receives the raw error on the server only. A FastMCP `UserError` passes through unchanged, because FastMCP defines it as the error meant for the user. A 500 from `authenticate` writes the same kind of line, starting `[ai-fastmcp] Authentication failed:`.
 
 Errors from `session.mcpClient` are already sanitized by `@auth0/ai-mcp`. Tools you do not wrap keep FastMCP's behavior.
 
@@ -118,14 +125,14 @@ Configure the client in one of three ways, the same three as the `@auth0/ai-mcp`
 | --- | --- |
 | A client you built | `createFastMcpAuth({ client })` with `client` from `createMcpClient` |
 | Inline options | `createFastMcpAuth({ domain, audience, clientId, clientSecret, tokenStore })`. Anything you leave out of `domain`, `audience`, `clientId` and `clientSecret` is read from the environment. |
-| Environment | `createFastMcpAuth({})` reads `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`. |
+| Environment | `createFastMcpAuth()`, with no argument, reads `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`. |
 
 Other options:
 
 | Option | Meaning |
 | --- | --- |
 | `resource` | The public URL of the server. Defaults to the audience and must equal it. Its path must be empty or equal `endpoint`. |
-| `endpoint` | The path FastMCP serves the MCP route on. Defaults to `/mcp`. Pass the same value to `server.start({ httpStream: { endpoint } })`. |
+| `endpoint` | The path FastMCP serves the MCP route on. Defaults to the path of the audience when it has one, else `/mcp`. The result exposes the chosen value as `auth.endpoint`; pass it to `server.start({ httpStream: { endpoint: auth.endpoint } })`. A path that ends in a slash, such as `https://host/mcp/`, throws `InvalidConfigurationError`. |
 | `authorizationServers` | Issuer URLs for the metadata. Defaults to `https://<domain>/`. |
 | `requiredScopes` | Scopes every request must carry. Also the default `scopes_supported` and the `scope` of the 401 challenge. |
 | `realm` | The `realm` of challenges. |

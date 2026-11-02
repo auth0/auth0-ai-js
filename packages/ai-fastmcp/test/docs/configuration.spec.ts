@@ -219,7 +219,7 @@ describe("Configuration.md: the resource, the audience and the endpoint", () => 
     documented(
       "Configuration.md",
       "`/.well-known/oauth-protected-resource/api/mcp`",
-      "It defaults to `/mcp`.",
+      "and to `/mcp` when the audience is an origin only",
     );
   });
 
@@ -435,7 +435,8 @@ describe("Configuration.md: required scopes, realm and the error observer", () =
     expect(((await thrown(rejecting.authenticate(fakeRequest(bearer("x"))))) as Response).status).toBe(500);
     documented(
       "Configuration.md",
-      "`onError` receives the raw error whenever `authenticate` answers 500. The error never reaches the response. The adapter ignores a hook that throws or returns a rejected promise.",
+      "`onError` receives the raw error whenever `authenticate` answers 500.",
+      "The adapter ignores a hook that throws or returns a rejected promise.",
     );
   });
 });

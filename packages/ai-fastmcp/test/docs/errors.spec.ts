@@ -226,7 +226,7 @@ describe("Errors.md: authentication failures", () => {
       challenge: false,
     });
     expect(seen).toEqual([fault]);
-    documented("Errors.md", "| 500 | `server_error` | `Internal server error.` |", "`onError` receives the raw error, so log it there.");
+    documented("Errors.md", "| 500 | `server_error` | `Internal server error.` |", "`onError` of `createFastMcpAuth` receives the raw error, so log it there.");
   });
 
   it("answers a failed verification with the same fixed text whatever the cause, and keeps the cause out of the response", async () => {
@@ -392,7 +392,7 @@ describe("Errors.md: errors inside tools", () => {
       "| `The token operation failed.` | `server_error` |",
       "| `Tool execution failed.` | `server_error` |",
       "All of these results have `isError: true` and the HTTP status 200.",
-      "For every row except the first three, `withAuth0Execute` hands the raw error to its `onError` option",
+      "For every row except the first three, `withAuth0Execute` hands the raw error to the `onError` of the tool or, when the tool has none, to the `onError` of `createFastMcpAuth`",
     );
   });
 

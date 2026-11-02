@@ -289,7 +289,7 @@ describe("Troubleshooting.md: the other symptoms", () => {
     documented(
       GUIDE,
       "- A `MissingClientAuthError` means the exchange needs `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`",
-      "- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error.",
+      "- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error",
       "## The token exchange did not grant the requested scopes.",
     );
   });
@@ -371,7 +371,7 @@ describe("Troubleshooting.md: the other symptoms", () => {
     } finally {
       await server.stop();
     }
-    documented(GUIDE, "## The resource_metadata URL in a challenge returns 404", "The two endpoints differ. Pass the same value to both.");
+    documented(GUIDE, "## The resource_metadata URL in a challenge returns 404", "The two endpoints differ. Pass `auth.endpoint` to `server.start`.");
   });
 
   it("ends a stalled discovery in 401 and a stalled exchange in Tool execution failed when requestTimeoutMs is set", async () => {

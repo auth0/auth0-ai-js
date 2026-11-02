@@ -12,7 +12,7 @@ import { z } from "zod";
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
 import type { Auth0Session } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP<Auth0Session>({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP<Auth0Session>({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 server.addTool({
   name: "who_am_i",
@@ -45,7 +45,7 @@ import { z } from "zod";
 import { getCallerPrincipal } from "@auth0/ai-mcp";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 async function auditLine(action: string): Promise<string> {
   return `${getCallerPrincipal()?.sub} ${action}`;
@@ -71,7 +71,8 @@ import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const auth = createFastMcpAuth({ metadata: { scopesSupported: ["write:orders", "refund:orders"] } });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
 
 server.addTool({
   name: "refund_order",
@@ -81,6 +82,8 @@ server.addTool({
   }),
 });
 ```
+
+Per-tool scopes are not published automatically. An OAuth client asks only for the scopes it finds in the metadata document or in the challenge, so list them in `metadata.scopesSupported` as the snippet does. Without that the client asks for none, and every call answers `Missing required scope`.
 
 A caller who lacks a scope does not reach the function. The wrapper answers with an ordinary tool result:
 
@@ -99,7 +102,7 @@ import { FastMCP, requireScopes } from "fastmcp";
 import { z } from "zod";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 server.addTool({
   name: "list_orders",
@@ -126,7 +129,7 @@ import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { createFastMcpAuth, withAuth0Execute } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 server.addTool({
   name: "invoices",

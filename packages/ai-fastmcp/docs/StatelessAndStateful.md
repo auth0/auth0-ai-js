@@ -8,7 +8,7 @@ FastMCP serves HTTP in two modes. Use the stateless mode unless a tool needs sta
 import { FastMCP } from "fastmcp";
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth({}) });
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
 
 await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });
 ```
