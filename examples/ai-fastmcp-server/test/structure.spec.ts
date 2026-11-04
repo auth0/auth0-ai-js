@@ -66,4 +66,14 @@ describe("example structure", () => {
     expect(readme.indexOf("npm run build --workspace")).toBeLessThan(readme.indexOf("npm run start:api"));
     expect(readme).not.toContain("npm install --no-save");
   });
+
+  it("says where the test support lives, because the smoke test imports it from the package", () => {
+    const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+    const readme = readFileSync(here("../README.md"), "utf8");
+    const smoke = readFileSync(here("./smoke.spec.ts"), "utf8");
+
+    expect(smoke).toContain("../../../packages/ai-fastmcp/test/support");
+    expect(readme).toContain("packages/ai-fastmcp/test/support");
+    expect(readme).toContain("the tests run only inside this repository");
+  });
 });

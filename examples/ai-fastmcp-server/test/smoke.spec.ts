@@ -15,8 +15,9 @@ import {
   scopeMode,
 } from "../../../packages/ai-fastmcp/test/support/index.js";
 import type { TestKey } from "../../../packages/ai-fastmcp/test/support/index.js";
-import type { Auth0Session } from "@auth0/ai-fastmcp";
+import type { Auth0Session, FastMcpAuth } from "@auth0/ai-fastmcp";
 import { createApp } from "../src/app.js";
+import { createAuth } from "../src/auth.js";
 import type { AppConfig, OrdersApiConfig } from "../src/config.js";
 import { createOrdersServer } from "../src/orders-api.js";
 
@@ -69,9 +70,13 @@ function freePort(): Promise<number> {
  * Starts the MCP server of the example on a free port. The example reads the Auth0 settings of the
  * MCP server from the environment, so they are set while `createApp` runs.
  */
-async function startApp(overrides: Partial<AppConfig> = {}, ordersApiUrl = `http://127.0.0.1:${ordersPort}`): Promise<StartedApp> {
+async function startApp(
+  overrides: Partial<AppConfig> = {},
+  ordersApiUrl = `http://127.0.0.1:${ordersPort}`,
+  routePath = "/mcp",
+): Promise<StartedApp> {
   const port = await freePort();
-  const url = `http://127.0.0.1:${port}/mcp`;
+  const url = `http://127.0.0.1:${port}${routePath}`;
   const config: AppConfig = {
     requiredScopes: [],
     ordersAudience: ORDERS,
@@ -89,15 +94,21 @@ async function startApp(overrides: Partial<AppConfig> = {}, ordersApiUrl = `http
     AUTH0_CLIENT_SECRET: "secret",
   });
   let server: FastMCP<Auth0Session>;
+  let auth: FastMcpAuth;
   try {
-    server = createApp(config, { logger: silentLogger });
+    auth = createAuth(config);
+    server = createApp(config, { auth, logger: silentLogger });
   } finally {
     for (const name of names) {
       if (saved[name] === undefined) delete process.env[name];
       else process.env[name] = saved[name];
     }
   }
-  await server.start({ transportType: "httpStream", httpStream: { port, host: "127.0.0.1", stateless: true } });
+  // The same wiring as src/server.ts and the README: the route comes from the audience through auth.endpoint.
+  await server.start({
+    transportType: "httpStream",
+    httpStream: { endpoint: auth.endpoint, port, host: "127.0.0.1", stateless: true },
+  });
   return { server, port, url, stop: () => server.stop() };
 }
 
@@ -382,6 +393,26 @@ describe("example MCP server", () => {
   it("publishes the scope of cancel_order, which only that tool checks, as scopes_supported", async () => {
     const metadata = await socketFetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource/mcp`);
     expect(((await metadata.json()) as { scopes_supported?: string[] }).scopes_supported).toEqual(["tool:cancel_order"]);
+  });
+
+  it("serves the route and the metadata at the path of an audience that is not /mcp", async () => {
+    const custom = await startApp({}, undefined, "/api/orders-mcp");
+    try {
+      const origin = new URL(custom.url).origin;
+      const refused = await callTool("whoami", undefined, {}, custom.url);
+      expect(refused.status).toBe(401);
+      const advertised = /resource_metadata="([^"]+)"/.exec(refused.headers.get("www-authenticate") ?? "")?.[1];
+      expect(advertised).toBe(`${origin}/.well-known/oauth-protected-resource/api/orders-mcp`);
+      expect((await socketFetch(advertised!)).status).toBe(200);
+
+      const out = await callTool("whoami", await callerToken("openid", "user|path", custom.url), {}, custom.url);
+      expect(out.status).toBe(200);
+      expect(((messageOf(await out.text()) as ToolResult).result?.content[0]?.text) ?? "").toContain("Signed in as user|path");
+      // FastMCP's default route is not served.
+      expect((await callTool("whoami", undefined, {}, `${origin}/mcp`)).status).toBe(404);
+    } finally {
+      await custom.stop();
+    }
   });
 
   it("applies MCP_REQUIRED_SCOPES to every request before any tool runs", async () => {

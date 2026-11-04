@@ -71,4 +71,4 @@ npm test
 
 The example needs FastMCP 4.22.0 or newer, the oldest release `@auth0/ai-fastmcp` supports. `npm test` fails if the resolved copy of FastMCP is older.
 
-`npm test` runs both servers on loopback with a mocked Auth0 tenant. It makes no network calls.
+`npm test` runs both servers on loopback with a mocked Auth0 tenant. It makes no network calls. The mock tenant and the token helpers come from `packages/ai-fastmcp/test/support`, which the smoke test imports by a relative path, so the tests run only inside this repository. If you copy the example out of it, copy that folder too or write your own mocks.
