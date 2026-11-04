@@ -224,8 +224,11 @@ function validateMetadataPath(path: string, origin: string): void {
  * `resource` must equal the client audience. The client itself is configured through
  * `client`, inline client options or the environment; see {@link McpHandlerClientConfig}.
  *
- * The metadata document is served at the RFC 9728 path derived from `resource` and also
- * at the root `/.well-known/oauth-protected-resource`. Challenges point at the former.
+ * The metadata document is served for GET and HEAD at the RFC 9728 path derived from
+ * `resource`, which is where challenges point. When `resource` has no path, that is the root
+ * `/.well-known/oauth-protected-resource`; for a resource with a path the root route is not
+ * served, because the document would name a resource other than the one the URL stands for.
+ * Other methods get 405 with `Allow: GET, HEAD`, and there is no CORS handling.
  *
  * @throws {TypeError} When an explicit `resource` is not an absolute URL and the audience comparison
  * does not catch it, that is, when the audience is the same non-URL string or the client declares no
@@ -249,10 +252,13 @@ export function createMcpHandler(
   if (rest.metadata?.path !== undefined) {
     validateMetadataPath(rest.metadata.path, resourceUrl.origin);
   }
-  // The RFC 9728 route is the primary one and the only one challenges point at. The root
-  // route is served as well, because clients that probe the origin look there first.
+  // The RFC 9728 route is the primary one and the only one challenges point at. The root route
+  // is served only for a resource without a path: RFC 9728 section 3.3 requires `resource` to
+  // equal the identifier the well-known URL was derived from, and the root URL is derived from
+  // the bare origin, so a document naming a resource with a path would not match it.
   const metadataPath = rest.metadata?.path ?? `${WELL_KNOWN_PRM}${resourcePath}`;
-  const metadataPaths = new Set([metadataPath, WELL_KNOWN_PRM]);
+  const metadataPaths = new Set([metadataPath]);
+  if (resourcePath === "") metadataPaths.add(WELL_KNOWN_PRM);
   const authenticator = createAuthenticator({
     client,
     resource,
@@ -275,6 +281,7 @@ export function createMcpHandler(
       resourceDocumentation: rest.metadata?.resourceDocumentation,
     }),
   );
+  const metadataLength = new TextEncoder().encode(metadataBody).byteLength;
   const { fail } = authenticator.responder;
 
   return async function handle(request: Request): Promise<Response> {
@@ -286,16 +293,22 @@ export function createMcpHandler(
       return fail(() => authFailure(400, "invalid_request"), undefined);
     }
     if (metadataPaths.has(url.pathname)) {
-      if (request.method !== "GET") {
-        return new Response(null, { status: 405, headers: { allow: "GET" } });
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response(null, {
+          status: 405,
+          headers: { allow: "GET, HEAD", "cache-control": "no-store" },
+        });
       }
-      return new Response(metadataBody, {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-          "cache-control": "public, max-age=3600",
-        },
-      });
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "cache-control": "public, max-age=3600",
+      };
+      // HEAD answers like GET without the body, so it carries the length GET would send.
+      if (request.method === "HEAD") {
+        headers["content-length"] = String(metadataLength);
+        return new Response(null, { status: 200, headers });
+      }
+      return new Response(metadataBody, { status: 200, headers });
     }
 
     const result = await authenticator.authenticate(request);

@@ -203,6 +203,7 @@ describe("createMcpSdkHandler", () => {
       );
       expect(response.status).toBe(405);
       expect(response.headers.get("allow")).toBe("POST");
+      expect(response.headers.get("cache-control")).toBe("no-store");
     }
     expect(factory).not.toHaveBeenCalled();
   });
@@ -1027,6 +1028,21 @@ describe("Node adapter", () => {
 
     expect(reply).toMatch(/^HTTP\/1\.1 405 /);
     expect(handle).not.toHaveBeenCalled();
+  });
+
+  it("answers HEAD on the metadata route over real HTTP with the headers of GET and no body", async () => {
+    useTenant();
+    const url = await listen(toNodeHandler(makeHandler([]), { resource: AUDIENCE }));
+    const metadata = new URL("/.well-known/oauth-protected-resource", url);
+    const got = await fetch(metadata);
+    const body = await got.text();
+    const head = await fetch(metadata, { method: "HEAD" });
+
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("application/json");
+    expect(head.headers.get("cache-control")).toBe(got.headers.get("cache-control"));
+    expect(head.headers.get("content-length")).toBe(String(Buffer.byteLength(body)));
+    expect(await head.text()).toBe("");
   });
 
   it("re-serializes a body a parser already consumed", async () => {

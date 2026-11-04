@@ -881,7 +881,8 @@ describe("protected resource metadata route", () => {
     const { handle } = makeHandler();
     const response = await handle(request({}, { method: "POST" }, PRM));
     expect(response.status).toBe(405);
-    expect(response.headers.get("allow")).toBe("GET");
+    expect(response.headers.get("allow")).toBe("GET, HEAD");
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it("inserts the resource path after the well-known prefix", async () => {

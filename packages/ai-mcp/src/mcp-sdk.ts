@@ -104,7 +104,7 @@ export function createMcpSdkHandler(
       // Only POST is served. This runs after authentication (the metadata route is
       // answered before it), so an unauthenticated GET gets the usual 401 challenge.
       if (request.method !== 'POST') {
-        return new Response(null, { status: 405, headers: { allow: 'POST' } });
+        return new Response(null, { status: 405, headers: { allow: 'POST', 'cache-control': 'no-store' } });
       }
       const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: undefined,

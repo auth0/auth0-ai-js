@@ -45,15 +45,29 @@ async function json(response: Response) {
 }
 
 describe("protected resource metadata routes", () => {
-  it("serves the suffixed and the root route for a resource with a path", async () => {
+  it("serves only the suffixed route for a resource with a path", async () => {
     const handle = build("https://mcp.example.com/mcp");
     const suffixed = await handle(get(`${ROOT_PRM}/mcp`));
-    const root = await handle(get(ROOT_PRM));
     expect(suffixed.status).toBe(200);
+    expect((await json(suffixed))["resource"]).toBe("https://mcp.example.com/mcp");
+    // RFC 9728 section 3.3: the root URL stands for the bare origin, so a document that names
+    // "https://mcp.example.com/mcp" must not be served there. The request is treated like any
+    // other one and has to authenticate.
+    const root = await handle(get(ROOT_PRM));
+    expect(root.status).toBe(401);
+    expect(root.headers.get("www-authenticate")).toContain(`resource_metadata="${ROOT_PRM}/mcp"`);
+  });
+
+  it("serves the root route for a resource without a path", async () => {
+    const handle = build("https://mcp.example.com");
+    const root = await handle(get(ROOT_PRM));
     expect(root.status).toBe(200);
-    const rootBody = await json(root);
-    expect(rootBody).toEqual(await json(suffixed));
-    expect(rootBody["resource"]).toBe("https://mcp.example.com/mcp");
+    expect((await json(root))["resource"]).toBe("https://mcp.example.com");
+  });
+
+  it("serves the root route for a resource whose only path is a slash", async () => {
+    const handle = build("https://mcp.example.com/");
+    expect((await handle(get(ROOT_PRM))).status).toBe(200);
   });
 
   it("points the challenge at the suffixed route", async () => {
@@ -69,24 +83,56 @@ describe("protected resource metadata routes", () => {
     expect(response.headers.get("www-authenticate")).toContain(`resource_metadata="${ROOT_PRM}"`);
   });
 
-  it("keeps the root route when metadata.path overrides the primary one", async () => {
+  it("serves only the custom path when metadata.path overrides the route of a resource with a path", async () => {
     const handle = createMcpHandler({
       client: clientFor("https://mcp.example.com/mcp"),
       metadata: { path: "/prm.json" },
       handler: async () => new Response("ok"),
     });
     expect((await handle(get("https://mcp.example.com/prm.json"))).status).toBe(200);
-    expect((await handle(get(ROOT_PRM))).status).toBe(200);
+    expect((await handle(get(ROOT_PRM))).status).toBe(401);
     expect((await handle(get(`${ROOT_PRM}/mcp`))).status).toBe(401);
     const challenge = await handle(new Request("https://mcp.example.com/mcp", { method: "POST" }));
     expect(challenge.headers.get("www-authenticate")).toContain('resource_metadata="https://mcp.example.com/prm.json"');
   });
 
-  it("answers other methods on the root route with 405", async () => {
-    const handle = build("https://mcp.example.com/mcp");
-    const response = await handle(new Request(ROOT_PRM, { method: "POST" }));
-    expect(response.status).toBe(405);
-    expect(response.headers.get("allow")).toBe("GET");
+  it("keeps the root route next to a custom path for a resource without a path", async () => {
+    const handle = createMcpHandler({
+      client: clientFor("https://mcp.example.com"),
+      metadata: { path: "/prm.json" },
+      handler: async () => new Response("ok"),
+    });
+    expect((await handle(get("https://mcp.example.com/prm.json"))).status).toBe(200);
+    expect((await handle(get(ROOT_PRM))).status).toBe(200);
+  });
+
+  it.each([
+    ["the root route", "https://mcp.example.com", ROOT_PRM],
+    ["the suffixed route", "https://mcp.example.com/mcp", `${ROOT_PRM}/mcp`],
+  ])("answers other methods on %s with 405, no-store and the allowed methods", async (_name, audience, url) => {
+    const handle = build(audience);
+    for (const method of ["POST", "PUT", "DELETE", "PATCH", "OPTIONS"]) {
+      const response = await handle(new Request(url, { method }));
+      expect(response.status).toBe(405);
+      expect(response.headers.get("allow")).toBe("GET, HEAD");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    }
+  });
+
+  it.each([
+    ["the root route", "https://mcp.example.com", ROOT_PRM],
+    ["the suffixed route", "https://mcp.example.com/mcp", `${ROOT_PRM}/mcp`],
+  ])("answers HEAD on %s like GET without a body", async (_name, audience, url) => {
+    const handle = build(audience);
+    const got = await handle(get(url));
+    const head = await handle(new Request(url, { method: "HEAD" }));
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe(got.headers.get("content-type"));
+    expect(head.headers.get("cache-control")).toBe(got.headers.get("cache-control"));
+    const body = await got.text();
+    expect(head.headers.get("content-length")).toBe(String(new TextEncoder().encode(body).byteLength));
+    expect(await head.text()).toBe("");
   });
 });
 
