@@ -3,6 +3,7 @@ import { authenticateRequest } from "@auth0/ai-mcp";
 import type { AuthenticateRequestOptions } from "@auth0/ai-mcp";
 import { SessionBindings, MAX_SESSION_ID_LENGTH } from "./binding.js";
 import { safely } from "./hooks.js";
+import { logFailure } from "./log.js";
 import { buildProtectedResource } from "./metadata.js";
 import type { FastMcpOAuthOptions } from "./metadata.js";
 import {
@@ -148,13 +149,17 @@ export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth
   const endpoint = (explicitEndpoint ?? defaultEndpoint(resource)) as `/${string}`;
   const metadataUrl = resolveMetadataUrl(resource, endpoint);
 
+  // Without an `onError`, an unexpected failure that becomes a 500 still leaves one line on the
+  // server's standard error stream, the same line a failed tool gets, so the operator sees it.
+  const reportUnexpected = rest.onError ?? ((error: unknown): void => logFailure(error, "Authentication failed"));
+
   const authOptions: AuthenticateRequestOptions = {
     client: bearerClient,
     resource,
     resourceMetadataUrl: metadataUrl,
     ...(requiredScopes.length > 0 && { requiredScopes }),
     ...(rest.realm !== undefined && { realm: rest.realm }),
-    ...(rest.onError !== undefined && { onError: rest.onError }),
+    onError: reportUnexpected,
   };
   const bindings = rest.sessionBinding === false ? undefined : new SessionBindings(rest.sessionBinding);
 
@@ -204,7 +209,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth
       return await authenticateOrThrow(req);
     } catch (error) {
       if (error instanceof Response) throw error;
-      safely(rest.onError, error);
+      safely(reportUnexpected, error);
       throw genericServerError();
     }
   }

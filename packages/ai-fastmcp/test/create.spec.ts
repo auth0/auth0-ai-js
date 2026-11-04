@@ -2,7 +2,7 @@ import type { IncomingMessage } from "node:http";
 import { VerifyAccessTokenError } from "@auth0/auth0-api-js";
 import { AuthError, InvalidConfigurationError, authenticateRequest } from "@auth0/ai-mcp";
 import type { RejectedRequest } from "@auth0/ai-mcp";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFastMcpAuth } from "../src/create.js";
 import { bearerOnly } from "../src/options.js";
 import type { FastMcpAuthOptions } from "../src/options.js";
@@ -241,6 +241,51 @@ describe("createFastMcpAuth", () => {
       expect(response.headers.get("www-authenticate")).toBeNull();
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError).toHaveBeenCalledWith(boom);
+    });
+
+    describe("without an onError hook", () => {
+      let logged: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => {
+        logged = vi.spyOn(console, "error").mockImplementation(() => {});
+      });
+      afterEach(() => {
+        logged.mockRestore();
+      });
+
+      it("writes one line to standard error for an unexpected failure from the core client", async () => {
+        const { auth } = setup({}, { verify: async () => Promise.reject(new Error("secret internal detail xyz")) });
+        const response = await failure(auth.authenticate(fakeRequest(bearer(fakeJwt()))));
+        expect(response.status).toBe(500);
+        expect(logged).toHaveBeenCalledTimes(1);
+        const line = String(logged.mock.calls[0]![0]);
+        expect(line).toMatch(/^\[ai-fastmcp\] Authentication failed: Error$/);
+      });
+
+      it("writes one line for a fault of the adapter itself, without the message", async () => {
+        const { auth } = setup();
+        const response = await failure(auth.authenticate({ url: "/mcp" } as unknown as IncomingMessage));
+        expect(response.status).toBe(500);
+        expect(logged).toHaveBeenCalledTimes(1);
+        const line = String(logged.mock.calls[0]![0]);
+        expect(line).toContain("[ai-fastmcp] Authentication failed: TypeError");
+        expect(line).not.toContain("headers");
+      });
+
+      it("writes nothing for failures the client caused", async () => {
+        const { auth } = setup({}, { verify: async () => Promise.reject(new VerifyAccessTokenError("bad")) });
+        expect((await failure(auth.authenticate(fakeRequest()))).status).toBe(401);
+        expect((await failure(auth.authenticate(fakeRequest(bearer(fakeJwt()))))).status).toBe(401);
+        expect((await failure(auth.authenticate(fakeRequest({ authorization: "Bearer abcĀ" })))).status).toBe(400);
+        expect(logged).not.toHaveBeenCalled();
+      });
+
+      it("stays silent when an onError hook is set", async () => {
+        const onError = vi.fn();
+        const { auth } = setup({ onError }, { verify: async () => Promise.reject(new Error("x")) });
+        await failure(auth.authenticate(fakeRequest(bearer(fakeJwt()))));
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(logged).not.toHaveBeenCalled();
+      });
     });
 
     it("keeps the 500 when the error hook throws or rejects", async () => {

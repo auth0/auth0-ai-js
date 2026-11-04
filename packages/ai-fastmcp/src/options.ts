@@ -60,8 +60,10 @@ export interface FastMcpAuthBaseOptions {
    * `withAuth0Execute` that has no `onError` of its own. A tool's own `onError` replaces this one.
    * The error never reaches the client; the hook runs on the server only, and the error it
    * receives can carry Auth0 response details, so treat it as sensitive. While a hook is in
-   * effect, the default log line for tool failures is not written. A throwing hook, or one that
-   * returns a rejected promise, is ignored.
+   * effect, the default log line is not written. Without a hook, a 500 from `authenticate` and a
+   * failed tool each leave one line on the server's standard error stream: the error name, its
+   * `code` and `statusCode`, and the `error` and `error_description` Auth0 returned. A throwing
+   * hook, or one that returns a rejected promise, is ignored.
    */
   onError?: (error: unknown) => void;
 }
