@@ -7,8 +7,9 @@ export interface SessionBindingOptions {
   maxSessions?: number;
   /**
    * Most session ids one subject can have remembered at once. When a subject reaches it, the oldest
-   * id of that same subject is forgotten, so one caller cannot push out the ids of others. It
-   * cannot exceed `maxSessions`. Raise it for a subject that legitimately holds many sessions, such
+   * id of that same subject is forgotten, so one caller cannot push out the ids of others. A value
+   * above `maxSessions` has no effect, because the whole table never holds more than that. Keep it
+   * well below `maxSessions`, and raise it for a subject that legitimately holds many sessions, such
    * as a gateway that uses one client credentials token.
    * @defaultValue `100`
    */
@@ -54,7 +55,7 @@ export class SessionBindings {
 
   constructor(options: SessionBindingOptions = {}, now: () => number = Date.now) {
     this.#max = options.maxSessions ?? DEFAULT_MAX_SESSIONS;
-    this.#maxPerSubject = Math.min(options.maxSessionsPerSubject ?? DEFAULT_MAX_SESSIONS_PER_SUBJECT, this.#max);
+    this.#maxPerSubject = options.maxSessionsPerSubject ?? DEFAULT_MAX_SESSIONS_PER_SUBJECT;
     this.#ttl = options.ttlMs ?? DEFAULT_TTL_MS;
     this.#now = now;
   }
@@ -62,6 +63,11 @@ export class SessionBindings {
   /** Number of ids currently remembered, expired ones included until they are next touched. */
   get size(): number {
     return this.#entries.size;
+  }
+
+  /** Number of subjects that currently hold at least one id. Never more than {@link size}. */
+  get subjects(): number {
+    return this.#bySubject.size;
   }
 
   /**

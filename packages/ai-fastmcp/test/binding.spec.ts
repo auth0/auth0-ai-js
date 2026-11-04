@@ -149,10 +149,12 @@ describe("SessionBindings per subject limit", () => {
     expect(bindings.accept("s2", "mallory")).toBe(true);
   });
 
-  it("never lets a subject hold more than maxSessions, even when the limit is larger", () => {
+  it("ignores a per-subject limit above maxSessions, because the whole table is bounded by maxSessions", () => {
     const bindings = new SessionBindings({ maxSessions: 3, maxSessionsPerSubject: 50 });
     for (let i = 0; i < 10; i++) bindings.accept(`s${i}`, "alice");
     expect(bindings.size).toBe(3);
+    expect(bindings.accept("s6", "mallory")).toBe(true);
+    expect(bindings.accept("s9", "mallory")).toBe(false);
   });
 
   it("still drops the least recently used id of anyone once the whole map is full", () => {
@@ -183,5 +185,27 @@ describe("SessionBindings per subject limit", () => {
     bindings.accept("s2", "alice");
     expect(bindings.accept("s2", "mallory")).toBe(false);
     expect(bindings.accept("s1", "mallory")).toBe(true);
+  });
+
+  it("keeps no record of a subject whose ids are all gone", () => {
+    const bindings = new SessionBindings({ maxSessions: 3, maxSessionsPerSubject: 2 });
+    // Twenty subjects with one id each: the table keeps the last three, and so does the subject index.
+    for (let i = 0; i < 20; i++) bindings.accept(`s${i}`, `user${i}`);
+    expect(bindings.size).toBe(3);
+    expect(bindings.subjects).toBe(3);
+    // One subject replacing its own ids leaves one record.
+    const own = new SessionBindings({ maxSessions: 10, maxSessionsPerSubject: 1 });
+    for (let i = 0; i < 5; i++) own.accept(`o${i}`, "alice");
+    expect(own.size).toBe(1);
+    expect(own.subjects).toBe(1);
+  });
+
+  it("counts subjects once however many ids each holds", () => {
+    const bindings = new SessionBindings({ maxSessions: 10, maxSessionsPerSubject: 3 });
+    bindings.accept("a1", "alice");
+    bindings.accept("a2", "alice");
+    bindings.accept("b1", "bob");
+    expect(bindings.subjects).toBe(2);
+    expect(bindings.size).toBe(3);
   });
 });
