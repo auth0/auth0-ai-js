@@ -80,7 +80,7 @@ Token exchange, caching (pass a `tokenStore` such as `MemoryIndexedTokenStore` t
 
 ## Errors inside tools
 
-FastMCP copies the message of an error thrown by a tool into the result, so a message with a secret in it reaches the client. `withAuth0Execute` closes that gap: a missing scope, a downscoped exchange and an authentication error become fixed texts, and every other error becomes `Tool execution failed.` with `isError: true`. Pass `onError` to see the original error on the server. A FastMCP `UserError` passes through unchanged, because FastMCP defines it as the error meant for the user.
+FastMCP copies the message of an error thrown by a tool into the result, so a message with a secret in it reaches the client. `withAuth0Execute` closes that gap: a missing scope, a downscoped exchange and an authentication error become fixed texts, and every other error becomes `Tool execution failed.` with `isError: true`. Pass `onError` to see the original error on the server. Without one, each failure writes a single line to the server's standard error stream (not to `context.log`, which FastMCP sends to the client): `[ai-fastmcp] Tool failed: <error name> code=<code> statusCode=<status> auth0_error=<error> auth0_error_description="<text>"`, with the fields that exist, cut to 300 characters on one line. It never holds the message, a token, a header or a request body. A missing scope, a downscoped exchange and a missing session are expected outcomes and are not logged. A 500 from `authenticate` writes the same kind of line, starting `[ai-fastmcp] Authentication failed:`. A FastMCP `UserError` passes through unchanged, because FastMCP defines it as the error meant for the user.
 
 Errors from `session.mcpClient` are already sanitized by `@auth0/ai-mcp`. Tools you do not wrap keep FastMCP's behavior.
 
@@ -105,7 +105,7 @@ Other options:
 | `realm` | The `realm` of challenges. |
 | `metadata` | `scopesSupported` (defaults to `requiredScopes`), `resourceName` and `resourceDocumentation` for the metadata document. |
 | `sessionBinding` | See below. |
-| `onError` | Called with the raw error whenever `authenticate` answers 500. |
+| `onError` | Called with the raw error whenever `authenticate` answers 500, and for every tool wrapped with `withAuth0Execute` that has no `onError` of its own (a tool's own `onError` replaces it). The error never reaches the client and can carry Auth0 response details, so treat it as sensitive. While a hook is set, the default log line is not written. A throwing hook is ignored. |
 
 Behind a proxy, set the audience (and so the resource) to the public URL. FastMCP does not follow `X-Forwarded-*` headers when it serves the metadata.
 
