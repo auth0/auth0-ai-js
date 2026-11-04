@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { HttpResponse, delay, http } from "msw";
@@ -18,7 +21,7 @@ import {
 import { scopeMode } from "../support/index.js";
 import { documented, loadSnippet } from "./guides.js";
 import { startDocsServer, withEnv } from "./server.js";
-import { installedFastmcpVersion, isBelowFloor } from "./versions.js";
+import { installedFastmcpVersion, isBelowMetaFloor } from "./versions.js";
 
 /** Pins every claim of docs/Troubleshooting.md. */
 
@@ -419,7 +422,7 @@ describe("Troubleshooting.md: the other symptoms", () => {
   });
 });
 
-describe.runIf(isBelowFloor())("Troubleshooting.md: FastMCP below the floor", () => {
+describe.runIf(isBelowMetaFloor())("Troubleshooting.md: FastMCP below 4.7.0", () => {
   it("rejects the _meta field of a tool error, as the guide describes", async () => {
     await withServer({}, async (server) => {
       const session = await connect(server, await rig().token(server, { scope: "x" }));
@@ -442,7 +445,7 @@ describe("Troubleshooting.md: the _meta symptom", () => {
       GUIDE,
       "## A tool result says Unrecognized key: \"_meta\"",
       "The text looks like `Tool 'admin' execution failed:` followed by a list that contains `Unrecognized key: \"_meta\"`.",
-      "Install FastMCP 4.7.0 or later.",
+      "Install FastMCP 4.22.0 or later, the oldest release this package supports.",
     );
   });
 });
@@ -469,3 +472,46 @@ async function toolText(server: { url: URL }, token: string): Promise<string> {
   const message = parseMessage(await response.text()) as { result: { content: Array<{ text: string }> } };
   return message.result.content[0]!.text;
 }
+
+describe("Troubleshooting.md: the legacy SSE route and the stdio transport", () => {
+  it("answers GET /sse with 404 not_found, as the entry shows", async () => {
+    await withServer({ stateless: false }, async (server) => {
+      const controller = new AbortController();
+      try {
+        const response = await socketFetch(new URL("/sse", server.url), {
+          headers: { authorization: `Bearer ${await rig().token(server)}`, accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "not_found", error_description: "Not found." });
+      } finally {
+        controller.abort();
+      }
+    });
+    documented(
+      GUIDE,
+      "## 404 not_found on GET /sse",
+      'the adapter answers 404 with `{"error":"not_found","error_description":"Not found."}`.',
+      "FastMCP has no option to turn the route off. Connect with the Streamable HTTP transport, at `auth.endpoint`.",
+    );
+  });
+
+  it("describes the stdio failure with the text FastMCP logs and the adapter's message", async () => {
+    const auth = createFastMcpAuth({ client: createMcpClient({ domain: DOMAIN, audience: URL_AUDIENCE }) });
+    const error = (await auth.authenticate(undefined as never).catch((caught: unknown) => caught)) as Error;
+    expect(error.message).toContain("cannot authenticate the stdio transport");
+    // FastMCP itself writes the prefix; the guide quotes it.
+    const dist = path.join(path.dirname(createRequire(import.meta.url).resolve("fastmcp")));
+    const source = readdirSync(dist)
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => readFileSync(path.join(dist, name), "utf8"))
+      .join("\n");
+    expect(source).toContain("Authentication failed for stdio transport:");
+    documented(
+      GUIDE,
+      "## Authentication failed for stdio transport",
+      "FastMCP logs `Authentication failed for stdio transport:` followed by `@auth0/ai-fastmcp authenticates HTTP requests and cannot authenticate the stdio transport`.",
+      'Start the server with `transportType: "httpStream"`. Until then wrapped tools answer `Authentication is required.`',
+    );
+  });
+});

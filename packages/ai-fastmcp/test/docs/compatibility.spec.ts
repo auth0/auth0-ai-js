@@ -28,16 +28,16 @@ function manifest(): {
 }
 
 describe("Compatibility.md: FastMCP", () => {
-  it("declares ^4.7.0 as the peer range, and the suites run inside it", () => {
-    expect(manifest().peerDependencies["fastmcp"]).toBe("^4.7.0");
-    expect(FLOOR).toEqual([4, 7, 0]);
+  it("declares ^4.22.0 as the peer range, and the suites run inside it", () => {
+    expect(manifest().peerDependencies["fastmcp"]).toBe("^4.22.0");
+    expect(FLOOR).toEqual([4, 22, 0]);
     const installed = parseVersion(installedFastmcpVersion());
     expect(compareVersions(installed, FLOOR)).toBeGreaterThanOrEqual(0);
     expect(installed[0]).toBe(4);
-    documented(GUIDE, "The peer dependency range is `^4.7.0`. 4.7.0 is the oldest release supported.");
+    documented(GUIDE, "The peer dependency range is `^4.22.0`. 4.22.0 is the oldest release supported.");
   });
 
-  it("puts an _meta field on a tool error, with one of the three documented kinds, which is why the floor is 4.7.0", async () => {
+  it("puts an _meta field on a tool error, with one of the three documented kinds, and releases before 4.7.0 reject it", async () => {
     await withServer({}, async (server) => {
       const session = await connect(server, await rig().token(server, { scope: "x" }));
       try {
@@ -77,15 +77,27 @@ describe("Compatibility.md: FastMCP", () => {
   it("lists the releases the matrix covered, with the floor first and the newest tried last", () => {
     const text = guideText(GUIDE);
     for (const row of [
-      "| 4.7.0 (the floor) | Pass |",
-      "| 4.10.0, 4.13.0, 4.16.0, 4.19.0, 4.21.0, 4.22.0, 4.23.0 | Pass |",
+      "| 4.22.0 (the floor) | Pass |",
+      "| 4.23.0 | Pass |",
       "| 4.23.8 (the newest tried) | Pass |",
+      "| 4.7.0, with mcp-proxy 6.7.17, 6.7.18 or 6.7.19 | Pass |",
+      "| 4.7.0, with mcp-proxy 6.4.6, 6.5.3, 6.5.4, 6.5.5, 6.5.7, 6.6.0, 6.7.0, 6.7.13, 6.7.15 or 6.7.16 | Fail: the test for `GET` and `DELETE` on a bound session gets no refusal from `authenticate` |",
       "| 4.0.0, 4.3.0, 4.4.0, 4.5.0, 4.6.0 | Fail, because of `_meta` |",
     ]) {
       expect(text).toContain(row);
     }
-    expect(text).toContain("These are samples, not every patch release. 4.1 and 4.2 were not run.");
-    documented("README.md", "FastMCP 4.7.0, the oldest release supported, and 4.23.8, the newest tested");
+    expect(text).toContain("These are samples, not every patch release. Releases from 4.7.0 to 4.21.2 are not supported");
+    documented("README.md", "FastMCP 4.22.0, the oldest release supported, and 4.23.8, the newest tested");
+  });
+});
+
+describe("Compatibility.md: transports", () => {
+  it("says the adapter supports neither stdio nor the legacy SSE transport", () => {
+    documented(
+      GUIDE,
+      "The adapter does not support the stdio transport: FastMCP calls `authenticate` with no request there, and the hook rejects with an error that names `transportType: \"httpStream\"`.",
+      "It does not support the legacy SSE transport either: `GET /sse` is answered with 404.",
+    );
   });
 });
 

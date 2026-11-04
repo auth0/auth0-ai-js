@@ -97,6 +97,14 @@ The exchange worked, but the tenant granted fewer scopes than the tool asked for
 
 A stateful server received a valid token for one subject on a session that another subject used first. A client that switches users has to start a new session. If your clients cannot do that, or you run several instances, use the stateless mode. See [Stateless and stateful servers](./StatelessAndStateful.md).
 
+## 404 not_found on GET /sse
+
+A client that speaks the legacy SSE transport opens `GET /sse`, and the adapter answers 404 with `{"error":"not_found","error_description":"Not found."}`. This is on purpose. FastMCP runs on mcp-proxy, which serves that route by default and takes the messages of the session it opens on `POST /messages?sessionId=...` without calling `authenticate`, so anyone who knew the session id could post tool calls as the user who opened the stream. FastMCP has no option to turn the route off. Connect with the Streamable HTTP transport, at `auth.endpoint`.
+
+## Authentication failed for stdio transport
+
+FastMCP logs `Authentication failed for stdio transport:` followed by `@auth0/ai-fastmcp authenticates HTTP requests and cannot authenticate the stdio transport`. FastMCP calls `authenticate` with no request when the server starts on stdio, and there is no token to verify. Start the server with `transportType: "httpStream"`. Until then wrapped tools answer `Authentication is required.`
+
 ## The accessors return undefined, or No authenticated request context.
 
 The tool is not wrapped. `getCallerPrincipal()` and `getCallerMcpClient()` return `undefined`, and `getCallerMcpClientOrThrow()` throws `No authenticated request context.`, outside `withAuth0Execute`. The message does not mean the request lacked authentication: the request passed `authenticate` and `context.session` is set. Only the binding of the accessors is missing. Wrap the `execute` function, or read `context.session` instead. See [Tools](./Tools.md#withauth0execute).
@@ -111,4 +119,4 @@ The client limits each request to the tenant with `requestTimeoutMs`. A discover
 
 ## A tool result says Unrecognized key: "_meta"
 
-The text looks like `Tool 'admin' execution failed:` followed by a list that contains `Unrecognized key: "_meta"`. The FastMCP release is older than 4.7.0, whose result schema does not allow the `_meta` field that this package puts on its tool errors. Install FastMCP 4.7.0 or later. See [Compatibility](./Compatibility.md).
+The text looks like `Tool 'admin' execution failed:` followed by a list that contains `Unrecognized key: "_meta"`. The FastMCP release is older than 4.7.0, whose result schema does not allow the `_meta` field that this package puts on its tool errors. Install FastMCP 4.22.0 or later, the oldest release this package supports. See [Compatibility](./Compatibility.md).

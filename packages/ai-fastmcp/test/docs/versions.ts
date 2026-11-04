@@ -4,7 +4,7 @@ import path from "node:path";
 import { packageDir } from "./guides.js";
 
 /** The oldest FastMCP release the package supports. */
-export const FLOOR = [4, 7, 0] as const;
+export const FLOOR = [4, 22, 0] as const;
 
 export function installedFastmcpVersion(): string {
   const candidates = [
@@ -29,7 +29,10 @@ export function compareVersions(a: readonly number[], b: readonly number[]): num
   return 0;
 }
 
-/** Whether the installed FastMCP is older than the floor. Only a deliberate run on an old release is. */
-export function isBelowFloor(): boolean {
-  return compareVersions(parseVersion(installedFastmcpVersion()), FLOOR) < 0;
+/** The first FastMCP release whose tool result schema allows `_meta`. */
+export const META_FLOOR = [4, 7, 0] as const;
+
+/** Whether the installed FastMCP rejects `_meta` in a tool result. Only a deliberate run on an old release does. */
+export function isBelowMetaFloor(): boolean {
+  return compareVersions(parseVersion(installedFastmcpVersion()), META_FLOOR) < 0;
 }

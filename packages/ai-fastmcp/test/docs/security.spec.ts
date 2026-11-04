@@ -196,3 +196,32 @@ describe("Security.md: public routes, proxies, FastMCP's auth option and revocat
     documented("Security.md", "After it has fetched the discovery document and the keys, it makes no call to the tenant per request.");
   });
 });
+
+describe("Security.md: the legacy SSE route", () => {
+  it("is closed: GET /sse is refused before a token is looked at, so /messages has no session to reach", async () => {
+    await withServer({ stateless: false }, async (server) => {
+      const controller = new AbortController();
+      try {
+        const opened = await socketFetch(new URL("/sse", server.url), {
+          headers: { authorization: `Bearer ${await rig().token(server)}`, accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+        expect(opened.status).toBe(404);
+        await opened.text();
+      } finally {
+        controller.abort();
+      }
+      expect(rig().requests).toEqual([]);
+      const posted = await rawRequest(server, {
+        path: "/messages?sessionId=00000000-0000-4000-8000-000000000000",
+        body: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "whoami_raw", arguments: {} } },
+      });
+      expect(posted.status).toBe(400);
+    });
+    documented(
+      "Security.md",
+      "## The legacy SSE route",
+      "The adapter answers `GET /sse` with 404 before it looks at a token, so no legacy session can be opened and `/messages` has nothing to reach.",
+    );
+  });
+});

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
-const MIN = [4, 7, 0] as const;
+const MIN = [4, 22, 0] as const;
 const PACKAGE = "fastmcp";
 
 function resolvedVersion(): { version: string; dir: string } {

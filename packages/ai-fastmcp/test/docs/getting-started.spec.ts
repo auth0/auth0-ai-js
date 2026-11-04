@@ -109,7 +109,7 @@ describe("GettingStarted.md", () => {
     );
   });
 
-  it("names FastMCP 4.7.0 as the oldest release and the other guides it links", () => {
-    documented("GettingStarted.md", "The oldest FastMCP release supported is 4.7.0", "(./Compatibility.md)");
+  it("names FastMCP 4.22.0 as the oldest release and the other guides it links", () => {
+    documented("GettingStarted.md", "The oldest FastMCP release supported is 4.22.0", "(./Compatibility.md)");
   });
 });

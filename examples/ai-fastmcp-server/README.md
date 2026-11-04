@@ -62,6 +62,6 @@ npm run build
 npm test
 ```
 
-The example needs FastMCP 4.7.0 or newer, the oldest release `@auth0/ai-fastmcp` supports. `npm test` fails if the resolved copy of FastMCP is older.
+The example needs FastMCP 4.22.0 or newer, the oldest release `@auth0/ai-fastmcp` supports. `npm test` fails if the resolved copy of FastMCP is older.
 
 `npm test` runs both servers on loopback with a mocked Auth0 tenant. It makes no network calls.

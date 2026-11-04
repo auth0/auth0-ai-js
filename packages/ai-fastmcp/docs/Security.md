@@ -25,6 +25,10 @@ FastMCP serves some routes without authentication, and this adapter does not cha
 - `/health` and `/ready`.
 - The protected resource metadata, at `/.well-known/oauth-protected-resource` and at that path followed by the endpoint. It holds public information: the resource, the authorization servers and the scopes you chose to publish.
 
+## The legacy SSE route
+
+FastMCP runs on mcp-proxy, which serves `GET /sse` and `POST /messages` for the legacy SSE transport by default. It calls `authenticate` for the first request only; the messages posted to `/messages` are never authenticated, and the session id travels in the query string, so the session binding cannot see it. FastMCP has no option to turn the route off. The adapter answers `GET /sse` with 404 before it looks at a token, so no legacy session can be opened and `/messages` has nothing to reach. See [Troubleshooting](./Troubleshooting.md#404-not_found-on-get-sse).
+
 ## Proxies and forwarded headers
 
 FastMCP does not follow `X-Forwarded-Host` or `X-Forwarded-Proto`. The published resource is the one you configured, whatever the forwarding headers say. Set the audience to the public URL clients use. See [Configuration](./Configuration.md#behind-a-proxy).
