@@ -247,16 +247,16 @@ describe("Troubleshooting.md: the other symptoms", () => {
     );
   });
 
-  it("lists the missing scopes in the challenge of a 403", async () => {
+  it("lists every required scope in the challenge of a 403", async () => {
     await withServer({ auth: { requiredScopes: ["a:one", "b:two"] } }, async (server) => {
       const response = await rawRequest(server, {
         body: INITIALIZE_BODY,
         headers: { authorization: `Bearer ${await rig().token(server, { scope: "a:one" })}` },
       });
       expect(response.status).toBe(403);
-      expect(parseChallenge(response.headers.get("www-authenticate")).params["scope"]).toBe("b:two");
+      expect(parseChallenge(response.headers.get("www-authenticate")).params["scope"]).toBe("a:one b:two");
     });
-    documented(GUIDE, "The `scope` parameter of the challenge lists the missing ones.");
+    documented(GUIDE, "The `scope` parameter of the challenge lists every required scope, the ones the token holds as well as the missing ones.");
   });
 
   it("explains a Tool execution failed from a missing client secret, a refused exchange, and a downscoped grant", async () => {
@@ -294,6 +294,30 @@ describe("Troubleshooting.md: the other symptoms", () => {
       "- A `MissingClientAuthError` means the exchange needs `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`",
       "- A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error",
       "## The token exchange did not grant the requested scopes.",
+    );
+  });
+
+  it("explains an exchange that issues a token about to expire: a generic tool error and a warning from @auth0/ai-mcp", async () => {
+    const errors: unknown[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const server = await startDocsServer({
+      auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience, clientId: "mcp-client", clientSecret: "secret" }),
+      tools: (s) => exchangeTool(s, errors),
+    });
+    try {
+      rig().tenant.auth0.state.expiresIn = 4;
+      expect(await toolText(server, await rig().token(server))).toBe("Tool execution failed.");
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]?.[0]);
+      expect(line.startsWith("[auth0-ai-mcp] ")).toBe(true);
+      expect(line).toContain("expires within 5 seconds");
+    } finally {
+      warn.mockRestore();
+      await server.stop();
+    }
+    documented(
+      GUIDE,
+      "- A warning that starts with `[auth0-ai-mcp]` and says the token endpoint issued a token that is already expired, expires within 5 seconds or came without a usable expiry",
     );
   });
 

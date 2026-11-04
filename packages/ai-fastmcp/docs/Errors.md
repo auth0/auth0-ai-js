@@ -28,7 +28,7 @@ Details of the challenges:
 
 - The 401 for a missing credential has no `error` value, as RFC 6750 asks, so the header reads `Bearer resource_metadata="..."`.
 - When you set `requiredScopes`, the same 401 also carries `scope="..."` with all of them, so a client knows what to ask for when it authorizes. The metadata document publishes the same scopes as `scopes_supported`.
-- The 403 for a missing scope adds `scope="..."`, which lists only the scopes the token lacks.
+- The 403 for a missing scope adds `scope="..."`, which lists every scope the server requires, not only the ones the token lacks. A client that authorizes again then keeps the scopes it already holds.
 - A `realm` option adds `realm="..."` to each challenge.
 - Challenges name the `Bearer` scheme only.
 
@@ -90,7 +90,7 @@ When a replaced error has no hook, neither on the tool nor on `createFastMcpAuth
 [ai-fastmcp] Tool failed: TokenExchangeError code=token_exchange_error statusCode=403 auth0_error=access_denied auth0_error_description="Unauthorized"
 ```
 
-The line holds the error name, its `code` and `statusCode`, and the `error` and `error_description` that Auth0 returned. It never holds the message of the error, a token, a secret, a header or a request body. It is one line and at most 300 characters. The wrapper does not use `context.log` for it, because FastMCP sends `context.log` to the connected client. The wrapper treats a missing scope, a downscoped exchange, a missing session and a `UserError` as expected outcomes and does not log them. While a hook is in effect the line is not written.
+The line holds the error name, its `code` and `statusCode`, and the `error` and `error_description` that Auth0 returned. It never holds the message of the error, a token, a secret, a header or a request body. It is one line and at most 300 characters. The wrapper does not use `context.log` for it, because FastMCP sends `context.log` to the connected client. The wrapper treats a missing scope, a downscoped exchange, a missing session and a `UserError` as expected outcomes and does not log them. While a hook is in effect the line is not written. `@auth0/ai-mcp` writes its own diagnostics with `console.warn`, each prefixed `[auth0-ai-mcp]`, for example when an exchange issues a token that is already expired or expires within five seconds. Those lines hold fixed text only and are not affected by `onError`.
 
 Auth0's answer sits two levels down in the raw error: `error.cause` is the original error, and its `cause` holds the body of the answer with `error` and `error_description`. A hook that wants them reads `error.cause.cause`.
 

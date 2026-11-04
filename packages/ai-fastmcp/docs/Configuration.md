@@ -56,7 +56,9 @@ Passing `client` together with an inline client option throws `InvalidConfigurat
 
 ### Other client options
 
-Inline options accept everything `createMcpClient` accepts: `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs` and `apiClient`. The `@auth0/ai-mcp` guides describe them. For example, `organizationPolicy: "required"` makes the adapter answer 401 to a token without an `org_id` claim. See [Token caching](./TokenCaching.md) for `tokenStore`.
+Inline options accept everything `createMcpClient` accepts: `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId` and `apiClient`. The `@auth0/ai-mcp` guides describe them. For example, `organizationPolicy: "required"` makes the adapter answer 401 to a token without an `org_id` claim. See [Token caching](./TokenCaching.md) for `tokenStore`.
+
+By default a token with neither an `azp` nor a `client_id` claim is accepted, and `principal.clientId` is `null`. Auth0 access tokens carry `azp`, and some machine callers have no client identity at all. Set `requireClientId: true` to answer 401 to a token without one.
 
 The adapter accepts Bearer tokens only, so the `dpop` option has one useful value. See [DPoP](./DPoP.md).
 
@@ -133,7 +135,7 @@ The document and the `WWW-Authenticate` challenge are built from the same resour
 
 ## Required scopes
 
-`requiredScopes` lists scopes every request must carry. A token that lacks one gets HTTP 403 before any tool runs. The challenge has `error="insufficient_scope"` and a `scope` parameter that lists only the missing scopes. A token with all of them passes. A request without credentials gets a 401 whose challenge names all of them in `scope`, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`, so the challenge and the document always agree.
+`requiredScopes` lists scopes every request must carry. A token that lacks one gets HTTP 403 before any tool runs. The challenge has `error="insufficient_scope"` and a `scope` parameter that lists every required scope, not only the missing ones, so a client that authorizes again keeps the scopes it already holds. A token with all of them passes. A request without credentials gets a 401 whose challenge names all of them in `scope`, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`, so the challenge and the document always agree.
 
 Each entry is split on whitespace, so `"read write"` means two scopes, and a repeated scope counts once. A blank entry or one that is not a string makes `createFastMcpAuth` throw `InvalidConfigurationError`.
 
@@ -173,7 +175,7 @@ export const auth = createFastMcpAuth({
 | --- | --- |
 | `client` | A client from `createMcpClient`. Cannot be combined with the inline client options. |
 | `domain`, `audience`, `clientId`, `clientSecret` | Inline client settings. Read from the environment when left out. |
-| `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `apiClient` | Other client options, as in `createMcpClient`. |
+| `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId`, `apiClient` | Other client options, as in `createMcpClient`. |
 | `resource` | Public URL of the server. Defaults to the audience and must equal it. |
 | `endpoint` | Path of the MCP route. Defaults to the path of the audience, else `/mcp`. Exposed as `auth.endpoint`. |
 | `authorizationServers` | Issuers published in the metadata document. |

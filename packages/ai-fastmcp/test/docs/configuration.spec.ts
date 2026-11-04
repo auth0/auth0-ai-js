@@ -132,6 +132,7 @@ describe("Configuration.md: the three ways to configure the client", () => {
       { organizationPolicy: "required" },
       { organizationPolicy: "required", organizationId: "org_1" },
       { requestTimeoutMs: 2000 },
+      { requireClientId: true },
       { apiClient: new ApiClient({ domain: DOMAIN, audience: "https://mcp.example.com/mcp" }) },
     ];
     for (const extra of options) {
@@ -139,7 +140,27 @@ describe("Configuration.md: the three ways to configure the client", () => {
     }
     documented(
       "Configuration.md",
-      "`tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs` and `apiClient`",
+      "`tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId` and `apiClient`",
+    );
+  });
+
+  it("accepts a token without azp and client_id by default and answers 401 to it with requireClientId", async () => {
+    const lenient = await startDocsServer({ auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience }) });
+    const strict = await startDocsServer({
+      auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience, requireClientId: true }),
+    });
+    try {
+      expect(await status(lenient, await rig().token(lenient, { claims: {} }))).toBe(200);
+      expect(await status(strict, await rig().token(strict, { claims: {} }))).toBe(401);
+      expect(await status(strict, await rig().token(strict))).toBe(200);
+    } finally {
+      await lenient.stop();
+      await strict.stop();
+    }
+    documented(
+      "Configuration.md",
+      "By default a token with neither an `azp` nor a `client_id` claim is accepted, and `principal.clientId` is `null`.",
+      "Set `requireClientId: true` to answer 401 to a token without one.",
     );
   });
 
@@ -335,7 +356,7 @@ describe("Configuration.md: metadata", () => {
 });
 
 describe("Configuration.md: required scopes, realm and the error observer", () => {
-  it("answers 403 with an insufficient_scope challenge that lists only the missing scopes", async () => {
+  it("answers 403 with an insufficient_scope challenge that lists every required scope", async () => {
     await withServer({ auth: { requiredScopes: ["mcp:access", "mcp:more"] } }, async (server) => {
       const response = await rawRequest(server, {
         body: LIST,
@@ -344,7 +365,7 @@ describe("Configuration.md: required scopes, realm and the error observer", () =
       expect(response.status).toBe(403);
       const challenge = parseChallenge(response.headers.get("www-authenticate"));
       expect(challenge.params["error"]).toBe("insufficient_scope");
-      expect(challenge.params["scope"]).toBe("mcp:more");
+      expect(challenge.params["scope"]).toBe("mcp:access mcp:more");
       const ok = await rawRequest(server, {
         body: LIST,
         headers: { authorization: `Bearer ${await rig().token(server, { scope: "mcp:access mcp:more" })}` },
@@ -355,7 +376,7 @@ describe("Configuration.md: required scopes, realm and the error observer", () =
       "Configuration.md",
       "A token that lacks one gets HTTP 403 before any tool runs.",
       "A token with all of them passes.",
-      'The challenge has `error="insufficient_scope"` and a `scope` parameter that lists only the missing scopes.',
+      'The challenge has `error="insufficient_scope"` and a `scope` parameter that lists every required scope, not only the missing ones, so a client that authorizes again keeps the scopes it already holds.',
     );
   });
 
@@ -455,7 +476,7 @@ describe("Configuration.md: the table of all options", () => {
     };
     const text = guideText("Configuration.md");
     const table = text.slice(text.indexOf("## All options"));
-    for (const name of [...Object.keys(adapterOptions), "client", "domain", "audience", "clientId", "clientSecret", "tokenStore", "scopeMatching", "organizationPolicy", "organizationId", "requestTimeoutMs", "apiClient"]) {
+    for (const name of [...Object.keys(adapterOptions), "client", "domain", "audience", "clientId", "clientSecret", "tokenStore", "scopeMatching", "organizationPolicy", "organizationId", "requestTimeoutMs", "requireClientId", "apiClient"]) {
       expect(table, name).toContain(`\`${name}\``);
     }
   });

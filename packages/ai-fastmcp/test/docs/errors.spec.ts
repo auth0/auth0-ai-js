@@ -130,7 +130,7 @@ describe("Errors.md: authentication failures", () => {
     documented("Errors.md", "wrong audience or issuer, no `sub`, or an organization policy violation");
   });
 
-  it("answers a missing server-wide scope with 403 and lists only the missing scopes in the challenge", async () => {
+  it("answers a missing server-wide scope with 403 and lists every required scope in the challenge", async () => {
     await withServer({ auth: { requiredScopes: ["a:one", "b:two"], realm: "orders" } }, async (server) => {
       const response = await rawRequest(server, {
         body: INITIALIZE_BODY,
@@ -143,14 +143,14 @@ describe("Errors.md: authentication failures", () => {
         challenge: true,
       });
       const challenge = parseChallenge(response.headers.get("www-authenticate"));
-      expect(challenge.params["scope"]).toBe("b:two");
+      expect(challenge.params["scope"]).toBe("a:one b:two");
       expect(challenge.params["realm"]).toBe("orders");
       expect(challenge.scheme).toBe("Bearer");
     });
     documented(
       "Errors.md",
       "| 403 | `insufficient_scope` | `The access token does not include the required scope.` |",
-      "The 403 for a missing scope adds `scope=\"...\"`, which lists only the scopes the token lacks.",
+      "The 403 for a missing scope adds `scope=\"...\"`, which lists every scope the server requires, not only the ones the token lacks.",
       "A `realm` option adds `realm=\"...\"` to each challenge.",
     );
   });
