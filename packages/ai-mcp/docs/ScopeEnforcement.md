@@ -34,7 +34,7 @@ export const handle = createMcpHandler({
 
 Each entry of `requiredScopes` is split on whitespace, so `'read write'` names two scopes, and duplicates count once. A blank or non-string entry is a mistake, so the handler throws `InvalidConfigurationError` when you create it, and an empty list means no requirement. The same scopes go out in the `scope` parameter of the 401 challenge that answers a request without a credential, so a client learns what to ask for when it authorizes, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`.
 
-When a scope is missing the response is a 403 whose challenge lists only the missing scopes in its `scope` parameter, so a client learns what to request without learning what else the server knows about:
+When a scope is missing the response is a 403 whose challenge lists the full requirement in its `scope` parameter, so a client that authorizes again asks for the scopes it already has as well as the missing ones. The server-wide list is already public in the 401 challenge and in `scopes_supported`, so the challenge discloses nothing new. In this example the token holds none of the required scopes:
 
 ```http
 HTTP/1.1 403 Forbidden
@@ -71,6 +71,8 @@ Calling `getOrderSummary('42')` for a caller without `read:payments` resolves to
 
 The text is generic and never names the scopes the server expects or the caller holds. Every other error, including errors thrown by your callback, propagates unchanged.
 
+**Why a result and not an error.** A tool call that fails reaches the MCP client as a result with `isError: true` whatever the cause, because the MCP SDK turns an error thrown inside a tool into one. The client sees the same thing either way. Returning the result keeps the failure machine readable through `_meta.error` and leaves the other tools of the server working. A tool result cannot carry an HTTP 403 challenge, so only the server-wide `requiredScopes` check can make a client authorize again with more scopes. If you want the error itself, for example to map it to your own response, call `requireScopes`, which throws `InsufficientScopeError`.
+
 `required` accepts one scope, a space-delimited string of scopes, or an array. A requirement that names no scope is a mistake, so `withRequiredScopes` throws `InvalidConfigurationError` for an empty string, a whitespace-only string, an empty array, or an array with a blank or non-string entry. It throws when you wrap the callback, not on each call, and it keeps its own copy of the list, so changing the array afterwards has no effect.
 
 ## Imperative checks
@@ -99,7 +101,7 @@ It throws:
 - `UnauthenticatedError` when you pass no principal and no request context is active. Passing `undefined` explicitly means "use the current caller".
 - `InsufficientScopeError` when any scope is missing. The error's `requiredScopes` property holds the normalized list for server-side use. Do not echo it to clients.
 
-When `InsufficientScopeError` escapes a custom `createMcpHandler` handler, the handler answers HTTP 403 with `insufficient_scope`. On `createMcpSdkHandler` and `createNodeMcpHandler`, the official MCP SDK's `McpServer` turns an error thrown inside a tool callback into a tool result with `isError: true` and the error's own message, and the HTTP status stays 200. The message of `InsufficientScopeError` and `DownscopedTokenError` is generic. The same applies to `DownscopedTokenError` from a downscoped exchange inside a tool.
+When `InsufficientScopeError` escapes a custom `createMcpHandler` handler, the handler answers HTTP 403 with `insufficient_scope`. The challenge lists the scopes of the failing check together with the server-wide `requiredScopes`. On `createMcpSdkHandler` and `createNodeMcpHandler`, the official MCP SDK's `McpServer` turns an error thrown inside a tool callback into a tool result with `isError: true` and the error's own message, and the HTTP status stays 200. The message of `InsufficientScopeError` and `DownscopedTokenError` is generic. The same applies to `DownscopedTokenError` from a downscoped exchange inside a tool.
 
 ## Tenant-side setup
 
