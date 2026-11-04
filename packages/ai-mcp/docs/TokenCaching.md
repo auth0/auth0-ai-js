@@ -89,7 +89,7 @@ The index is a hint kept next to the data, not an authority. The package conside
 
 - Both modes cache a token under the scopes Auth0 granted it, including a token whose grant came back narrower than the request. The caller that asked for more still gets `DownscopedTokenError`. See [On Behalf Of](./OnBehalfOf.md#narrowed-grants).
 - A token within five seconds of its expiry counts as a miss.
-- Store failures never fail a tool call. A read that throws counts as a miss, and the package ignores a write that throws, so the freshly exchanged token is still returned. A store outage costs extra exchanges.
+- Store failures never fail a tool call. A read that throws counts as a miss, and the package ignores a write that throws, so the freshly exchanged token is still returned. A store outage costs extra exchanges. The encrypted store reports such failures once, as described below.
 - The package never deletes entries. Your store must expire them, using each value's `expiresAt`. For an index, expire the whole index key and push its expiry out to the latest member's `expiresAt` on every add.
 
 ## Encrypted store
@@ -120,7 +120,7 @@ export const client = createMcpClient({
 
 **What stays readable.** The storage keys, each entry's expiry time, and the token key and expiry of each index member remain in the clear, because the inner store needs them to find and expire entries. The wrapper encrypts the granted scopes of an index member, so the inner indexed store must treat members as opaque: their `grantedScopes` hold ciphertext, not scope names.
 
-**Failures.** Tampered or malformed ciphertext, a different secret or a key mismatch reads as a cache miss, never as an exception, so the call falls through to a fresh exchange. The wrapper logs nothing about the value. Failures raised by the inner store are not swallowed by the wrapper. The core client then treats them as described above.
+**Failures.** Tampered or malformed ciphertext, a different secret or a key mismatch reads as a cache miss, never as an exception, so the call falls through to a fresh exchange. The wrapper writes one `console.warn` line per kind of problem and store instance, the first time it happens, so a wrong or changed secret shows up in the logs instead of silently turning every read into a miss. A changed secret is expected to cause these lines right after a rollout. The line holds fixed text only: no value, key or error message. Failures raised by the inner store are not swallowed by the wrapper. It reports the first one the same way and rethrows it unchanged, and the core client then treats it as described above.
 
 **What it does not protect against.** Someone with write access to the inner store can delete entries or replay an older ciphertext under the same key until it expires. Encryption does not defend against that. There is also no secret rotation. See [known limitations](./KnownLimitations.md#the-encrypted-store-has-no-secret-rotation).
 

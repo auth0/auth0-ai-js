@@ -44,7 +44,7 @@ The context is visible to everything the handler starts, including code after `a
 
 The verified access token is held privately by the implementation. The object is frozen, has no property that holds the token, and exposes no way to read the token, so tool code cannot forward or log it by accident.
 
-Each token method rejects a result that is already expired, with the same generic error. Errors that leave the request-scoped client carry a fixed generic message. They keep the original class so `instanceof` checks and status mapping still work (a core `VerifyAccessTokenError` raised during an exchange becomes `UnauthenticatedError`, because the caller's token expired), and the original error is available as `cause` for server-side diagnostics. The sanitized error itself keeps the `code`, `statusCode` and a copy of the `headers` of a failed token request. Do not serialize `cause` into a response.
+Each token method rejects a result that is expired or expires within five seconds, with the same generic error. Errors that leave the request-scoped client carry a fixed generic message. They keep the original class so `instanceof` checks and status mapping still work (a core `VerifyAccessTokenError` raised during an exchange becomes `UnauthenticatedError`, because the caller's token expired), and the original error is available as `cause` for server-side diagnostics. The sanitized error itself keeps the `code`, `statusCode` and a copy of the `headers` of a failed token request. Do not serialize `cause` into a response.
 
 ## Setting the context yourself
 

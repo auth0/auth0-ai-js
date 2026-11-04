@@ -51,13 +51,13 @@ If you need sessions or streaming, use `createMcpHandler` and manage the transpo
 
 ## A tenant outage answers 401
 
-When the discovery document or the key set of your tenant cannot be fetched (the request fails, times out or gets an error status), the core client reports the token as invalid. The handler answers 401 with `error="invalid_token"` and does not call `onError`. During an outage a client can therefore start a new authorization although its token is fine, and alerts on 5xx responses or on `onError` stay silent. A 503 for this case needs a change in the core library. A key set fetch also stops after 5 seconds at most, because the JWT library caps it there, so a larger `requestTimeoutMs` does not lengthen it; see [Timeouts](./OnBehalfOf.md#timeouts).
+When the discovery document or the key set of your tenant cannot be fetched (the request fails, times out or gets an error status), the core client reports the token as invalid. The handler answers 401 with `error="invalid_token"` and does not call `onError`. During an outage a client can therefore start a new authorization although its token is fine, and alerts on 5xx responses or on `onError` stay silent. The cause is in the core library, `@auth0/auth0-api-js`, which has to report the failure as its own error before this package can answer 503. That change is tracked as a follow-up for the core library and is not part of this release. Until then, watch the reachability of the discovery and key set URLs of your tenant separately, because nothing on the response or in `onError` tells an outage from a bad token. A key set fetch also stops after 5 seconds at most, because the JWT library caps it there, so a larger `requestTimeoutMs` does not lengthen it; see [Timeouts](./OnBehalfOf.md#timeouts).
 
 ## Other things to know
 
 - `MemoryIndexedTokenStore` lives in one process. Workers do not share it, and it is empty after a restart.
 - Client credentials tokens and Token Vault tokens are not cached by this package.
-- The core client stores an On Behalf Of result before this package checks its expiry. If the authorization server returns an already expired token, the call fails, and the expired entry can stay in the token store. The cache treats expired entries as misses, so it is never served.
+- The core client stores an On Behalf Of result before this package checks its expiry. If the authorization server returns a token that is expired or expires within five seconds, the call fails, and that entry can stay in the token store. The cache treats such entries as misses, so it is never served.
 - The handler cannot serve an Auth0 API whose identifier is not the public URL of the server. See [resource and audience](./Handler.md#resource-and-audience).
 - The exchange request to Auth0 carries no DPoP proof. See [DPoP](./TokenVerification.md#dpop).
 - The handler routes nothing but the metadata document. Mount it only on the path that serves MCP.

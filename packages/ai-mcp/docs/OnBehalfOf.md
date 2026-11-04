@@ -64,7 +64,7 @@ Use `grantedScopes`, not `scope`, to decide what a token covers. The token respo
 
 The same rule applies to client credentials grants.
 
-The request-scoped client also rejects a result whose `expiresAt` is at or before the current time, or is not a finite number. This applies to `getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection`. The rejection is the generic `The token operation failed.` error, and no token data is attached to it, so a tool never receives a token that is already dead. A cached on behalf of entry that has expired is a miss, so the next call performs a new exchange.
+The request-scoped client also rejects a result whose `expiresAt` is within five seconds of the current time or earlier, or is not a finite number. The five seconds are the same margin the cache uses, so a token this package returns is never one the cache would refuse a moment later. This applies to `getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection`. The rejection is the generic `The token operation failed.` error, and no token data is attached to it, so a tool never receives a token that is already dead. The package writes one `console.warn` line that names the operation and says the token was expired or came without an expiry, so an operator can tell why a call failed. The line holds fixed text only, never a token or a claim. A cached on behalf of entry that has expired is a miss, so the next call performs a new exchange.
 
 ## Narrowed grants
 
@@ -139,5 +139,7 @@ export async function readConfig(): Promise<string> {
 ```
 
 The result is the core `TokenSet` (`accessToken`, `expiresAt`, `scope`, `tokenType`) plus `grantedScopes`. When the server returned no `scope` field, `grantedScopes` holds the normalized requested scopes. An empty `scope` string means nothing was granted, and `grantedScopes` is empty. A client credentials grant that is narrower than requested is a server-side configuration failure, because the scopes belong to the server's own client and the caller cannot fix them. It is a generic error with the downscope detail as its `cause`, not a 403. In a custom `createMcpHandler` handler it escapes as a generic 500 and `onError` receives it. With `createMcpSdkHandler` and `createNodeMcpHandler`, the MCP SDK turns it into a tool result with `isError: true` and HTTP 200, and `onError` is not called, so alerts on 5xx or on `onError` never see it. Log it inside the tool. See [Errors](./Errors.md#what-the-handler-returns).
+
+When you leave out `scope` on a client credentials call, Auth0 issues the scopes of the client grant and the package checks nothing against them: read `grantedScopes` if the tool depends on a scope. When you pass it, the call fails unless every requested scope was granted.
 
 This package does not cache client credentials tokens.

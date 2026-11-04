@@ -18,10 +18,10 @@ A `Principal` describes the caller. It holds no credential and is safe to log. T
 | `expiresAt` | `number` | The `exp` claim, in epoch seconds. |
 | `scopes` | `readonly string[]` | The space-delimited `scope` claim. Empty when the claim is absent. |
 | `permissions` | `readonly string[] \| null` | The `permissions` claim (RBAC). `null` when the claim is absent, which means permissions are unknown. An empty array means the caller has none. A present claim must be an array of strings. |
-| `clientId` | `string \| null` | The `azp` claim, falling back to `client_id`. `null` when neither is present, and a token without either is still accepted. |
+| `clientId` | `string \| null` | The `azp` claim, falling back to `client_id`; a blank value counts as absent. `null` when neither is present. A token without either is accepted unless you set `requireClientId` on `createMcpClient`, which rejects it with `UnauthenticatedError`. |
 | `orgId` | `string \| null` | The `org_id` claim. `null` outside an organization context. A present claim must be a string. |
 
-`buildPrincipal(claims)` builds a `Principal` from claims you have already verified. It does not verify anything. It throws `UnauthenticatedError` when `sub` is blank, when `exp` is missing or not a finite number, when a present `permissions` claim is not an array of strings (`null` included, only an absent claim means unknown), and when a present `org_id` claim is not a string. The messages never contain claim values. An empty `org_id` string maps to `null`. It reads every claim as an own property, so it ignores values inherited through the prototype chain.
+`buildPrincipal(claims, options?)` builds a `Principal` from claims you have already verified. It does not verify anything. `options.requireClientId` makes a token with no client identity an error. It is off by default, because Auth0 access tokens carry `azp` and a token without any client identity is valid for some machine callers. It throws `UnauthenticatedError` when `sub` is blank, when `exp` is missing or not a finite number, when a present `permissions` claim is not an array of strings (`null` included, only an absent claim means unknown), and when a present `org_id` claim is not a string. The messages never contain claim values. An empty `org_id` string maps to `null`. It reads every claim as an own property, so it ignores values inherited through the prototype chain.
 
 Scope checks use the `scopes` field only. The `permissions` claim is there for your own logic. Neither `requireScopes` nor the handler consults it.
 
