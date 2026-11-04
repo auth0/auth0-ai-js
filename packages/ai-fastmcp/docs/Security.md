@@ -23,6 +23,8 @@ What the adapter does for you, what it leaves to you, and the limits to know bef
 FastMCP serves some routes without authentication, and this adapter does not change that:
 
 - `/health` and `/ready`.
+- `GET /ping`, which answers `pong`. Only the exact path `/ping` matches; with a query string the request is a 404.
+- `OPTIONS` on any path, which answers 204 with an empty body.
 - The protected resource metadata, at `/.well-known/oauth-protected-resource` and at that path followed by the endpoint. It holds public information: the resource, the authorization servers and the scopes you chose to publish.
 
 ## The legacy SSE route

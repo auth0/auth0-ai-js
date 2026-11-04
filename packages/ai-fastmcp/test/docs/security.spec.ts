@@ -154,6 +154,26 @@ describe("Security.md: public routes, proxies, FastMCP's auth option and revocat
     );
   });
 
+  it("answers GET /ping and OPTIONS on any path without a token, as the list says", async () => {
+    await withServer({}, async (server) => {
+      const ping = await socketFetch(`${server.origin}/ping`);
+      expect(ping.status).toBe(200);
+      expect(await ping.text()).toBe("pong");
+      // Only the exact path matches.
+      expect((await socketFetch(`${server.origin}/ping?x=1`)).status).toBe(404);
+      for (const route of ["/mcp", "/anything"]) {
+        const preflight = await socketFetch(`${server.origin}${route}`, { method: "OPTIONS" });
+        expect(preflight.status, route).toBe(204);
+        expect(await preflight.text()).toBe("");
+      }
+    });
+    documented(
+      "Security.md",
+      "- `GET /ping`, which answers `pong`. Only the exact path `/ping` matches; with a query string the request is a 404.",
+      "- `OPTIONS` on any path, which answers 204 with an empty body.",
+    );
+  });
+
   it("returns exactly the two options to spread, so FastMCP's auth option is never set", () => {
     const auth = createFastMcpAuth({ domain: DOMAIN, audience: "https://mcp.example.com/mcp" });
     expect(Object.keys(auth).sort()).toEqual(["authenticate", "oauth"]);
