@@ -15,17 +15,17 @@ Seed data lives in memory and resets on restart. Each shopper gets their own thr
 
 ## Set up your tenant
 
-The tenant setup is the one of the [`ai-mcp-server` example](../ai-mcp-server/README.md#set-up-your-tenant), with fewer pieces: this example has no analytics service, so it needs no client credentials grant. Use these two APIs in step 1 in place of the four there, and these grants in step 3:
+The tenant setup is the one of the [`ai-mcp-server` example](../ai-mcp-server/README.md#set-up-your-tenant), with fewer pieces: this example has no analytics service, so it needs no client credentials grant. It also uses identifiers and ports of its own, so a tenant that is already set up for the `ai-mcp-server` example needs no change and both examples can run side by side. The MCP API here is `http://localhost:3002/mcp` and the orders API is `https://fastmcp-orders.api/`; the other example uses `http://localhost:3001/mcp` and `https://orders.api/`. Use these two APIs in step 1 in place of the four there, and these grants in step 3:
 
 ```bash
-auth0 apis create --name "Orders MCP" --identifier "http://localhost:3001/mcp" --signing-alg RS256 \
+auth0 apis create --name "Orders MCP (FastMCP)" --identifier "http://localhost:3002/mcp" --signing-alg RS256 \
   --scopes "tool:cancel_order"
-auth0 apis create --name "Orders Service" --identifier "https://orders.api/" --signing-alg RS256 \
+auth0 apis create --name "Orders Service (FastMCP)" --identifier "https://fastmcp-orders.api/" --signing-alg RS256 \
   --scopes "read:orders,write:orders"
-auth0 api post client-grants --data '{"client_id":"YOUR_EXCHANGE_CLIENT_ID","audience":"https://orders.api/","scope":["read:orders","write:orders"],"subject_type":"user"}'
+auth0 api post client-grants --data '{"client_id":"YOUR_EXCHANGE_CLIENT_ID","audience":"https://fastmcp-orders.api/","scope":["read:orders","write:orders"],"subject_type":"user"}'
 ```
 
-On-behalf-of token exchange must be enabled on your tenant, and the exchange client must be a Custom API client tied to the MCP API. That README explains both. In step 6, list `tool:cancel_order` as the tool scope of the grant to the MCP API. The exchange client's id and secret go in `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`.
+On-behalf-of token exchange must be enabled on your tenant, and the exchange client must be a Custom API client tied to the MCP API. That README explains both. In step 2, create a new exchange client for this example with `resource_server_identifier` set to `http://localhost:3002/mcp`, because the client of the other example is tied to the other MCP API. In step 4, set `skip_consent_for_verifiable_first_party_clients` on the orders API created here. In step 6, if you registered the Claude Code client for the other example, skip the register command; the grant to the MCP API is new, with `http://localhost:3002/mcp` as the audience and `tool:cancel_order` as the tool scope. The exchange client's id and secret go in `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`.
 
 A real MCP client signs in through your tenant, so the tenant has to accept that client. [MCP clients and tenant settings](../../packages/ai-mcp/docs/McpClients.md) explains what that takes for Claude Code. This example was not tried with a specific MCP client. Any client that follows the protected resource metadata of the server and supports OAuth should be able to sign in.
 
@@ -40,16 +40,16 @@ npm run build --workspace @auth0/ai-mcp --workspace @auth0/ai-fastmcp
 
 cd examples/ai-fastmcp-server
 cp .env.example .env   # fill in the domain, client id and secret
-npm run start:api      # orders API on port 3003
+npm run start:api      # orders API on port 3004
 npm run start          # MCP server, in a second terminal
 ```
 
-Node's `--env-file` support reads the `.env` file, so you need no extra package. The MCP server listens on the port of `AUTH0_AUDIENCE` (3001 in `.env.example`) and serves the route at its path (`/mcp`), so the URL is set in one place. Set `MCP_PORT` only when a proxy makes the public port differ from the listening port.
+Node's `--env-file` support reads the `.env` file, so you need no extra package. The MCP server listens on the port of `AUTH0_AUDIENCE` (3002 in `.env.example`) and serves the route at its path (`/mcp`), so the URL is set in one place. Set `MCP_PORT` only when a proxy makes the public port differ from the listening port.
 
 To call the server without an MCP client, send a request with an access token issued for `AUTH0_AUDIENCE`:
 
 ```sh
-curl -s -X POST http://localhost:3001/mcp \
+curl -s -X POST http://localhost:3002/mcp \
   -H "authorization: Bearer $ACCESS_TOKEN" \
   -H "content-type: application/json" \
   -H "accept: application/json, text/event-stream" \

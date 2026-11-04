@@ -76,4 +76,31 @@ describe("example structure", () => {
     expect(readme).toContain("packages/ai-fastmcp/test/support");
     expect(readme).toContain("the tests run only inside this repository");
   });
+
+  it("uses identifiers and ports of its own, so one tenant and one machine can run it next to the ai-mcp-server example", () => {
+    const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+    const env = (file: string) =>
+      Object.fromEntries(
+        readFileSync(here(file), "utf8")
+          .split("\n")
+          .filter((line) => /^[A-Z0-9_]+=/.test(line))
+          .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+      ) as Record<string, string>;
+    const mine = env("../.env.example");
+    const other = env("../../ai-mcp-server/.env.example");
+    const readme = readFileSync(here("../README.md"), "utf8");
+
+    expect(mine["AUTH0_AUDIENCE"]).not.toBe(other["MCP_SERVER_URL"]);
+    expect(new URL(mine["AUTH0_AUDIENCE"]!).port).not.toBe(new URL(other["MCP_SERVER_URL"]!).port);
+    expect(mine["ORDERS_AUDIENCE"]).not.toBe(other["ORDERS_AUDIENCE"]);
+    expect(mine["ORDERS_API_PORT"]).not.toBe(other["DOWNSTREAM_PORT"]);
+    expect(new URL(mine["ORDERS_API_URL"]!).port).toBe(mine["ORDERS_API_PORT"]);
+
+    // The setup commands create the APIs the .env file names.
+    expect(readme).toContain(`--identifier "${mine["AUTH0_AUDIENCE"]}"`);
+    expect(readme).toContain(`--identifier "${mine["ORDERS_AUDIENCE"]}"`);
+    expect(readme).toContain(`"audience":"${mine["ORDERS_AUDIENCE"]}"`);
+    expect(readme).not.toContain(`"${other["MCP_SERVER_URL"]}"`);
+    expect(readme).not.toContain(`"${other["ORDERS_AUDIENCE"]}"`);
+  });
 });

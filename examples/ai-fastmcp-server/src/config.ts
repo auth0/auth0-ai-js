@@ -86,6 +86,6 @@ export function loadOrdersApiConfig(env: NodeJS.ProcessEnv = process.env): Order
   return {
     domain: required(env, "AUTH0_DOMAIN"),
     ordersAudience: required(env, "ORDERS_AUDIENCE"),
-    port: port(env, "ORDERS_API_PORT", 3003),
+    port: port(env, "ORDERS_API_PORT", 3004),
   };
 }
