@@ -269,14 +269,14 @@ describe("StatelessAndStateful.md: the limits of the binding", () => {
     documented(
       GUIDE,
       "A subject that reaches its limit replaces its own oldest id, and when the whole table is full the adapter forgets the least recently used id first.",
-      "`maxSessionsPerSubject` never exceeds `maxSessions`.",
+      "A value of `maxSessionsPerSubject` above `maxSessions` has no effect, because the whole table never holds more.",
     );
     expect(() => adapter({ sessionBinding: { maxSessionsPerSubject: 0 } })).toThrow(
       '"sessionBinding.maxSessionsPerSubject" must be a positive number.',
     );
   });
 
-  it("never lets a subject hold more than maxSessions", async () => {
+  it("ignores a per-subject limit above maxSessions", async () => {
     const auth = adapter({ sessionBinding: { maxSessions: 3, maxSessionsPerSubject: 50 } });
     for (let i = 0; i < 10; i++) await auth.authenticate(as("alice", `a${i}`));
     expect((await auth.authenticate(as("bob", "a6"))).principal.sub).toBe("bob");

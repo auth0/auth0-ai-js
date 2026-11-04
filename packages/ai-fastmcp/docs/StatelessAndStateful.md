@@ -43,7 +43,7 @@ How it behaves:
 - It is on by default. `sessionBinding: false` turns it off, and then FastMCP's behavior described above applies.
 - The adapter answers a session id longer than 256 characters with 400 `invalid_request` and the description `The session id is not valid.`. FastMCP issues UUIDs, which are far shorter.
 - It cannot tell which mode FastMCP runs in, so it binds a session id on any server that receives one. A stateless server behind a gateway that forwards a fixed or stale `mcp-session-id` binds that id to the first subject, and a second user behind the same id gets 403.
-- It has limits. `sessionBinding: { maxSessions, maxSessionsPerSubject, ttlMs }` sets them. The defaults are 10000 session ids, 100 per subject, and 3600000 milliseconds (one hour) after the last use. Each use renews the time. A subject that reaches its limit replaces its own oldest id, and when the whole table is full the adapter forgets the least recently used id first. The values must be positive numbers, or `createFastMcpAuth` throws `InvalidConfigurationError`. `maxSessionsPerSubject` never exceeds `maxSessions`.
+- It has limits. `sessionBinding: { maxSessions, maxSessionsPerSubject, ttlMs }` sets them. The defaults are 10000 session ids, 100 per subject, and 3600000 milliseconds (one hour) after the last use. Each use renews the time. A subject that reaches its limit replaces its own oldest id, and when the whole table is full the adapter forgets the least recently used id first. The values must be positive numbers, or `createFastMcpAuth` throws `InvalidConfigurationError`. A value of `maxSessionsPerSubject` above `maxSessions` has no effect, because the whole table never holds more.
 
 ```ts
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
