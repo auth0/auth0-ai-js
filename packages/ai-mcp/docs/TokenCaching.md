@@ -120,9 +120,9 @@ export const client = createMcpClient({
 
 **What stays readable.** The storage keys, each entry's expiry time, and the token key and expiry of each index member remain in the clear, because the inner store needs them to find and expire entries. The wrapper encrypts the granted scopes of an index member, so the inner indexed store must treat members as opaque: their `grantedScopes` hold ciphertext, not scope names.
 
-**Failures.** Reads fail open: tampered or malformed ciphertext, a different secret or a key mismatch produces a miss, never an exception, and the wrapper logs nothing about the value. Failures raised by the inner store are not swallowed by the wrapper. The core client then treats them as described above.
+**Failures.** Tampered or malformed ciphertext, a different secret or a key mismatch reads as a cache miss, never as an exception, so the call falls through to a fresh exchange. The wrapper logs nothing about the value. Failures raised by the inner store are not swallowed by the wrapper. The core client then treats them as described above.
 
-**What it does not protect against.** An attacker with write access to the inner store can delete entries or replay an older ciphertext under the same key until it expires. Encryption does not defend against that. There is also no secret rotation. See [known limitations](./KnownLimitations.md#the-encrypted-store-has-no-secret-rotation).
+**What it does not protect against.** Someone with write access to the inner store can delete entries or replay an older ciphertext under the same key until it expires. Encryption does not defend against that. There is also no secret rotation. See [known limitations](./KnownLimitations.md#the-encrypted-store-has-no-secret-rotation).
 
 ## Writing a store
 
