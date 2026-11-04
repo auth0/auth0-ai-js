@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer as createNetServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import type { AddressInfo, Socket } from "node:net";
 import type { FastMCP } from "fastmcp";
@@ -321,6 +322,40 @@ describe("example MCP server", () => {
       await impatient.stop();
       for (const socket of sockets) socket.destroy();
       await new Promise((resolve) => silent.close(resolve));
+    }
+  });
+
+  it("keeps the path of ORDERS_API_URL when it calls the orders API, with or without a trailing slash", async () => {
+    // An orders API that lives under a path, and records the paths it is asked for.
+    const seen: string[] = [];
+    const behindPath = createHttpServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      const verified = { audience: ORDERS, scope: "read:orders", actor: null, subject: "user|path" };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(req.method === "GET" ? { orders: [], verified } : { result: "cancelled", verified }));
+    });
+    const apiPort = await listen(behindPath);
+    try {
+      for (const base of [`http://127.0.0.1:${apiPort}/api/v1`, `http://127.0.0.1:${apiPort}/api/v1/`]) {
+        seen.length = 0;
+        const withPath = await startApp({}, base);
+        try {
+          const list = await callTool("list_orders", await callerToken(ALL_TOOLS, "user|path", withPath.url), {}, withPath.url);
+          expect(((messageOf(await list.text()) as ToolResult).result?.isError)).toBeFalsy();
+          const cancel = await callTool(
+            "cancel_order",
+            await callerToken(ALL_TOOLS, "user|path", withPath.url),
+            { order_id: "ord 2" },
+            withPath.url,
+          );
+          expect(((messageOf(await cancel.text()) as ToolResult).result?.isError)).toBeFalsy();
+          expect(seen).toEqual(["GET /api/v1/orders", "POST /api/v1/orders/ord%202/cancel"]);
+        } finally {
+          await withPath.stop();
+        }
+      }
+    } finally {
+      await new Promise((resolve) => behindPath.close(resolve));
     }
   });
 

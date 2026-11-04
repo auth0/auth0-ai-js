@@ -12,6 +12,15 @@ interface ApiCall {
   body: Record<string, unknown>;
 }
 
+/**
+ * The URL of a path below the base URL of the orders API. The base may have a path of its own
+ * (`http://host/api`), and `path` is relative to it, so the base keeps its path with or without a
+ * trailing slash. A path with a leading slash would replace the path of the base.
+ */
+function ordersApiUrl(base: string, path: string): URL {
+  return new URL(path, base.endsWith("/") ? base : `${base}/`);
+}
+
 /** Calls the orders API with an exchanged token. Only the exchanged token is sent. */
 async function callOrdersApi(
   config: AppConfig,
@@ -19,7 +28,7 @@ async function callOrdersApi(
   path: string,
   method: "GET" | "POST" = "GET",
 ): Promise<ApiCall> {
-  const response = await fetch(new URL(path, config.ordersApiUrl), {
+  const response = await fetch(ordersApiUrl(config.ordersApiUrl, path), {
     method,
     headers: { authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(config.downstreamTimeoutMs),
@@ -82,7 +91,7 @@ export function registerTools(server: FastMCP<Auth0Session>, config: AppConfig):
           audience: config.ordersAudience,
           scope: READ_ORDERS,
         });
-        const call = await callOrdersApi(config, token.accessToken, "/orders");
+        const call = await callOrdersApi(config, token.accessToken, "orders");
         expectOk(call);
         const orders = call.body["orders"] as OrderBody[];
         const lines = orders.map((order) => `- ${order.id} ${order.item} x${order.qty}, ${order.status}`);
@@ -106,7 +115,7 @@ export function registerTools(server: FastMCP<Auth0Session>, config: AppConfig):
         const call = await callOrdersApi(
           config,
           token.accessToken,
-          `/orders/${encodeURIComponent(orderId)}/cancel`,
+          `orders/${encodeURIComponent(orderId)}/cancel`,
           "POST",
         );
         if (call.status === 404) throw new UserError(`Order ${orderId} was not found.`);
