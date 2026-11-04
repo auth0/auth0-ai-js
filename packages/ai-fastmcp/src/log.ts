@@ -1,3 +1,6 @@
+/** What the log line says failed. */
+export type FailureKind = "Tool failed" | "Authentication failed";
+
 /** The longest log line this package writes. */
 const MAX_LINE_LENGTH = 300;
 const MAX_FIELD_LENGTH = 80;
@@ -14,6 +17,11 @@ function field(value: unknown, max = MAX_FIELD_LENGTH): string | undefined {
   if (typeof value === "string" && value !== "") return clean(value, max);
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return undefined;
+}
+
+/** A value as it appears after `key=`: bare when it is a plain token, else a JSON string, so it cannot add fields. */
+function quoted(value: string): string {
+  return /^[\w.:/-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
 /** The first `error` string and the `error_description` string found on the cause chain. */
@@ -35,26 +43,40 @@ function auth0Details(error: unknown): { error?: string; description?: string } 
 }
 
 /**
- * One log line for a tool failure: the error name, `code` and `statusCode`, and Auth0's `error` and
+ * One log line for a failure: the error name, `code` and `statusCode`, and Auth0's `error` and
  * `error_description` when the cause chain holds them. It never reads `message`, headers, a request
- * body or a token, and it is at most 300 characters on a single line.
+ * body or a token, and it is at most 300 characters on a single line. A value that is not a plain
+ * token is written as a JSON string, so text from Auth0 cannot add fields of its own.
  */
-export function describeFailure(error: unknown): string {
+export function describeFailure(error: unknown, what: FailureKind = "Tool failed"): string {
   const record = (typeof error === "object" && error !== null ? error : {}) as {
     name?: unknown;
     code?: unknown;
     statusCode?: unknown;
   };
   const name = error instanceof Error ? (field(record.name) ?? "Error") : typeof error;
-  const parts = [`[ai-fastmcp] Tool failed: ${name}`];
+  const parts = [`[ai-fastmcp] ${what}: ${quoted(name)}`];
   const code = field(record.code);
-  if (code !== undefined) parts.push(`code=${code}`);
+  if (code !== undefined) parts.push(`code=${quoted(code)}`);
   const status = field(record.statusCode);
-  if (status !== undefined) parts.push(`statusCode=${status}`);
+  if (status !== undefined) parts.push(`statusCode=${quoted(status)}`);
   const details = auth0Details(error);
   const auth0Error = field(details.error);
-  if (auth0Error !== undefined) parts.push(`auth0_error=${auth0Error}`);
+  if (auth0Error !== undefined) parts.push(`auth0_error=${quoted(auth0Error)}`);
   const description = field(details.description, MAX_LINE_LENGTH);
-  if (description !== undefined) parts.push(`auth0_error_description="${description}"`);
+  if (description !== undefined) parts.push(`auth0_error_description=${JSON.stringify(description)}`);
   return clean(parts.join(" "), MAX_LINE_LENGTH);
+}
+
+/**
+ * Writes the default log line for a failure nobody asked to handle. It goes to the server's own
+ * standard error stream and not to `context.log`, because FastMCP sends `context.log` to the
+ * connected client as a logging notification, and this line can carry Auth0's error description.
+ */
+export function logFailure(error: unknown, what: FailureKind = "Tool failed"): void {
+  try {
+    console.error(describeFailure(error, what));
+  } catch {
+    // Logging must not change the outcome.
+  }
 }

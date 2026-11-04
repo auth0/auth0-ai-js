@@ -87,6 +87,36 @@ describe("default log line for a failed tool", () => {
     expect(line).not.toMatch(/[\r\n\u2028]/);
   });
 
+  it("writes a quote in Auth0's description as an escaped character, so it cannot add a field", () => {
+    const line = describeFailure(exchangeFailure({ error_description: 'bad" auth0_error=forged code=x' }));
+    expect(line).toContain('auth0_error_description="bad\\" auth0_error=forged code=x"');
+    // Read the line the way an operator's tooling would: key=value fields, quoted strings kept whole.
+    const pattern = /\s*([A-Za-z0-9_]+)=("(?:[^"\\]|\\.)*"|\S+)/y;
+    pattern.lastIndex = line.indexOf(" code=");
+    const names: string[] = [];
+    let end = pattern.lastIndex;
+    for (let found = pattern.exec(line); found !== null; found = pattern.exec(line)) {
+      names.push(found[1]!);
+      end = pattern.lastIndex;
+    }
+    expect(end).toBe(line.length);
+    expect(names).toEqual(["code", "statusCode", "auth0_error", "auth0_error_description"]);
+  });
+
+  it("quotes any value that is not a plain token, and leaves plain ones bare", () => {
+    const line = describeFailure(exchangeFailure({ error: "two words code=9" }));
+    expect(line).toContain('auth0_error="two words code=9"');
+    expect(line).toContain("code=token_exchange_error");
+    expect(describeFailure(exchangeFailure({ error: "invalid_grant" }))).toContain("auth0_error=invalid_grant ");
+    const named = Object.assign(new Error("x"), { name: "Odd Name code=1" });
+    expect(describeFailure(named)).toContain('Tool failed: "Odd Name code=1"');
+  });
+
+  it("starts with what failed", () => {
+    expect(describeFailure(new Error("x"))).toBe("[ai-fastmcp] Tool failed: Error");
+    expect(describeFailure(new Error("x"), "Authentication failed")).toBe("[ai-fastmcp] Authentication failed: Error");
+  });
+
   it("survives a cause chain that loops", () => {
     const a: { cause?: unknown } = {};
     a.cause = { cause: a };

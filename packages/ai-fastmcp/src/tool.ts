@@ -8,7 +8,7 @@ import {
 import { UserError } from "fastmcp";
 import { safely } from "./hooks.js";
 import { normalizeRequiredScopes } from "./scopes.js";
-import { describeFailure } from "./log.js";
+import { logFailure } from "./log.js";
 import { errorHookOf, isAuth0Session } from "./session.js";
 import type { Auth0Session } from "./session.js";
 
@@ -72,19 +72,6 @@ function scopeDenied(missing: readonly string[]): ToolErrorResult {
 }
 
 /**
- * Writes the default log line for a failure nobody asked to handle. It goes to the server's own
- * standard error stream and not to `context.log`, because FastMCP sends `context.log` to the
- * connected client as a logging notification, and this line can carry Auth0's error description.
- */
-function reportFailure(error: unknown): void {
-  try {
-    console.error(describeFailure(error));
-  } catch {
-    // Logging must not change the result.
-  }
-}
-
-/**
  * Turns an error thrown inside a tool into a result that is safe to show. FastMCP copies the
  * message of a thrown error into the result, so anything that is not meant for the client is
  * replaced here by fixed text. `UserError` is the one exception: FastMCP defines it as the error
@@ -104,7 +91,7 @@ function toToolResult(error: unknown, session: Auth0Session, options: WithAuth0E
   }
   const hook = options.onError ?? errorHookOf(session);
   if (hook !== undefined) safely(hook, error);
-  else reportFailure(error);
+  else logFailure(error);
   if (error instanceof AuthError) {
     return textResult("The token operation failed.", "server_error");
   }
