@@ -32,6 +32,13 @@ A real MCP client signs in through your tenant, so the tenant has to accept that
 ## Run
 
 ```sh
+# At the repository root. The example imports @auth0/ai-mcp and @auth0/ai-fastmcp from their dist
+# folders, which are git ignored and not built by npm install. Build @auth0/ai-mcp first: the other
+# package compiles against it.
+npm install
+npm run build --workspace @auth0/ai-mcp --workspace @auth0/ai-fastmcp
+
+cd examples/ai-fastmcp-server
 cp .env.example .env   # fill in the domain, client id and secret
 npm run start:api      # orders API on port 3003
 npm run start          # MCP server, in a second terminal

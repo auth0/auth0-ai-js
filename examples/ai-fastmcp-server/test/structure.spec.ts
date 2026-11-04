@@ -54,4 +54,16 @@ describe("example structure", () => {
   it("does not use FastMCP's own auth option", () => {
     expect(source("app.ts")).not.toMatch(/\bauth:/);
   });
+
+  it("tells the reader to build both workspace packages first, by their real names and in dependency order", () => {
+    const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+    const readme = readFileSync(here("../README.md"), "utf8");
+    const nameOf = (dir: string) =>
+      (JSON.parse(readFileSync(here(`../../../packages/${dir}/package.json`), "utf8")) as { name: string }).name;
+
+    // dist folders are not committed, and ai-fastmcp compiles against the build of ai-mcp, so the order matters.
+    expect(readme).toContain(`npm run build --workspace ${nameOf("ai-mcp")} --workspace ${nameOf("ai-fastmcp")}`);
+    expect(readme.indexOf("npm run build --workspace")).toBeLessThan(readme.indexOf("npm run start:api"));
+    expect(readme).not.toContain("npm install --no-save");
+  });
 });
