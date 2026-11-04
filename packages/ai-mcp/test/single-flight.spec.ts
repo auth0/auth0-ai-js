@@ -88,4 +88,34 @@ describe('SingleFlight', () => {
     await expect(second).resolves.toBe(2);
     expect(fn).toHaveBeenCalledTimes(2);
   });
+
+  it('lets a call that settles late leave the slot of a call that replaced it alone', async () => {
+    // A callback that starts a flight for its own key before the outer one is registered is
+    // the only way for two flights to claim one key. The outer one wins the slot, and the
+    // inner one settling must not release it.
+    const flight = new SingleFlight<string>();
+    const inner = deferred<string>();
+    const outer = deferred<string>();
+    const later = vi.fn(async () => 'later');
+
+    const outerCall = flight.run('k', () => {
+      void flight.run('k', () => inner.promise);
+      return outer.promise;
+    });
+
+    inner.resolve('inner');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The outer flight is still running, so this call joins it instead of starting `later`.
+    const joined = flight.run('k', later);
+    expect(later).not.toHaveBeenCalled();
+
+    outer.resolve('outer');
+    await expect(outerCall).resolves.toBe('outer');
+    await expect(joined).resolves.toBe('outer');
+    expect(later).not.toHaveBeenCalled();
+
+    // Once the outer flight has settled, the key is free again.
+    await expect(flight.run('k', later)).resolves.toBe('later');
+  });
 });

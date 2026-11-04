@@ -353,6 +353,38 @@ describe('withToken', () => {
     expect(() => client.withToken(caller)).not.toThrow();
   });
 
+  describe('at the instant the caller token expires', () => {
+    /** Runs `withToken` with the clock at `atMs`, returning the thrown error, if any. */
+    async function withTokenAt(offsetSeconds: number, offsetMs = 0) {
+      useTenant();
+      const client = makeClient();
+      const caller = await client.verifyAccessToken({ accessToken: await token() });
+      const spy = vi.spyOn(Date, 'now').mockReturnValue((caller.principal.expiresAt + offsetSeconds) * 1000 + offsetMs);
+      try {
+        client.withToken(caller);
+        return undefined;
+      } catch (error) {
+        return error;
+      } finally {
+        spy.mockRestore();
+      }
+    }
+
+    it('refuses the caller during the exact second given by exp', async () => {
+      expect(await withTokenAt(0)).toBeInstanceOf(UnauthenticatedError);
+      expect(await withTokenAt(0, 999)).toBeInstanceOf(UnauthenticatedError);
+    });
+
+    it('refuses the caller after exp', async () => {
+      expect(await withTokenAt(1)).toBeInstanceOf(UnauthenticatedError);
+    });
+
+    it('accepts the caller until the last second before exp ends', async () => {
+      expect(await withTokenAt(-1, 999)).toBeUndefined();
+      expect(await withTokenAt(-1)).toBeUndefined();
+    });
+  });
+
   it('fails with the core missing-client-auth error when the client has no secret', async () => {
     useTenant();
     const client = makeClient({ clientSecret: undefined, tokenStore: new PlainStore() });

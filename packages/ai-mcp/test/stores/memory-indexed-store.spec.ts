@@ -70,6 +70,32 @@ describe('MemoryIndexedTokenStore', () => {
       expect(store.size).toBe(0);
     });
 
+    it('treats an entry as expired during the second given by its expiry', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+      const store = new MemoryIndexedTokenStore();
+      await store.set('k', token({ expiresAt: now() + 10 }));
+
+      vi.setSystemTime(new Date('2030-01-01T00:00:09.999Z'));
+      expect(await store.get('k')).toBeDefined();
+
+      vi.setSystemTime(new Date('2030-01-01T00:00:10Z'));
+      expect(await store.get('k')).toBeUndefined();
+      expect(store.size).toBe(0);
+    });
+
+    it('does not store a value whose expiry is the current second', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.500Z'));
+      const store = new MemoryIndexedTokenStore();
+      await store.set('k', token({ expiresAt: now() }));
+      expect(store.size).toBe(0);
+      expect(await store.get('k')).toBeUndefined();
+
+      await store.set('k', token({ expiresAt: now() + 1 }));
+      expect(store.size).toBe(1);
+    });
+
     it('does not store a value that has already expired', async () => {
       const store = new MemoryIndexedTokenStore();
       await store.set('k', token({ expiresAt: now() - 1 }));
@@ -145,6 +171,20 @@ describe('MemoryIndexedTokenStore', () => {
       await store.addIndexMember('i', member('t1', { expiresAt: now() + 5 }));
       await store.addIndexMember('i', member('t2'));
       vi.advanceTimersByTime(6_000);
+      expect((await store.listIndexMembers('i')).map((m) => m.tokenKey)).toEqual(['t2']);
+    });
+
+    it('treats a member as expired during the second given by its expiry', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+      const store = new MemoryIndexedTokenStore();
+      await store.addIndexMember('i', member('t1', { expiresAt: now() + 5 }));
+      await store.addIndexMember('i', member('t2'));
+
+      vi.setSystemTime(new Date('2030-01-01T00:00:04.999Z'));
+      expect((await store.listIndexMembers('i')).map((m) => m.tokenKey)).toEqual(['t1', 't2']);
+
+      vi.setSystemTime(new Date('2030-01-01T00:00:05Z'));
       expect((await store.listIndexMembers('i')).map((m) => m.tokenKey)).toEqual(['t2']);
     });
 
