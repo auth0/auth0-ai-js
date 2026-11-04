@@ -88,7 +88,9 @@ When one fails, look at the dependency before suspecting the adapter.
 
 ## Tenant requirements
 
-The suite reuses the objects the `@auth0/ai-mcp` suite uses and creates nothing. It makes no Management API calls.
+The suite creates nothing and makes no Management API calls, so the tenant must already hold the objects below. The
+real-tenant suite of `@auth0/ai-mcp` is a separate draft pull request. It uses the same objects and carries scripts that
+create them.
 
 - The MCP API, whose identifier is a loopback URL `http://127.0.0.1:<port>/mcp` with scopes `tool:whoami` and
   `tool:delegate`, and the downstream API with scope `work:read`.
