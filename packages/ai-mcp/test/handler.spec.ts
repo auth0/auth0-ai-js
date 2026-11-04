@@ -282,6 +282,40 @@ describe("failure responses", () => {
       body: malformed,
     },
     {
+      name: "DPoP token with characters outside the token68 set",
+      headers: async () => ({
+        authorization: 'DPoP ab"c',
+        dpop: "a.b.c",
+      }),
+      status: 400,
+      challenge: `${BEARER_ADVERT}, ${dpopError("invalid_request")}`,
+      body: malformed,
+    },
+    {
+      name: "tab between the scheme and the token counts as no credential",
+      headers: async () => ({ authorization: `Bearer\t${await token()}` }),
+      status: 401,
+      challenge: `${BEARER_ADVERT}, ${DPOP_ADVERT}`,
+      body: unauthorized,
+    },
+    {
+      name: "non-breaking space between the scheme and the token counts as no credential",
+      headers: async () => ({ authorization: `Bearer\u00a0${await token()}` }),
+      status: 401,
+      challenge: `${BEARER_ADVERT}, ${DPOP_ADVERT}`,
+      body: unauthorized,
+    },
+    {
+      name: "tab between the DPoP scheme and the token counts as no credential",
+      headers: async () => ({
+        authorization: "DPoP\tabc.def.ghi",
+        dpop: "a.b.c",
+      }),
+      status: 401,
+      challenge: `${BEARER_ADVERT}, ${DPOP_ADVERT}`,
+      body: unauthorized,
+    },
+    {
       name: "DPoP scheme without a proof header: error lands on the DPoP challenge",
       headers: async () => ({ authorization: "DPoP abc.def.ghi" }),
       status: 400,
@@ -1527,6 +1561,8 @@ describe("resource and authorizationServers defaults", () => {
     ["a non-http url", "ftp://mcp.example.com/mcp"],
     ["a url with a fragment", "https://mcp.example.com/mcp#frag"],
     ["a url with credentials", "https://user:pw@mcp.example.com/mcp"],
+    ["a url with a user name only", "https://user@mcp.example.com/mcp"],
+    ["a url with a password only", "https://:pw@mcp.example.com/mcp"],
     ["a url with surrounding whitespace", " https://mcp.example.com/mcp"],
   ])("throws when the audience is %s and no resource is given", (_name, audience) => {
     const client = bare({ audience });
