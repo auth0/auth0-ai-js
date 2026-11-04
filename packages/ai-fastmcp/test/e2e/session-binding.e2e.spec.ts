@@ -4,6 +4,7 @@
  * that used it first. The scenarios open a session as the first user and then present the second
  * user's real token on that id.
  */
+import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import {
   SECOND_USER_VARS,
@@ -50,7 +51,7 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
   });
 
   /** Opens a session as the first user on a fresh stateful server. */
-  async function openSession(auth: { sessionBinding?: false } = {}): Promise<{ server: FastMcpServer; owner: Session; id: string }> {
+  async function openSession(auth: NonNullable<Parameters<typeof startFastMcpServer>[0]["auth"]> = {}): Promise<{ server: FastMcpServer; owner: Session; id: string }> {
     server = await startFastMcpServer({ env: e2e, downstreamUrl: downstream.url, stateless: false, auth });
     owner = await connect(server, firstToken);
     const id = owner.sessionId;
@@ -124,5 +125,48 @@ describeLive("fastmcp session binding", SECOND_USER_VARS, (e2e) => {
     expect(seen.sessionSub).toBe(secondSub);
     expect(seen.accessorSub).toBe(secondSub);
     expect(seen.sessionSub).not.toBe(firstSub);
+  });
+
+  it("E-N-02 a flood of session ids FastMCP never issued, sent with the second user's real token, does not unbind the first user's session", async () => {
+    const { server: running, owner: active, id } = await openSession({
+      sessionBinding: { maxSessions: 4, maxSessionsPerSubject: 2 },
+    });
+    for (let i = 0; i < 12; i++) {
+      const response = await rawRequest(running, {
+        body: { jsonrpc: "2.0", id: i, method: "tools/list" },
+        headers: { authorization: `Bearer ${secondToken}`, "mcp-session-id": randomUUID(), "mcp-protocol-version": "2025-06-18" },
+      });
+      await response.arrayBuffer();
+      // FastMCP refuses an id it never issued; the adapter has still recorded it for the second user.
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).not.toBe(403);
+    }
+    const reply = await callOnSession(running, id, secondToken, "whoami");
+    expect(reply.status).toBe(403);
+    expect(reply.toolText).toBeUndefined();
+    expect((await callTool<WhoamiResult>(active, "whoami")).value.sessionSub).toBe(firstSub);
+  });
+
+  it("E-N-03 GET /sse with a real token is refused with 404 and opens no legacy session, and /messages has nothing to reach", async () => {
+    const { server: running } = await openSession();
+    const controller = new AbortController();
+    try {
+      const opened = await fetch(new URL("/sse", running.url), {
+        headers: { authorization: `Bearer ${firstToken}`, accept: "text/event-stream" },
+        signal: controller.signal,
+      });
+      const body = await opened.text();
+      expect(opened.status).toBe(404);
+      expect(JSON.parse(body)).toEqual({ error: "not_found", error_description: "Not found." });
+      expectNoTokens("the response", body, [firstToken, secondToken]);
+    } finally {
+      controller.abort();
+    }
+    const posted = await rawRequest(running, {
+      path: "/messages?sessionId=00000000-0000-4000-8000-000000000000",
+      body: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "whoami", arguments: {} } },
+    });
+    await posted.arrayBuffer();
+    expect(posted.status).toBe(400);
   });
 });

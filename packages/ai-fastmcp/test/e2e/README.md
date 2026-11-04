@@ -41,8 +41,8 @@ test listens on that port, so two servers cannot run together. Every spec starts
 
 ## Scenarios
 
-Each test title starts with its scenario id. Most scenarios run against both a stateless and a stateful server. E-N-01
-needs a stateful one, and E-C-01 uses a stateless one.
+Each test title starts with its scenario id. Most scenarios run against both a stateless and a stateful server. E-N-01 to E-N-03
+need a stateful one, and E-C-01 uses a stateless one.
 
 | Id | Spec | What it proves |
 | --- | --- | --- |
@@ -59,6 +59,8 @@ needs a stateful one, and E-C-01 uses a stateless one.
 | E-I-01 | `isolation` | Four distinct callers at once never see each other, and the store keeps each exchange under its own caller. |
 | E-I-02 | `isolation` | The session, the accessors and the bound client agree on the caller under concurrency. |
 | E-N-01 | `session-binding` | A second real user on the first user's session id gets 403. |
+| E-N-02 | `session-binding` | The second real user sends many session ids FastMCP never issued, and the first user's session stays bound to the first user. |
+| E-N-03 | `session-binding` | `GET /sse` with a real token gets 404 and opens no legacy session, and `POST /messages` has nothing to reach. |
 | E-P-01 | `dpop` | A DPoP header, the DPoP scheme or a key-bound token gets a Bearer challenge before any tenant call. |
 | E-S-01 | `scopes` | The server-wide gate answers 403, a request without credentials gets a 401 that names the scope and a metadata document that lists it, the tool wrapper names the missing scope, and `canAccess` hides a tool. |
 | E-X-01 | `slow/expiry` | A caller token that expires inside a stateful session, or on a stateless server, gets a 401. |
