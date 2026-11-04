@@ -457,6 +457,7 @@ export function asTokenVerifier(client: McpClient): OAuthTokenVerifier {
         extra: {
           sub: principal.sub,
           ...(principal.orgId !== null && { orgId: principal.orgId }),
+          ...(principal.permissions !== null && { permissions: [...principal.permissions] }),
         },
       };
     },

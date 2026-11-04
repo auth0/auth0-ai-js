@@ -1220,6 +1220,21 @@ describe("asTokenVerifier", () => {
     expect(req.auth!.extra).toMatchObject({ orgId: "org_1" });
   });
 
+  it("carries the permissions of the token, like the handler does", async () => {
+    useTenant();
+    const bearer = await token("read", { claims: { client_id: "c", permissions: ["read:items", "write:items"] } });
+    const { req } = await run(`Bearer ${bearer}`, makeClient());
+
+    expect(req.auth!.extra).toMatchObject({ permissions: ["read:items", "write:items"] });
+  });
+
+  it("leaves permissions out when the token has none", async () => {
+    useTenant();
+    const { req } = await run(`Bearer ${await token()}`, makeClient());
+
+    expect(req.auth!.extra).not.toHaveProperty("permissions");
+  });
+
   it("maps an invalid token to the SDK invalid_token response with a generic message", async () => {
     useTenant();
     const { res, next } = await run("Bearer garbage.token.value", makeClient());
