@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastMCP } from "fastmcp";
 import { InvalidConfigurationError } from "@auth0/ai-mcp";
@@ -78,6 +79,7 @@ describe("StatelessAndStateful.md: stateless mode", () => {
     }
     documented(
       GUIDE,
+      "The session binding described below applies only to a request that carries a session id, and a stateless server issues none.",
       "FastMCP creates no session and issues no `mcp-session-id`",
       "FastMCP answers a `GET` or `DELETE` on the MCP route with 405 before `authenticate` runs.",
     );
@@ -95,6 +97,17 @@ describe("StatelessAndStateful.md: stateful mode", () => {
       expect(first.headers.get("mcp-session-id")).toBeTruthy();
       expect((await socketFetch(server.url, { method: "GET" })).status).toBe(401);
       expect((await socketFetch(server.url, { method: "DELETE" })).status).toBe(401);
+      // On a live session, with a valid token of another subject: refused by the adapter, so authenticate ran.
+      const id = first.headers.get("mcp-session-id")!;
+      const mallory = `Bearer ${await rig().token(server, { sub: "user|mallory" })}`;
+      await rawRequest(server, { body: { jsonrpc: "2.0", method: "notifications/initialized" }, headers: { authorization: `Bearer ${await rig().token(server)}`, "mcp-session-id": id } });
+      for (const method of ["GET", "DELETE"]) {
+        const response = await rawRequest(server, {
+          method,
+          headers: { authorization: mallory, "mcp-session-id": id, accept: "text/event-stream" },
+        });
+        expect(response.status).toBe(403);
+      }
     });
     documented(
       GUIDE,
@@ -231,16 +244,119 @@ describe("StatelessAndStateful.md: the limits of the binding", () => {
   });
 
   it("remembers 10000 session ids by default and forgets the oldest beyond that", async () => {
+    // 101 subjects, so no subject reaches its own limit of 100 and only the size of the table matters.
+    const owner = (i: number) => `u${i % 101}`;
     const auth = adapter();
-    for (let i = 0; i < 10_000; i++) await auth.authenticate(as("alice", `s${i}`));
+    for (let i = 0; i < 10_000; i++) await auth.authenticate(as(owner(i), `s${i}`));
     expect(((await thrown(auth.authenticate(as("bob", "s0")))) as Response).status).toBe(403);
 
     const over = adapter();
-    for (let i = 0; i < 10_001; i++) await over.authenticate(as("alice", `s${i}`));
+    for (let i = 0; i < 10_001; i++) await over.authenticate(as(owner(i), `s${i}`));
     expect((await over.authenticate(as("bob", "s0"))).principal.sub).toBe("bob");
     expect(((await thrown(over.authenticate(as("bob", "s10000")))) as Response).status).toBe(403);
-    documented(GUIDE, "The defaults are 10000 session ids");
-    documented("README.md", "10000 ids and one hour of idle time by default");
+    documented(GUIDE, "The defaults are 10000 session ids, 100 per subject,");
+    documented("README.md", "10000 ids, 100 per subject and one hour of idle time by default");
+  });
+
+  it("lets a subject hold 100 ids by default and replaces that subject's own oldest id beyond that", async () => {
+    const auth = adapter();
+    for (let i = 0; i < 101; i++) await auth.authenticate(as("alice", `a${i}`));
+    await auth.authenticate(as("carol", "c0"));
+    // a0 was alice's oldest id and is forgotten; carol's id and alice's newer ids stay bound.
+    expect((await auth.authenticate(as("bob", "a0"))).principal.sub).toBe("bob");
+    expect(((await thrown(auth.authenticate(as("bob", "a1")))) as Response).status).toBe(403);
+    expect(((await thrown(auth.authenticate(as("bob", "c0")))) as Response).status).toBe(403);
+    documented(
+      GUIDE,
+      "A subject that reaches its limit replaces its own oldest id, and when the whole table is full the adapter forgets the least recently used id first.",
+      "`maxSessionsPerSubject` never exceeds `maxSessions`.",
+    );
+    expect(() => adapter({ sessionBinding: { maxSessionsPerSubject: 0 } })).toThrow(
+      '"sessionBinding.maxSessionsPerSubject" must be a positive number.',
+    );
+  });
+
+  it("never lets a subject hold more than maxSessions", async () => {
+    const auth = adapter({ sessionBinding: { maxSessions: 3, maxSessionsPerSubject: 50 } });
+    for (let i = 0; i < 10; i++) await auth.authenticate(as("alice", `a${i}`));
+    expect((await auth.authenticate(as("bob", "a6"))).principal.sub).toBe("bob");
+    expect(((await thrown(auth.authenticate(as("bob", "a9")))) as Response).status).toBe(403);
+  });
+
+  it("keeps another subject's binding when a caller sends many ids FastMCP never issued", async () => {
+    await withServer(
+      { stateless: false, auth: { sessionBinding: { maxSessions: 4, maxSessionsPerSubject: 2 } } },
+      async (server) => {
+        const alice = await connect(server, await rig().token(server, { sub: "user|alice" }));
+        try {
+          const bob = await rig().token(server, { sub: "user|bob" });
+          for (let i = 0; i < 12; i++) {
+            const response = await rawRequest(server, {
+              body: { jsonrpc: "2.0", id: i, method: "tools/list" },
+              headers: { authorization: `Bearer ${bob}`, "mcp-session-id": randomUUID(), "mcp-protocol-version": "2025-06-18" },
+            });
+            // FastMCP refuses the unknown id (404, or 401 on older mcp-proxy releases); the adapter has recorded it.
+            expect(response.status).toBeGreaterThanOrEqual(400);
+            expect(response.status).not.toBe(403);
+          }
+          const reply = await onSession(server, idOf(alice), bob);
+          expect(reply.status).toBe(403);
+        } finally {
+          await alice.close();
+        }
+      },
+    );
+    documented(
+      GUIDE,
+      "**Ids FastMCP never issued are recorded too.**",
+      "It raises the cost of the attack and does not end it. Several accounts together can still fill the table",
+      "Stateless mode is the fix.",
+    );
+  });
+
+  it("binds a session id that a gateway forwards to a stateless server", async () => {
+    await withServer({ stateless: true }, async (server) => {
+      const headers = (token: string) => ({ authorization: `Bearer ${token}`, "mcp-session-id": "fixed-by-the-gateway" });
+      const list = { jsonrpc: "2.0", id: 1, method: "tools/list" };
+      const first = await rawRequest(server, { body: list, headers: headers(await rig().token(server, { sub: "user|one" })) });
+      const second = await rawRequest(server, { body: list, headers: headers(await rig().token(server, { sub: "user|two" })) });
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(403);
+    });
+    documented(
+      GUIDE,
+      "It cannot tell which mode FastMCP runs in, so it binds a session id on any server that receives one.",
+      "a second user behind the same id gets 403.",
+    );
+  });
+
+  it("leaves a live session without a binding when a stream stays open longer than ttlMs", async () => {
+    await withServer({ stateless: false, auth: { sessionBinding: { ttlMs: 50 } } }, async (server) => {
+      const alice = await connect(server, await rig().token(server, { sub: "user|alice" }));
+      const stream = new AbortController();
+      try {
+        const aliceToken = await rig().token(server, { sub: "user|alice" });
+        const open = await socketFetch(server.url, {
+          method: "GET",
+          headers: { authorization: `Bearer ${aliceToken}`, "mcp-session-id": idOf(alice), accept: "text/event-stream" },
+          signal: stream.signal,
+        });
+        // 200 for a stream that opened; 409 when the client already holds the standalone stream.
+        expect([200, 409]).toContain(open.status);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const reply = await onSession(server, idOf(alice), await rig().token(server, { sub: "user|bob" }));
+        expect(reply.status).toBe(200);
+        expect(reply.text).toContain("user|bob");
+      } finally {
+        stream.abort();
+        await alice.close();
+      }
+    });
+    documented(
+      GUIDE,
+      "**An idle stream outlives its binding.**",
+      "Set `ttlMs` above the longest stream you expect.",
+    );
   });
 
   it("evicts the least recently used id first when the table is full", async () => {
@@ -251,7 +367,7 @@ describe("StatelessAndStateful.md: the limits of the binding", () => {
     await auth.authenticate(as("alice", "s3")); // evicts s2
     expect(((await thrown(auth.authenticate(as("bob", "s1")))) as Response).status).toBe(403);
     expect((await auth.authenticate(as("bob", "s2"))).principal.sub).toBe("bob");
-    documented(GUIDE, "when the table is full the adapter forgets the least recently used id first");
+    documented(GUIDE, "when the whole table is full the adapter forgets the least recently used id first");
   });
 
   it("does not share the table between two adapters, which stand for two processes", async () => {
@@ -274,7 +390,7 @@ describe("StatelessAndStateful.md: the limits of the binding", () => {
       expect(() => createFastMcpAuth({ client, sessionBinding: { ttlMs: bad } })).toThrow(InvalidConfigurationError);
     }
     expect(() => createFastMcpAuth({ client, sessionBinding: { maxSessions: 1000, ttlMs: 15 * 60 * 1000 } })).not.toThrow();
-    documented(GUIDE, "Both values must be positive numbers, or `createFastMcpAuth` throws `InvalidConfigurationError`.");
+    documented(GUIDE, "The values must be positive numbers, or `createFastMcpAuth` throws `InvalidConfigurationError`.");
   });
 
   it("builds the adapter of the guide's limits block", async () => {

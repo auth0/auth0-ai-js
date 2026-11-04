@@ -17,7 +17,7 @@ In stateless mode FastMCP creates no session and issues no `mcp-session-id`. Eve
 
 - Any instance can serve any request, so you scale by running more instances behind a load balancer.
 - No caller can ride on another caller's session, because no session exists.
-- The session binding described below never applies, because requests carry no session id.
+- The session binding described below applies only to a request that carries a session id, and a stateless server issues none.
 
 The trade-off is that there is no standalone event stream. FastMCP answers a `GET` or `DELETE` on the MCP route with 405 before `authenticate` runs.
 
@@ -42,7 +42,8 @@ How it behaves:
 - It applies only to requests that carry a session id. The first request of a session, `initialize`, has none, so it cannot be bound. The binding starts with the first later request that carries the id, which is normally the client's own follow-up.
 - It is on by default. `sessionBinding: false` turns it off, and then FastMCP's behavior described above applies.
 - The adapter answers a session id longer than 256 characters with 400 `invalid_request` and the description `The session id is not valid.`. FastMCP issues UUIDs, which are far shorter.
-- It has limits. `sessionBinding: { maxSessions, ttlMs }` sets them. The defaults are 10000 session ids and 3600000 milliseconds (one hour) after the last use. Each use renews the time, and when the table is full the adapter forgets the least recently used id first. Both values must be positive numbers, or `createFastMcpAuth` throws `InvalidConfigurationError`.
+- It cannot tell which mode FastMCP runs in, so it binds a session id on any server that receives one. A stateless server behind a gateway that forwards a fixed or stale `mcp-session-id` binds that id to the first subject, and a second user behind the same id gets 403.
+- It has limits. `sessionBinding: { maxSessions, maxSessionsPerSubject, ttlMs }` sets them. The defaults are 10000 session ids, 100 per subject, and 3600000 milliseconds (one hour) after the last use. Each use renews the time. A subject that reaches its limit replaces its own oldest id, and when the whole table is full the adapter forgets the least recently used id first. The values must be positive numbers, or `createFastMcpAuth` throws `InvalidConfigurationError`. `maxSessionsPerSubject` never exceeds `maxSessions`.
 
 ```ts
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
@@ -56,6 +57,8 @@ export const auth = createFastMcpAuth({
 
 - **One process.** The table lives in the memory of the process. Instances do not share it, and a restart empties it.
 - **Forgotten ids.** When the adapter evicts an id, when an id expires, or when a restart empties the table, the next subject that presents the id owns it. That is what FastMCP does without the binding.
+- **Ids FastMCP never issued are recorded too.** `authenticate` runs before FastMCP looks the session up, so the binding records the id of any request that passes authentication, issued or not. Without a limit per subject, one caller could send `maxSessions` requests with random ids and push every other subject's binding out of the table, and then take over a session id they had learned. The limit per subject keeps a caller's ids to their own: at the limit, a new id replaces that caller's oldest one. It raises the cost of the attack and does not end it. Several accounts together can still fill the table, and on a tenant with open sign-up creating accounts is cheap. Raise `maxSessionsPerSubject` for a subject that legitimately holds many sessions, for example a gateway that uses one client credentials token. Stateless mode is the fix.
+- **An idle stream outlives its binding.** The adapter forgets an id `ttlMs` after its last request. mcp-proxy closes a session that has had no request for 30 minutes, except while an event stream is open on it. The token of a stream is checked only when the stream opens, so a client that holds one open for longer than `ttlMs` leaves a live session without a binding, and another subject who knows the id can then take it. Set `ttlMs` above the longest stream you expect.
 - **The first request with an id wins.** The binding starts with the first request that carries the id, whoever sends it. A caller who learns another caller's id before that caller's first follow-up owns the id, and the real owner is then refused. Treat session ids as secrets: keep them out of logs and URLs.
 
 If your deployment has several instances, or you cannot accept these limits, run stateless.
