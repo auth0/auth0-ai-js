@@ -86,9 +86,11 @@ The wrapper replaced an error that it does not show to the client. Look in the s
 - A warning that starts with `[auth0-ai-mcp]` and says the token endpoint issued a token that is already expired, expires within 5 seconds or came without a usable expiry means the exchange itself worked, but `@auth0/ai-mcp` refuses a token that is about to die. Raise the token lifetime of the downstream API in your tenant.
 - Another error is a bug in your tool or a failure of a service it calls.
 
-## A UserError shows up as Tool execution failed.
+## A UserError does not arrive as you wrote it
 
-The wrapper recognizes a FastMCP `UserError` with `instanceof`, so it passes through only an error from the same copy of `fastmcp` that `@auth0/ai-fastmcp` uses. If your application resolves a second copy, the wrapper treats your `UserError` like any other error, replaces its message and hands it to `onError`. `fastmcp` is a peer dependency so that both sides share one copy. Run `npm ls fastmcp` and make your package manager install a single copy.
+Two checks decide what the client sees. The wrapper passes a `UserError` through when it is an instance of the class `@auth0/ai-fastmcp` imports, and also when it comes from another installed copy of `fastmcp`, which it recognizes by the names of the error classes. FastMCP then shows the message as written only when the `UserError` comes from the same copy as the `FastMCP` class that serves the tools. From another copy, the client gets `Tool '<name>' execution failed: <message>`, the text FastMCP writes for any other error, and the wrapper does not call `onError`. Import `UserError` and `FastMCP` from one copy: run `npm ls fastmcp` and make your package manager install a single copy. `fastmcp` is a peer dependency so that the adapter shares that copy too.
+
+A tool result of `Tool execution failed.` means the error is not a `UserError`. An error that only has `name` set to `UserError`, or a class called `UserError` that does not descend from FastMCP's error classes, is replaced like any other error and handed to `onError`.
 
 ## The token exchange did not grant the requested scopes.
 

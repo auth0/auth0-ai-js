@@ -326,43 +326,82 @@ describe("Troubleshooting.md: the other symptoms", () => {
     );
   });
 
-  it("replaces an error that only looks like a UserError, which is what a second copy of fastmcp produces", async () => {
-    // An error of another class with the same name stands in for a UserError of a second copy.
-    class OtherCopyUserError extends Error {
-      override name = "UserError";
+  /** The class chain of fastmcp as a second installed copy defines it. */
+  function otherCopyUserError(): new (message?: string) => Error {
+    const named = (name: string, base: new (message?: string) => Error): new (message?: string) => Error =>
+      Object.defineProperty(class extends base {}, "name", { value: name });
+    class Base extends Error {
+      constructor(message?: string) {
+        super(message);
+        this.name = new.target.name;
+      }
     }
-    const errors: unknown[] = [];
-    const server = await startDocsServer({
+    return named("UserError", named("UnexpectedStateError", named("FastMCPError", Base)));
+  }
+
+  async function throwingServer(error: unknown, errors: unknown[]) {
+    return startDocsServer({
       auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience }),
       tools: (s) => {
         s.addTool({
-          name: "lookalike",
+          name: "thrower",
           parameters: z.object({}),
           execute: withAuth0Execute(
             async () => {
-              throw new OtherCopyUserError("the order does not exist");
+              throw error;
             },
-            { onError: (error) => void errors.push(error) },
+            { onError: (caught) => void errors.push(caught) },
           ),
         });
       },
     });
+  }
+
+  async function textOf(server: Awaited<ReturnType<typeof startDocsServer>>): Promise<string> {
+    const response = await rawRequest(server, {
+      body: { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "thrower", arguments: {} } },
+      headers: { authorization: `Bearer ${await rig().token(server)}` },
+    });
+    const message = parseMessage(await response.text()) as { result: { content: Array<{ text: string }> } };
+    return message.result.content[0]!.text;
+  }
+
+  const USER_ERROR_SECTION = [
+    "## A UserError does not arrive as you wrote it",
+    "The wrapper passes a `UserError` through when it is an instance of the class `@auth0/ai-fastmcp` imports, and also when it comes from another installed copy of `fastmcp`, which it recognizes by the names of the error classes.",
+    "FastMCP then shows the message as written only when the `UserError` comes from the same copy as the `FastMCP` class that serves the tools.",
+    "`Tool '<name>' execution failed: <message>`, the text FastMCP writes for any other error, and the wrapper does not call `onError`.",
+  ] as const;
+
+  it("passes a UserError from another copy of fastmcp to FastMCP, which formats it like any other error and not as the generic text", async () => {
+    const Foreign = otherCopyUserError();
+    const errors: unknown[] = [];
+    const server = await throwingServer(new Foreign("the order does not exist"), errors);
     try {
-      const response = await rawRequest(server, {
-        body: { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "lookalike", arguments: {} } },
-        headers: { authorization: `Bearer ${await rig().token(server)}` },
-      });
-      const message = parseMessage(await response.text()) as { result: { content: Array<{ text: string }> } };
-      expect(message.result.content[0]!.text).toBe("Tool execution failed.");
+      expect(await textOf(server)).toBe("Tool 'thrower' execution failed: the order does not exist");
+      expect(errors).toHaveLength(0);
+    } finally {
+      await server.stop();
+    }
+    documented(GUIDE, ...USER_ERROR_SECTION);
+  });
+
+  it("replaces an error that only looks like a UserError", async () => {
+    class OnlyTheName extends Error {
+      override name = "UserError";
+    }
+    const errors: unknown[] = [];
+    const server = await throwingServer(new OnlyTheName("the order does not exist"), errors);
+    try {
+      expect(await textOf(server)).toBe("Tool execution failed.");
       expect(errors).toHaveLength(1);
     } finally {
       await server.stop();
     }
     documented(
       GUIDE,
-      "## A UserError shows up as Tool execution failed.",
-      "The wrapper recognizes a FastMCP `UserError` with `instanceof`, so it passes through only an error from the same copy of `fastmcp` that `@auth0/ai-fastmcp` uses.",
-      "`fastmcp` is a peer dependency so that both sides share one copy.",
+      "A tool result of `Tool execution failed.` means the error is not a `UserError`.",
+      "An error that only has `name` set to `UserError`, or a class called `UserError` that does not descend from FastMCP's error classes, is replaced like any other error and handed to `onError`.",
     );
   });
 
