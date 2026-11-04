@@ -52,7 +52,8 @@ describe("StatelessAndStateful.md: stateless mode", () => {
     const port = await freePort();
     const origin = `http://127.0.0.1:${port}`;
     const loaded = await withEnv(
-      { AUTH0_DOMAIN: DOMAIN, AUTH0_AUDIENCE: `${origin}/mcp`, AUTH0_CLIENT_ID: undefined, AUTH0_CLIENT_SECRET: undefined },
+      // A path other than FastMCP's default `/mcp`: the snippet serves it only because it passes auth.endpoint.
+      { AUTH0_DOMAIN: DOMAIN, AUTH0_AUDIENCE: `${origin}/orders`, AUTH0_CLIENT_ID: undefined, AUTH0_CLIENT_SECRET: undefined },
       () =>
         loadSnippet(GUIDE, 1, {
           rewrites: [["port: 3000", `host: "127.0.0.1", port: ${port}`]],
@@ -60,7 +61,7 @@ describe("StatelessAndStateful.md: stateless mode", () => {
         }),
     );
     const server = loaded.exports["server"] as FastMCP<never>;
-    const target = { url: new URL(`${origin}/mcp`), audience: `${origin}/mcp` };
+    const target = { url: new URL(`${origin}/orders`), audience: `${origin}/orders` };
     try {
       for (const sub of ["user|one", "user|two"]) {
         const response = await rawRequest(target, {

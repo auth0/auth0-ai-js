@@ -8,9 +8,10 @@ FastMCP serves HTTP in two modes. Use the stateless mode unless a tool needs sta
 import { FastMCP } from "fastmcp";
 import { createFastMcpAuth } from "@auth0/ai-fastmcp";
 
-const server = new FastMCP({ name: "orders", version: "1.0.0", ...createFastMcpAuth() });
+const auth = createFastMcpAuth();
+const server = new FastMCP({ name: "orders", version: "1.0.0", ...auth });
 
-await server.start({ transportType: "httpStream", httpStream: { port: 3000, stateless: true } });
+await server.start({ transportType: "httpStream", httpStream: { endpoint: auth.endpoint, port: 3000, stateless: true } });
 ```
 
 In stateless mode FastMCP creates no session and issues no `mcp-session-id`. Every request carries its own access token and `authenticate` verifies it on its own. This is why it is the recommended mode:
