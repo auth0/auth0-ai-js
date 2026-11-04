@@ -77,16 +77,30 @@ describe.each(WIRINGS)("handler configuration tiers (%s wiring)", (wiring) => {
       tenant,
       { useDefaults: true, createServer: () => buildToolServer({ downstreamUrl: tenant.downstreamUrl }) },
       async (app) => {
-        for (const path of [
-          "/.well-known/oauth-protected-resource/mcp",
-          "/.well-known/oauth-protected-resource",
-        ]) {
-          const response = await app.fetch(new URL(path, app.url));
-          expect(response.status, path).toBe(200);
-          const metadata = (await response.json()) as { resource: string; authorization_servers: string[] };
-          expect(metadata.resource).toBe(PATH_AUDIENCE);
-          expect(metadata.authorization_servers).toEqual([`https://${tenant.domain}/`]);
-        }
+        const suffixed = "/.well-known/oauth-protected-resource/mcp";
+        const response = await app.fetch(new URL(suffixed, app.url));
+        expect(response.status, suffixed).toBe(200);
+        const metadata = (await response.json()) as { resource: string; authorization_servers: string[] };
+        expect(metadata.resource).toBe(PATH_AUDIENCE);
+        expect(metadata.authorization_servers).toEqual([`https://${tenant.domain}/`]);
+
+        // A resource with a path is described at its suffixed route only; the root route is
+        // not served, so it falls through to the authentication check.
+        const root = await app.fetch(new URL("/.well-known/oauth-protected-resource", app.url));
+        expect(root.status).toBe(401);
+        await root.arrayBuffer();
+
+        // HEAD gets the GET headers without a body over the real HTTP server, and a method
+        // outside GET and HEAD is told which ones are allowed.
+        const head = await app.fetch(new URL(suffixed, app.url), { method: "HEAD" });
+        expect(head.status).toBe(200);
+        expect(head.headers.get("content-type")).toBe(response.headers.get("content-type"));
+        expect(await head.text()).toBe("");
+        const post = await app.fetch(new URL(suffixed, app.url), { method: "POST" });
+        expect(post.status).toBe(405);
+        expect(post.headers.get("allow")).toBe("GET, HEAD");
+        expect(post.headers.get("cache-control")).toBe("no-store");
+        await post.arrayBuffer();
 
         const error = await refusal(app);
         expect(error.status).toBe(401);

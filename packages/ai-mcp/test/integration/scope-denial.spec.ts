@@ -54,7 +54,7 @@ describe.each(WIRINGS)("scope enforcement (%s wiring)", (wiring) => {
     });
   });
 
-  it("answers 403 insufficient_scope listing only the missing server-wide scopes", async () => {
+  it("answers 403 insufficient_scope listing the full server-wide requirement", async () => {
     const { tenant, createServer, handler } = options({ requiredScopes: ["read", "admin"], realm: "mcp-test" });
     await withApp(wiring, tenant, handler, async (app) => {
       const error = await connectClient(app, await rig().token({ scope: "read" })).then(
@@ -67,7 +67,9 @@ describe.each(WIRINGS)("scope enforcement (%s wiring)", (wiring) => {
       expect(error?.seen[0]!.status).toBe(403);
       const challenge = error!.seen[0]!.wwwAuthenticate!;
       expect(challenge).toContain('error="insufficient_scope"');
-      expect(challenge).toContain('scope="admin"');
+      // The challenge names the whole requirement, not just the part the caller lacks, so a
+      // client that re-authorizes asks for a scope set that satisfies the server in one step.
+      expect(challenge).toContain('scope="read admin"');
       expect(challenge).toContain('realm="mcp-test"');
       expect(challenge).toContain("resource_metadata=");
       expect(createServer).not.toHaveBeenCalled();

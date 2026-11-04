@@ -62,12 +62,48 @@ describe.each(WIRINGS)("expiry handling (%s wiring)", (wiring) => {
     expect(await exchangesAfter(LEEWAY + 1, 0)).toBe(1);
   });
 
-  it("does not reuse a cached token one second inside the leeway", async () => {
-    expect(await exchangesAfter(LEEWAY - 1, 0)).toBe(2);
+  // The tenant issues the token, and the client then refuses to hand one to the tool that has
+  // no usable life left. The refusal is the generic tool error, nothing is cached, and the
+  // next call has to ask the tenant again.
+  async function issuedWith(expiresIn: number): Promise<{ failures: number; exchanges: number }> {
+    vi.setSystemTime(START);
+    const app = await serve();
+    try {
+      rig().tenant.auth0.state.expiresIn = expiresIn;
+      const bearer = await rig().token({ expiresIn: 2 * DAY });
+      let failures = 0;
+      for (let call = 0; call < 2; call++) {
+        await delegateOnce(app, bearer).catch((e: unknown) => {
+          expect((e as Error).message).toMatch(/delegate failed/);
+          failures++;
+        });
+      }
+      return { failures, exchanges: rig().tenant.auth0.state.successfulExchangeCount };
+    } finally {
+      await app.stop();
+    }
+  }
+
+  it("refuses a token issued one second inside the leeway and does not cache it", async () => {
+    expect(await issuedWith(LEEWAY - 1)).toEqual({ failures: 2, exchanges: 2 });
   });
 
-  it("does not reuse a cached token exactly at the leeway", async () => {
-    expect(await exchangesAfter(LEEWAY, 0)).toBe(2);
+  it("refuses a token issued exactly at the leeway and does not cache it", async () => {
+    expect(await issuedWith(LEEWAY)).toEqual({ failures: 2, exchanges: 2 });
+  });
+
+  it("refuses a token issued already expired", async () => {
+    expect(await issuedWith(0)).toEqual({ failures: 2, exchanges: 2 });
+  });
+
+  it("serves a token issued one second outside the leeway", async () => {
+    expect(await issuedWith(LEEWAY + 1)).toEqual({ failures: 0, exchanges: 1 });
+  });
+
+  it("reuses a token one second outside the leeway until the clock reaches the leeway", async () => {
+    expect(await exchangesAfter(LEEWAY + 2, 1)).toBe(1);
+    rig().reset();
+    expect(await exchangesAfter(LEEWAY + 2, 2)).toBe(2);
   });
 
   it("stops reusing a cached token as time passes into its leeway window", async () => {
