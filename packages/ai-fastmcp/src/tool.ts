@@ -6,6 +6,7 @@ import {
   runWithRequestContext,
 } from "@auth0/ai-mcp";
 import { UserError } from "fastmcp";
+import { safely } from "./hooks.js";
 import { normalizeRequiredScopes } from "./scopes.js";
 import { describeFailure } from "./log.js";
 import { errorHookOf, isAuth0Session } from "./session.js";
@@ -68,18 +69,6 @@ function scopeDenied(missing: readonly string[]): ToolErrorResult {
         ? `Missing required scope: ${names[0]}`
         : `Missing required scopes: ${names.join(", ")}`;
   return textResult(text, "insufficient_scope");
-}
-
-
-function safely(hook: ((error: unknown) => void) | undefined, error: unknown): void {
-  try {
-    const result: unknown = hook?.(error);
-    if (typeof (result as PromiseLike<unknown> | undefined)?.then === "function") {
-      (result as PromiseLike<unknown>).then(undefined, () => {});
-    }
-  } catch {
-    // A failing observer must not change the result.
-  }
 }
 
 /**

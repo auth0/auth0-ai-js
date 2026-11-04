@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import { authenticateRequest } from "@auth0/ai-mcp";
 import type { AuthenticateRequestOptions } from "@auth0/ai-mcp";
 import { SessionBindings, MAX_SESSION_ID_LENGTH } from "./binding.js";
+import { safely } from "./hooks.js";
 import { buildProtectedResource } from "./metadata.js";
 import type { FastMcpOAuthOptions } from "./metadata.js";
 import {
@@ -103,17 +104,6 @@ function claimsSenderConstraint(authorization: string | undefined): boolean {
     return typeof payload === "object" && payload !== null && (payload as { cnf?: unknown }).cnf != null;
   } catch {
     return false;
-  }
-}
-
-function safely(hook: ((error: unknown) => void) | undefined, error: unknown): void {
-  try {
-    const result: unknown = hook?.(error);
-    if (typeof (result as PromiseLike<unknown> | undefined)?.then === "function") {
-      (result as PromiseLike<unknown>).then(undefined, () => {});
-    }
-  } catch {
-    // A failing observer must not change the response.
   }
 }
 
