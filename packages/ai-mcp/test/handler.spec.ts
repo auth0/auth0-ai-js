@@ -540,7 +540,7 @@ describe("DPoP modes", () => {
 });
 
 describe("server-wide required scopes", () => {
-  it("lists only the missing scopes in a 403 and skips the downstream handler", async () => {
+  it("lists the full requirement in a 403 and skips the downstream handler", async () => {
     useTenant();
     const { handle, calls } = makeHandler({
       requiredScopes: ["read", "admin", "audit"],
@@ -548,7 +548,7 @@ describe("server-wide required scopes", () => {
     const response = await handle(request(await bearer()));
     expect(response.status).toBe(403);
     expect(wwwAuthenticate(response)).toBe(
-      `Bearer error="insufficient_scope", error_description="${GENERIC.insufficient_scope}", scope="admin audit", ${ALLOWED_PRM}, ${DPOP_ADVERT}`,
+      `Bearer error="insufficient_scope", error_description="${GENERIC.insufficient_scope}", scope="read admin audit", ${ALLOWED_PRM}, ${DPOP_ADVERT}`,
     );
     expect(await bodyOf(response)).toEqual({
       error: "insufficient_scope",
@@ -604,7 +604,7 @@ describe("server-wide required scopes", () => {
 
     const denied = await handle(request(await bearer({}, { scope: "read" })));
     expect(denied.status).toBe(403);
-    expect(wwwAuthenticate(denied)).toContain('scope="write"');
+    expect(wwwAuthenticate(denied)).toContain('scope="read write"');
   });
 
   it("lists a scope that repeats across entries once", async () => {
@@ -958,12 +958,19 @@ describe("error mapping", () => {
     return handle(request(await bearer(claims)));
   }
 
-  it("maps InsufficientScopeError to 403 listing the scopes the caller lacks", async () => {
+  it("maps InsufficientScopeError to 403 listing every scope the failing check requires", async () => {
     const response = await run(new InsufficientScopeError(["read", "admin"]));
     expect(response.status).toBe(403);
     expect(wwwAuthenticate(response)).toContain('error="insufficient_scope"');
-    expect(wwwAuthenticate(response)).toContain('scope="admin"');
-    expect(wwwAuthenticate(response)).not.toContain("read");
+    // The token holds "read write". The list is the whole requirement, so a client that
+    // re-authorizes with it keeps "read".
+    expect(wwwAuthenticate(response)).toContain('scope="read admin"');
+  });
+
+  it("adds the server-wide requirement to the scopes of a downstream InsufficientScopeError", async () => {
+    const response = await run(new InsufficientScopeError(["admin", "write"]), { requiredScopes: ["read"] });
+    expect(response.status).toBe(403);
+    expect(wwwAuthenticate(response)).toContain('scope="read admin write"');
   });
 
   it("maps DownscopedTokenError to 403 without scope data", async () => {

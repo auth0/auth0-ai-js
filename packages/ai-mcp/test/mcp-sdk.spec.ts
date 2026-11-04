@@ -292,7 +292,7 @@ describe("createMcpSdkHandler", () => {
 
     expect(response.status).toBe(403);
     expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
-    expect(response.headers.get("www-authenticate")).toContain('scope="admin"');
+    expect(response.headers.get("www-authenticate")).toContain('scope="read admin"');
     expect(factory).not.toHaveBeenCalled();
   });
 

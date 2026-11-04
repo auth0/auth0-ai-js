@@ -313,12 +313,12 @@ export function createMcpHandler(
 
     const result = await authenticator.authenticate(request);
     if (!result.ok) return result.response;
-    const { authInfo, caller } = result;
+    const { authInfo } = result;
     try {
       return await result.run(() => rest.handler(request, authInfo));
     } catch (error) {
       return fail(
-        () => classifyDownstream(error, caller.principal.scopes),
+        () => classifyDownstream(error, authenticator.requiredScopes),
         error,
         result.scheme,
       );

@@ -256,11 +256,16 @@ function classifyAuthentication(error: unknown): Failure {
  * These errors only reach this function when they escape the downstream handler.
  * Under `createMcpSdkHandler` the MCP SDK catches errors thrown by tools first, so
  * a downscoped exchange there becomes an `isError` tool result with HTTP 200.
+ *
+ * @param serverScopes - The server-wide `requiredScopes`, which a 403 challenge repeats next to
+ * the scopes the failing check named.
  */
-export function classifyDownstream(error: unknown, held: readonly string[]): Failure {
+export function classifyDownstream(error: unknown, serverScopes: readonly string[]): Failure {
   if (error instanceof InsufficientScopeError) {
+    // The challenge names everything the request needs, not only what is missing: a client that
+    // asks for just the missing scopes in its next authorization would drop the ones it holds.
     return authFailure(403, "insufficient_scope", {
-      scope: missingFrom(error.requiredScopes, held),
+      scope: [...new Set([...serverScopes, ...error.requiredScopes])],
     });
   }
   if (error instanceof DownscopedTokenError) {
@@ -621,7 +626,9 @@ export function createAuthenticator(options: AuthenticateRequestOptions): Authen
         return {
           ok: false,
           response: responder.respond(
-            authFailure(403, "insufficient_scope", { scope: missing }),
+            // The full requirement, not only the missing part, so a client that re-authorizes
+            // with this list keeps the scopes it already has.
+            authFailure(403, "insufficient_scope", { scope: requiredScopes }),
             presented,
           ),
         };
