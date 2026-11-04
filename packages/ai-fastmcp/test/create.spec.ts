@@ -449,6 +449,20 @@ describe("createFastMcpAuth", () => {
       ).resolves.toBeDefined();
     });
 
+    it("applies the configured per-subject limit", async () => {
+      let sub = "alice";
+      const { auth } = setup(
+        { sessionBinding: { maxSessions: 10, maxSessionsPerSubject: 1 } },
+        { verify: async () => callerFor(principalOf({ sub })) },
+      );
+      await auth.authenticate(fakeRequest({ ...bearer(fakeJwt()), "mcp-session-id": "s1" }));
+      await auth.authenticate(fakeRequest({ ...bearer(fakeJwt()), "mcp-session-id": "s2" }));
+      // alice may hold one id, so s2 replaced s1 and bob can take s1, but not s2.
+      sub = "bob";
+      await expect(auth.authenticate(fakeRequest({ ...bearer(fakeJwt()), "mcp-session-id": "s1" }))).resolves.toBeDefined();
+      await expect(failure(auth.authenticate(fakeRequest({ ...bearer(fakeJwt()), "mcp-session-id": "s2" })))).resolves.toBeDefined();
+    });
+
     it("refuses an oversized session id with 400", async () => {
       const { auth, client } = setup();
       const response = await failure(

@@ -145,15 +145,13 @@ describe("warning for a request on another path", () => {
     expect(text).not.toContain("token=");
   });
 
-  it("stays quiet for the endpoint, the metadata routes and the legacy SSE routes", async () => {
+  it("stays quiet for the endpoint and the metadata routes", async () => {
     const auth = setup("https://mcp.example.com/mcp");
     for (const url of [
       "/mcp",
       "/mcp?x=1",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-protected-resource/mcp",
-      "/sse",
-      "/messages?sessionId=1",
     ]) {
       await request(auth, url);
     }
@@ -175,5 +173,52 @@ describe("warning for a request on another path", () => {
     expect(await thrown(auth.authenticate(noUrl))).toBeInstanceOf(Response);
     await request(auth, "http://[bad");
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("legacy SSE route", () => {
+  // mcp-proxy opens an SSE session on GET /sse and never authenticates the messages posted for it.
+  async function refusal(auth: ReturnType<typeof setup>, url: string, method = "GET", headers = {}): Promise<Response> {
+    return (await thrown(auth.authenticate(fakeRequest(headers, url, method)))) as Response;
+  }
+
+  it.each(["/sse", "/sse?x=1", "/sse#frag", "//host/sse", "/./sse", "/a/../sse"])(
+    "refuses GET %s with 404 before the token is looked at",
+    async (url) => {
+      const client = stubClient({ audience: "https://mcp.example.com/mcp" });
+      const auth = createFastMcpAuth({ client } as FastMcpAuthOptions);
+      const response = await refusal(auth, url, "GET", { authorization: "Bearer valid-looking" });
+      expect(response.status).toBe(404);
+      expect(response.headers.get("www-authenticate")).toBeNull();
+      expect(await response.json()).toEqual({ error: "not_found", error_description: "Not found." });
+      expect(client.verifyCalls).toHaveLength(0);
+    },
+  );
+
+  it.each([
+    ["GET", "/sse/"],
+    ["GET", "/SSE"],
+    ["GET", "/sses"],
+    ["GET", "/mcp?next=/sse"],
+    ["POST", "/sse"],
+    ["DELETE", "/sse"],
+  ])("does not refuse %s %s, which mcp-proxy does not route to a session", async (method, url) => {
+    const auth = setup("https://mcp.example.com/mcp");
+    const response = await refusal(auth, url, method);
+    expect(response.status).toBe(401);
+  });
+
+  it("lets a server that serves the MCP route on /sse answer its POST requests", async () => {
+    const auth = setup("https://mcp.example.com/sse", { endpoint: "/sse" });
+    expect((await refusal(auth, "/sse", "POST")).status).toBe(401);
+    expect((await refusal(auth, "/sse", "GET")).status).toBe(404);
+  });
+
+  it("does not depend on the request url being set", async () => {
+    const auth = setup("https://mcp.example.com/mcp");
+    const request = { headers: {}, method: "GET" } as unknown as IncomingMessage;
+    expect(((await thrown(auth.authenticate(request))) as Response).status).toBe(401);
+    const bad = fakeRequest({}, "http://[bad", "GET");
+    expect(((await thrown(auth.authenticate(bad))) as Response).status).toBe(401);
   });
 });

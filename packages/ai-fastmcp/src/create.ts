@@ -37,8 +37,10 @@ export interface FastMcpAuth {
 }
 
 const WELL_KNOWN_ROOT = "/.well-known/";
-// Routes FastMCP serves next to the MCP endpoint and authenticates with the same hook.
-const LEGACY_SSE_ROUTES = new Set(["/sse", "/messages"]);
+// mcp-proxy, which FastMCP runs on, opens a legacy SSE session on `GET /sse` and takes that session's
+// messages on `POST /messages?sessionId=...`. FastMCP offers no option to turn the route off, and it
+// authenticates only the first request: the message route never calls `authenticate`.
+const LEGACY_SSE_OPEN_PATH = "/sse";
 const MAX_WARNED_PATHS = 20;
 const warnedPaths = new Set<string>();
 
@@ -51,7 +53,7 @@ function warnOnUnexpectedPath(url: string | undefined, endpoint: string): void {
   try {
     if (url === undefined) return;
     const path = new URL(url, "http://localhost").pathname;
-    if (path === endpoint || path.startsWith(WELL_KNOWN_ROOT) || LEGACY_SSE_ROUTES.has(path)) return;
+    if (path === endpoint || path.startsWith(WELL_KNOWN_ROOT)) return;
     if (warnedPaths.has(path) || warnedPaths.size >= MAX_WARNED_PATHS) return;
     warnedPaths.add(path);
     const shown = path.length > 100 ? `${path.slice(0, 97)}...` : path;
@@ -60,6 +62,19 @@ function warnOnUnexpectedPath(url: string | undefined, endpoint: string): void {
     );
   } catch {
     // A warning must never change the response.
+  }
+}
+
+/**
+ * Whether the request opens a legacy SSE session, the same test mcp-proxy applies (method and
+ * parsed path) before it calls `createServer`, and so `authenticate`.
+ */
+function opensLegacySseSession(req: IncomingMessage): boolean {
+  if (req.method !== "GET" || req.url === undefined) return false;
+  try {
+    return new URL(req.url, "http://localhost").pathname === LEGACY_SSE_OPEN_PATH;
+  } catch {
+    return false;
   }
 }
 
@@ -110,6 +125,9 @@ function safely(hook: ((error: unknown) => void) | undefined, error: unknown): v
  * and returns an {@link Auth0Session}. A request that carries a `DPoP` header, or a token that
  * is bound to a key, is refused with 401: this adapter verifies Bearer tokens only. `oauth`
  * serves the protected resource metadata from the same resource and endpoint the challenges name.
+ *
+ * `GET /sse`, which would open a legacy SSE session, is refused with 404: mcp-proxy never
+ * authenticates the messages posted for such a session, so the adapter allows none to exist.
  *
  * Do not combine the result with FastMCP's own `auth` option, which makes FastMCP an OAuth proxy
  * that issues its own tokens.
@@ -179,6 +197,11 @@ export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth
   }
 
   async function authenticate(req: IncomingMessage): Promise<Auth0Session> {
+    // Refused before any token work. Only this request can open a session on the route whose
+    // messages are never authenticated, so refusing it leaves nothing for `POST /messages` to reach.
+    if (opensLegacySseSession(req)) {
+      throw jsonResponse(404, { error: "not_found", error_description: "Not found." });
+    }
     warnOnUnexpectedPath(req.url, endpoint);
     try {
       return await authenticateOrThrow(req);
