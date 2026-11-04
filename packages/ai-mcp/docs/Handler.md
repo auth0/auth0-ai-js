@@ -67,7 +67,7 @@ export const handle = createMcpHandler({
 | `handler` | Serves the authenticated request. It runs inside the request context. |
 | `requiredScopes` | Scopes every request must carry. The token needs all of them. Each entry is split on whitespace, so `'read write'` names two scopes, and duplicates count once. A blank or non-string entry throws `InvalidConfigurationError` when you create the handler, and an empty list means no requirement. The scopes are also sent as the `scope` of the 401 challenge for a request without a credential, and they are the default of `metadata.scopesSupported`. |
 | `realm` | Protection space reported as `realm` in challenges. Must be a non-empty string without quotes, backslashes or control characters. |
-| `metadata.path` | Replaces the suffixed metadata route. It must be an absolute, normalized path without query or fragment. The root route `/.well-known/oauth-protected-resource` is served regardless. |
+| `metadata.path` | Replaces the suffixed metadata route. It must be an absolute, normalized path without query or fragment. |
 | `metadata.scopesSupported`, `metadata.resourceName`, `metadata.resourceDocumentation` | Extra fields published in the metadata document. Without `metadata.scopesSupported` the document lists `requiredScopes` as `scopes_supported`, so a client that reads it has something to ask for. Set it to publish more scopes than every request needs, such as the scopes of single tools. |
 | `onError` | Observer for internal errors. It receives the raw error whenever the handler itself answers 500, for example when a custom `handler` throws an error that is not one of this package's three. It is not called for 401 and 403 answers, and not for errors thrown inside tools served by `createMcpSdkHandler` or `createNodeMcpHandler`, because the MCP SDK turns those into tool results. Log those inside the tool. The handler ignores a hook that throws. |
 
@@ -116,7 +116,7 @@ Failures that happen before your handler runs use a generic JSON body (`error` a
 | Token fails verification, including organization policy failures | 401 | `invalid_token` |
 | DPoP proof fails verification | 401 | `invalid_dpop_proof` |
 | Server requires a DPoP nonce | 401 | `use_dpop_nonce` |
-| Token lacks a scope in `requiredScopes` | 403 | `insufficient_scope`, with `scope` listing the missing scopes |
+| Token lacks a scope in `requiredScopes` | 403 | `insufficient_scope`, with `scope` listing every scope the request needs |
 | Your handler throws `UnauthenticatedError` | 401 | `invalid_token` |
 | A custom `createMcpHandler` handler throws `InsufficientScopeError` or `DownscopedTokenError` | 403 | `insufficient_scope` |
 | Anything else | 500 | no challenge, generic body |
@@ -125,18 +125,19 @@ A missing credential gets a challenge without an `error` value, because RFC 6750
 
 Every failure response, including the 500, carries `cache-control: no-store`, so no cache keeps a rejection. The metadata document carries `cache-control: public, max-age=3600`.
 
-Every path other than the metadata paths goes through authentication. The handler does not route, so mount it only on the path that serves MCP, and also on the metadata paths. It answers `GET` on two of them with the same document, and `405` with an `Allow: GET` header for any other method:
+Every path other than the metadata paths goes through authentication. The handler does not route, so mount it only on the path that serves MCP, and also on the metadata paths. It answers `GET` and `HEAD` on the metadata path with the same document (`HEAD` without a body), and `405` with `Allow: GET, HEAD` and `cache-control: no-store` for any other method, `OPTIONS` included. It sends no CORS headers.
 
-- The RFC 9728 suffixed path, which is `/.well-known/oauth-protected-resource` followed by the path of `resource`. For `https://mcp.example.com/mcp` that is `/.well-known/oauth-protected-resource/mcp`. `metadata.path` replaces this route.
-- The root path `/.well-known/oauth-protected-resource`, which some MCP clients request first. It is served whatever `metadata.path` says. For a resource without a path, the two are the same route.
+- The RFC 9728 suffixed path is `/.well-known/oauth-protected-resource` followed by the path of `resource`. For `https://mcp.example.com/mcp` that is `/.well-known/oauth-protected-resource/mcp`. `metadata.path` replaces this route.
+- The root path `/.well-known/oauth-protected-resource` is a metadata route only for a resource without a path, where it is the same route as the first bullet. For a resource with a path the document would name a resource that the root URL does not stand for (RFC 9728 section 3.3), so a request for the root URL goes through authentication like any other path.
 
-The `resource_metadata` URL in a challenge names the suffixed route (or the custom `metadata.path`). A framework that routes by path, such as Express, needs all of them or discovery fails:
+The `resource_metadata` URL in a challenge names the metadata route. A framework that routes by path, such as Express, needs it, or discovery fails:
 
 ```text
 app.all('/mcp', handler);
 app.get('/.well-known/oauth-protected-resource/mcp', handler);
-app.get('/.well-known/oauth-protected-resource', handler);
 ```
+
+Express answers `HEAD` through `app.get`. A framework that routes by verb needs `HEAD` mounted on the metadata path too, or `app.all` for it.
 
 ### Proxies
 
@@ -286,14 +287,17 @@ const client = createMcpClient({
 });
 
 const METADATA_URL = 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp';
-const METADATA_PATHS = new Set(['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp']);
+const METADATA_PATH = '/.well-known/oauth-protected-resource/mcp';
 const metadata = buildProtectedResourceMetadata({ client, scopesSupported: ['mcp:access', 'tool:admin'] });
 
 export async function handle(request: Request): Promise<Response> {
-  if (METADATA_PATHS.has(new URL(request.url).pathname)) {
-    return request.method === 'GET'
-      ? Response.json(metadata)
-      : new Response(null, { status: 405, headers: { allow: 'GET' } });
+  if (new URL(request.url).pathname === METADATA_PATH) {
+    if (request.method === 'GET') {
+      return Response.json(metadata);
+    }
+    return request.method === 'HEAD'
+      ? new Response(null, { status: 200 })
+      : new Response(null, { status: 405, headers: { allow: 'GET, HEAD', 'cache-control': 'no-store' } });
   }
 
   const result = await authenticateRequest(request, {

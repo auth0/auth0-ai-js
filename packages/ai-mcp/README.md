@@ -150,21 +150,20 @@ createServer((req, res) => void handler(req, res)).listen(3000);
 What this gives you:
 
 - `POST /mcp` requires a valid access token with the `mcp:access` scope. Otherwise the client gets a 401 or 403 with a `WWW-Authenticate` challenge.
-- `GET /.well-known/oauth-protected-resource/mcp` serves the protected resource metadata, so MCP clients can discover your authorization server. The same document is also served at `/.well-known/oauth-protected-resource`. Some clients, such as Claude Code, also need tenant settings: see [MCP clients and tenant settings](./docs/McpClients.md).
+- `GET /.well-known/oauth-protected-resource/mcp` serves the protected resource metadata, so MCP clients can discover your authorization server. Some clients, such as Claude Code, also need tenant settings: see [MCP clients and tenant settings](./docs/McpClients.md).
 - `list_reports` runs only for callers whose token carries `tool:list_reports`. Other callers get a tool result with `isError: true`.
 - The token exchange always acts for the caller of the current request.
 
 The handler needs no `resource` or `authorizationServers` here. `resource` defaults to the `audience` of the client, which must therefore be the public URL of your server, and `authorizationServers` defaults to `https://<domain>/`. If you set `resource` yourself it must equal the audience. See [resource and audience](./docs/Handler.md#resource-and-audience).
 
-`createNodeMcpHandler` mounts on `http.createServer` as shown above. On Express, route the MCP path and both protected resource metadata paths to the handler, or MCP clients cannot discover your authorization server:
+`createNodeMcpHandler` mounts on `http.createServer` as shown above. On Express, route the MCP path and the protected resource metadata path to the handler, or MCP clients cannot discover your authorization server:
 
 ```text
 app.all('/mcp', handler);
 app.get('/.well-known/oauth-protected-resource/mcp', handler);
-app.get('/.well-known/oauth-protected-resource', handler);
 ```
 
-The suffixed metadata path is `/.well-known/oauth-protected-resource` followed by the path of `resource`. Set `metadata.path` to replace it. The root path `/.well-known/oauth-protected-resource` is always served as well. Mount the handler before any body-parsing middleware. For other runtimes use `createMcpSdkHandler`, which takes a standard `Request` and returns a `Response`. For a different MCP stack use [`createMcpHandler`](./docs/Handler.md).
+The suffixed metadata path is `/.well-known/oauth-protected-resource` followed by the path of `resource`. Set `metadata.path` to replace it. The root path `/.well-known/oauth-protected-resource` is served only for a resource without a path. Mount the handler before any body-parsing middleware. For other runtimes use `createMcpSdkHandler`, which takes a standard `Request` and returns a `Response`. For a different MCP stack use [`createMcpHandler`](./docs/Handler.md).
 
 ## Configuration
 
