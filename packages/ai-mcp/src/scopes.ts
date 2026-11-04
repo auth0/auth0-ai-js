@@ -69,6 +69,14 @@ export function requireScopes(required: string | readonly string[], principal?: 
  * instead of throwing. Every other error, including those from the handler,
  * propagates unchanged.
  *
+ * The failure is a result and not a thrown error on purpose. A tool call that fails is
+ * reported to the MCP client as a result with `isError: true` whatever the cause, and an
+ * error thrown from a tool is turned into one by the MCP SDK anyway, so the client sees the
+ * same thing either way. Returning it directly keeps the failure machine readable through
+ * `_meta.error` and leaves the other tools of the server working. A tool result cannot carry
+ * an HTTP 403 challenge. When you want the error itself, for example to map it to a 403
+ * yourself, call {@link requireScopes} instead: it throws {@link InsufficientScopeError}.
+ *
  * @param required - One scope, a space-delimited string of scopes, or a non-empty
  *   list of such strings. Validated when the wrapper is created and copied then, so
  *   changing the list later has no effect.

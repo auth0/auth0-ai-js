@@ -55,7 +55,14 @@ export interface Principal {
 export interface OnBehalfOfOptions {
   /** Identifier of the downstream API the new token is for. */
   audience: string;
-  /** Space-separated scopes to request. */
+  /**
+   * Space-separated scopes to request. Optional. When you leave it out, the exchange asks
+   * for no particular scope and the authorization server issues whatever it grants by default
+   * for this client and audience. Nothing is then checked against the grant, so a token with
+   * fewer scopes than your tool needs is returned as is: read `grantedScopes` on the result
+   * if the tool depends on a scope. When you pass it, the call fails with
+   * `DownscopedTokenError` unless every requested scope was granted.
+   */
   scope?: string;
 }
 
@@ -63,7 +70,14 @@ export interface OnBehalfOfOptions {
 export interface ClientCredentialsOptions {
   /** Identifier of the API the token is for. */
   audience: string;
-  /** Space-separated scopes to request. */
+  /**
+   * Space-separated scopes to request. Optional. When you leave it out, the grant asks for no
+   * particular scope and the authorization server issues whatever it grants by default for
+   * this client and audience. Nothing is then checked against the grant; read `grantedScopes`
+   * on the result if the tool depends on a scope. When you pass it, the call fails with a
+   * generic server error (its `cause` is a `DownscopedTokenError`) unless every
+   * requested scope was granted.
+   */
   scope?: string;
 }
 
@@ -101,13 +115,20 @@ export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessToken
  * call downstream APIs through this client. The SDK still exposes raw request headers,
  * including Authorization, through `extra.requestInfo.headers`; tool code must not log or
  * forward them.
+ *
+ * Every method rejects a token that is already expired or expires within 5 seconds, so tool
+ * code never receives one it cannot use. Only `getTokenOnBehalfOf` can be cached, through the
+ * `tokenStore` option. `getClientCredentialsToken` and `getTokenForConnection` go to the
+ * tenant on every call and their results are not cached by this package, so a tool that calls
+ * either in a loop makes one token request per call: keep the result in the tool for as long
+ * as it is valid if that matters.
  */
 export interface RequestScopedMcpClient {
   /** Exchanges the caller's token for a token to a downstream API. */
   getTokenOnBehalfOf(options: OnBehalfOfOptions): Promise<OnBehalfOfTokenResult>;
-  /** Obtains a token for this server using its own client credentials. */
+  /** Obtains a token for this server using its own client credentials. Not cached. */
   getClientCredentialsToken(options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult>;
-  /** Obtains a token for a third-party service linked to the caller through a connection. */
+  /** Obtains a token for a third-party service linked to the caller through a connection. Not cached. */
   getTokenForConnection(options: TokenForConnectionOptions): Promise<ConnectionTokenResult>;
   /** Returns the identity of the caller this client is bound to. */
   getPrincipal(): Principal;
@@ -146,6 +167,16 @@ export interface McpClientOptions {
    */
   scopeMatching?: ScopeMatching;
   /**
+   * Reject an access token that carries neither an `azp` nor a `client_id` claim, with
+   * `UnauthenticatedError` (401). Auth0 access tokens carry `azp`, so this only matters for
+   * tokens that come from elsewhere. It is off by default because a token without any client
+   * identity is valid for some machine callers; with it off, `Principal.clientId` is `null`
+   * for such a token. It is a setting of this package, not of the core client, so it can be
+   * combined with `apiClient`.
+   * @defaultValue `false`
+   */
+  requireClientId?: boolean;
+  /**
    * Organization enforcement applied at ingress.
    * @defaultValue `'allow'`
    */
@@ -166,16 +197,6 @@ export interface McpClientOptions {
    * Upper limit, in milliseconds, for each outbound HTTP request the core client makes:
    * the token exchange, discovery and JWKS fetches. The limit covers the response body
    * as well as the headers. A request that exceeds it is aborted. A stalled token exchange
-  /**
-   * Reject an access token that carries neither an `azp` nor a `client_id` claim, with
-   * `UnauthenticatedError` (401). Auth0 access tokens carry `azp`, so this only matters for
-   * tokens that come from elsewhere. It is off by default because a token without any client
-   * identity is valid for some machine callers; with it off, `Principal.clientId` is `null`
-   * for such a token. It is a setting of this package, not of the core client, so it can be
-   * combined with `apiClient`.
-   * @defaultValue `false`
-   */
-  requireClientId?: boolean;
    * fails as a server error (the handler answers 500), never as an authentication
    * challenge; nothing is cached, concurrent callers that shared the exchange all fail, and
    * the next call starts a new one. A stalled discovery or JWKS fetch surfaces from core as

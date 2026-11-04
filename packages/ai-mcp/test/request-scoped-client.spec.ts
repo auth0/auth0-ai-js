@@ -341,6 +341,32 @@ describe('request-scoped client: other operations', () => {
     expect(tenant.state.clientCredentialsCount).toBe(1);
   });
 
+  it('does not cache client credentials or connection tokens, even with a store configured', async () => {
+    useTenant();
+    const store = new TestStore();
+    const client = makeClient({ tokenStore: store });
+    const scoped = client.withToken(await caller(client));
+
+    await scoped.getClientCredentialsToken({ audience: DOWNSTREAM, scope: 'a' });
+    await scoped.getClientCredentialsToken({ audience: DOWNSTREAM, scope: 'a' });
+    expect(tenant.state.clientCredentialsCount).toBe(2);
+
+    let connectionRequests = 0;
+    server.use(
+      http.post(tenant.tokenEndpoint, async ({ request }) => {
+        const params = Object.fromEntries(new URLSearchParams(await request.text()));
+        if (!params['requested_token_type']) return undefined;
+        connectionRequests++;
+        return HttpResponse.json({ access_token: 'connection-token', expires_in: 3600, token_type: 'Bearer' });
+      })
+    );
+    await scoped.getTokenForConnection({ connection: 'github' });
+    await scoped.getTokenForConnection({ connection: 'github' });
+    expect(connectionRequests).toBe(2);
+
+    expect(store.entries.size).toBe(0);
+  });
+
   it('falls back to the requested scopes for client credentials when the response has none', async () => {
     useTenant(scopeMode.absent);
     const client = makeClient();
