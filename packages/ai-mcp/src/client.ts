@@ -185,7 +185,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
 
     async verifyAccessToken(verifyOptions) {
       const claims = await apiClient.verifyAccessToken(verifyOptions);
-      const principal = buildPrincipal(claims);
+      const principal = buildPrincipal(claims, { requireClientId: options.requireClientId === true });
       const redacted = () => ({ principal });
       const caller: VerifiedCaller = Object.freeze({
         principal,

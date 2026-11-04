@@ -96,6 +96,11 @@ describe('buildPrincipal', () => {
       expect(buildPrincipal(claims({ ...BASE, client_id: 'cid', azp: 7 })).clientId).toBe('cid');
     });
 
+    it('treats a blank azp or client_id as absent', () => {
+      expect(buildPrincipal(claims({ ...BASE, client_id: 'cid', azp: '  ' })).clientId).toBe('cid');
+      expect(buildPrincipal(claims({ ...BASE, client_id: ' \t', azp: '\n' })).clientId).toBeNull();
+    });
+
     it('accepts a token that carries neither azp nor client_id, with a null clientId', () => {
       expect(buildPrincipal(claims(BASE)).clientId).toBeNull();
     });
@@ -109,6 +114,49 @@ describe('buildPrincipal', () => {
       const input = Object.create({ client_id: 'inherited', azp: 'inherited' });
       Object.assign(input, BASE);
       expect(buildPrincipal(input).clientId).toBeNull();
+    });
+
+    describe('with requireClientId', () => {
+      const require = { requireClientId: true };
+
+      it('rejects a token that carries neither azp nor client_id, without echoing any claim', () => {
+        let error: unknown;
+        try {
+          buildPrincipal(claims({ ...BASE, scope: 'secret-scope' }), require);
+        } catch (e) {
+          error = e;
+        }
+        expect(error).toBeInstanceOf(UnauthenticatedError);
+        expect((error as UnauthenticatedError).statusCode).toBe(401);
+        expect((error as UnauthenticatedError).message).toBe('Access token has no client identity.');
+        expect(JSON.stringify(error)).not.toContain('user|123');
+      });
+
+      it.each([
+        ['blank azp', { azp: '  ' }],
+        ['blank client_id', { client_id: '' }],
+        ['non-string azp and client_id', { azp: 5, client_id: {} }],
+      ])('rejects a token with %s', (_name, extra) => {
+        expect(() => buildPrincipal(claims({ ...BASE, ...extra }), require)).toThrow(UnauthenticatedError);
+      });
+
+      it('rejects inherited client claims', () => {
+        const input = Object.create({ client_id: 'inherited', azp: 'inherited' });
+        Object.assign(input, BASE);
+        expect(() => buildPrincipal(input, require)).toThrow(UnauthenticatedError);
+      });
+
+      it('accepts a token with azp or client_id', () => {
+        expect(buildPrincipal(claims({ ...BASE, azp: 'azp1' }), require).clientId).toBe('azp1');
+        expect(buildPrincipal(claims({ ...BASE, client_id: 'cid' }), require).clientId).toBe('cid');
+      });
+
+      it('is off by default and when set to false or to a non-true value', () => {
+        expect(buildPrincipal(claims(BASE)).clientId).toBeNull();
+        expect(buildPrincipal(claims(BASE), {}).clientId).toBeNull();
+        expect(buildPrincipal(claims(BASE), { requireClientId: false }).clientId).toBeNull();
+        expect(buildPrincipal(claims(BASE), { requireClientId: 'yes' as unknown as boolean }).clientId).toBeNull();
+      });
     });
   });
 

@@ -7,6 +7,11 @@ function ownClaim(claims: object, name: string): unknown {
   return Object.hasOwn(claims, name) ? (claims as Record<string, unknown>)[name] : undefined;
 }
 
+/** Returns the value when it is a string with at least one non-whitespace character, otherwise `null`. */
+function nonBlankString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
 /** Returns the value when it is a non-empty string, otherwise `null`. */
 function nonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
@@ -21,8 +26,8 @@ function nonEmptyString(value: unknown): string | null {
  *
  * - `sub` must be a non-blank string.
  * - `expiresAt` comes from `exp`, which must be a finite number of epoch seconds.
- * - `clientId` is the `azp` claim when it is a non-empty string, otherwise the
- *   `client_id` claim when that is a non-empty string, otherwise `null`. Auth0 tokens
+ * - `clientId` is the `azp` claim when it is a non-blank string, otherwise the
+ *   `client_id` claim when that is a non-blank string, otherwise `null`. Auth0 tokens
  *   carry `azp` and not `client_id`, so a token with neither is still accepted.
  * - `orgId` is the `org_id` claim when it is a non-empty string, otherwise `null`. A
  *   present `org_id` that is not a string is rejected.
@@ -35,14 +40,20 @@ function nonEmptyString(value: unknown): string | null {
  * The returned principal and its arrays are frozen.
  *
  * @param claims - Verified access token claims.
+ * @param options - Set `requireClientId` to reject a token that carries neither `azp` nor
+ * `client_id`. It is off by default, because a token without a client identity is a valid
+ * token for some machine callers.
  * @returns The resolved principal.
  * @throws {UnauthenticatedError} When `sub` is missing, blank or not a string,
  * `exp` is missing or not a finite number, `permissions` is present but not an array
- * of strings, or `org_id` is present but not a string. The message never contains
- * claim values.
+ * of strings, `org_id` is present but not a string, or `requireClientId` is set and the
+ * token has no client identity. The message never contains claim values.
  * The error carries no `WWW-Authenticate` challenge, so the HTTP layer must add it.
  */
-export function buildPrincipal(claims: VerifiedAccessTokenClaims): Principal {
+export function buildPrincipal(
+  claims: VerifiedAccessTokenClaims,
+  options: { requireClientId?: boolean } = {}
+): Principal {
   const sub = ownClaim(claims, 'sub');
   if (typeof sub !== 'string' || sub.trim() === '') {
     throw new UnauthenticatedError('Access token has a missing or blank subject.');
@@ -70,12 +81,17 @@ export function buildPrincipal(claims: VerifiedAccessTokenClaims): Principal {
     throw new UnauthenticatedError('Access token has an invalid organization.');
   }
 
+  const clientId = nonBlankString(ownClaim(claims, 'azp')) ?? nonBlankString(ownClaim(claims, 'client_id'));
+  if (clientId === null && options.requireClientId === true) {
+    throw new UnauthenticatedError('Access token has no client identity.');
+  }
+
   return Object.freeze({
     sub,
     expiresAt: exp,
     scopes: Object.freeze(scopes) as string[],
     permissions,
-    clientId: nonEmptyString(ownClaim(claims, 'azp')) ?? nonEmptyString(ownClaim(claims, 'client_id')),
+    clientId,
     orgId: nonEmptyString(rawOrgId),
   });
 }

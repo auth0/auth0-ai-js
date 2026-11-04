@@ -195,6 +195,41 @@ describe('verifyAccessToken', () => {
     await expect(client.verifyAccessToken({ accessToken: bad })).rejects.toBeInstanceOf(VerifyAccessTokenError);
   });
 
+  describe('requireClientId', () => {
+    it('accepts a token without a client identity by default, with a null clientId', async () => {
+      useTenant();
+      const caller = await makeClient().verifyAccessToken({ accessToken: await token() });
+      expect(caller.principal.clientId).toBeNull();
+    });
+
+    it('rejects such a token with a 401 when set', async () => {
+      useTenant();
+      const client = makeClient({ requireClientId: true });
+      const error = await client.verifyAccessToken({ accessToken: await token() }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(UnauthenticatedError);
+      expect((error as UnauthenticatedError).statusCode).toBe(401);
+    });
+
+    it('accepts a token that carries azp when set', async () => {
+      useTenant();
+      const client = makeClient({ requireClientId: true });
+      const caller = await client.verifyAccessToken({ accessToken: await token('user|1', { azp: 'app-1' }) });
+      expect(caller.principal.clientId).toBe('app-1');
+    });
+
+    it('can be combined with a supplied apiClient', async () => {
+      useTenant();
+      const apiClient = new ApiClient({
+        domain: 'tenant.example.com',
+        audience: AUDIENCE,
+        clientId: 'mcp-client',
+        clientSecret: 'secret',
+      });
+      const client = createMcpClient({ domain: 'tenant.example.com', audience: AUDIENCE, apiClient, requireClientId: true });
+      await expect(client.verifyAccessToken({ accessToken: await token() })).rejects.toBeInstanceOf(UnauthenticatedError);
+    });
+  });
+
   it('enforces organization policy at ingress', async () => {
     useTenant();
     const client = makeClient({ organizationPolicy: 'required', organizationId: ['org_ok'] });

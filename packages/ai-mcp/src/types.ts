@@ -42,7 +42,9 @@ export interface Principal {
   readonly permissions: readonly string[] | null;
   /**
    * The OAuth client the token was issued to. Taken from the `azp` claim (what
-   * Auth0 access tokens carry), falling back to `client_id`. `null` when neither is present.
+   * Auth0 access tokens carry), falling back to `client_id`. `null` when neither is present,
+   * unless {@link McpClientOptions.requireClientId} is set, in which case such a token is
+   * rejected before a principal is built.
    */
   readonly clientId: string | null;
   /** The `org_id` claim. `null` when the token was not issued in an organization context. */
@@ -164,6 +166,16 @@ export interface McpClientOptions {
    * Upper limit, in milliseconds, for each outbound HTTP request the core client makes:
    * the token exchange, discovery and JWKS fetches. The limit covers the response body
    * as well as the headers. A request that exceeds it is aborted. A stalled token exchange
+  /**
+   * Reject an access token that carries neither an `azp` nor a `client_id` claim, with
+   * `UnauthenticatedError` (401). Auth0 access tokens carry `azp`, so this only matters for
+   * tokens that come from elsewhere. It is off by default because a token without any client
+   * identity is valid for some machine callers; with it off, `Principal.clientId` is `null`
+   * for such a token. It is a setting of this package, not of the core client, so it can be
+   * combined with `apiClient`.
+   * @defaultValue `false`
+   */
+  requireClientId?: boolean;
    * fails as a server error (the handler answers 500), never as an authentication
    * challenge; nothing is cached, concurrent callers that shared the exchange all fail, and
    * the next call starts a new one. A stalled discovery or JWKS fetch surfaces from core as
