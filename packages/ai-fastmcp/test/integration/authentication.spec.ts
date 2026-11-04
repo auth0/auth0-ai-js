@@ -158,7 +158,8 @@ describe.each(MODES)("authentication (stateless: $stateless)", ({ stateless }) =
         expect(response.status).toBe(403);
         const challenge = parseChallenge(response.headers.get("www-authenticate"));
         expect(challenge.params["error"]).toBe("insufficient_scope");
-        expect(challenge.params["scope"]).toBe("mcp:access");
+        // The full requirement, not only the missing scope, so a client that authorizes again keeps what it holds.
+        expect(challenge.params["scope"]).toBe("read:orders mcp:access");
         expect(challenge.params["resource_metadata"]).toBe(metadataUrlOf(server));
         expect(await response.json()).toEqual({
           error: "insufficient_scope",

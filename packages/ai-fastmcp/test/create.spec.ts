@@ -202,7 +202,8 @@ describe("createFastMcpAuth", () => {
       expect(response.status).toBe(403);
       const challenge = response.headers.get("www-authenticate")!;
       expect(challenge).toContain('error="insufficient_scope"');
-      expect(challenge).toContain('scope="write:orders"');
+      // The full requirement, not only the missing scope, so a client that authorizes again keeps what it holds.
+      expect(challenge).toContain('scope="read:orders write:orders"');
     });
 
     it("accepts a caller that holds every server-wide scope", async () => {

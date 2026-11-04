@@ -1,5 +1,5 @@
 import { MemoryIndexedTokenStore } from "@auth0/ai-mcp";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { scopeMode } from "../support/index.js";
 import { callTool, connect, createRig, withServer } from "./harness.js";
 
@@ -173,6 +173,29 @@ describe.each(MODES)("on behalf of exchange through the session client (stateles
           expect(outcome.meta).toEqual({ error: "insufficient_scope" });
           expect(outcome.text).not.toContain("other:scope");
         } finally {
+          await session.close();
+        }
+      });
+    });
+  });
+
+  describe("an exchange that issues a token about to expire", () => {
+    it("is refused with the generic tool error when the token has five seconds or less left, and the server logs why", async () => {
+      await withServer({ stateless }, async (server) => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        rig().tenant.auth0.state.expiresIn = 4;
+        const session = await connect(server, await rig().token(server));
+        try {
+          const outcome = await callTool(session, "delegate");
+          expect(outcome.isError).toBe(true);
+          expect(outcome.text).toBe("Tool execution failed.");
+          expect(outcome.meta).toEqual({ error: "server_error" });
+          expect(warn).toHaveBeenCalledTimes(1);
+          const line = String(warn.mock.calls[0]?.[0]);
+          expect(line).toContain("on_behalf_of");
+          expect(line).not.toMatch(/eyJ/);
+        } finally {
+          warn.mockRestore();
           await session.close();
         }
       });
