@@ -70,3 +70,43 @@ describe("configuration errors", () => {
     await expect(startServer({ clientOptions: { dpop: { mode: "required" } } })).rejects.toThrow(/DPoP mode "required"/);
   });
 });
+
+describe("requireClientId", () => {
+  it("accepts a token with neither azp nor client_id by default", async () => {
+    await withServer({ configuration: "inline" }, async (server) => {
+      const token = await rig().token(server, { claims: {} });
+      const session = await connect(server, token);
+      try {
+        expect((await callTool<{ sessionSub: string }>(session, "whoami")).value.sessionSub).toBe("user|1");
+      } finally {
+        await session.close();
+      }
+    });
+  });
+
+  it("refuses a token with neither azp nor client_id when an inline option asks for one, and accepts one that has azp", async () => {
+    await withServer({ configuration: "inline", clientOptions: { requireClientId: true } }, async (server) => {
+      const refused = await rawRequest(server, {
+        body: INITIALIZE_BODY,
+        headers: { authorization: `Bearer ${await rig().token(server, { claims: {} })}` },
+      });
+      expect(refused.status).toBe(401);
+      expect(refused.headers.get("www-authenticate")).toContain('error="invalid_token"');
+      expect(await refused.text()).not.toContain("client");
+
+      const session = await connect(server, await rig().token(server));
+      try {
+        expect((await callTool<{ sessionSub: string }>(session, "whoami")).value.sessionSub).toBe("user|1");
+      } finally {
+        await session.close();
+      }
+    });
+  });
+
+  it("counts requireClientId as a client option, so it cannot be combined with a client", () => {
+    const client = createMcpClient({ domain: DOMAIN, audience: "http://127.0.0.1:1/mcp" });
+    const attempt = () =>
+      createFastMcpAuth({ client, requireClientId: true } as unknown as Parameters<typeof createFastMcpAuth>[0]);
+    expect(attempt).toThrow('"client" cannot be combined with "requireClientId"');
+  });
+});
