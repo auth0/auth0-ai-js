@@ -272,6 +272,79 @@ describe("withAuth0Execute", () => {
       expect(onError).not.toHaveBeenCalled();
     });
 
+    describe("a UserError from another copy of fastmcp", () => {
+      /** Declares a class with exactly this name, whatever the bundler does with local identifiers. */
+      type ErrorClass = new (message?: string) => Error;
+      function named(name: string, base: ErrorClass): ErrorClass {
+        return Object.defineProperty(class extends base {}, "name", { value: name });
+      }
+
+      /** The class chain of fastmcp 4.x as a second installed copy defines it. */
+      function otherCopy() {
+        class Base extends Error {
+          constructor(message?: string) {
+            super(message);
+            this.name = new.target.name;
+          }
+        }
+        const FastMCPError = named("FastMCPError", Base);
+        const UnexpectedStateError = named("UnexpectedStateError", FastMCPError);
+        return { FastMCPError, UnexpectedStateError, UserError: named("UserError", UnexpectedStateError) };
+      }
+
+      async function throwing(error: unknown, onError = vi.fn()) {
+        const wrapped = withAuth0Execute(
+          async () => {
+            throw error;
+          },
+          { onError },
+        );
+        return { outcome: await wrapped({}, contextFor(sessionFor("alice"))).then(
+          (value) => ({ value }),
+          (thrown: unknown) => ({ thrown }),
+        ), onError };
+      }
+
+      it("is rethrown like the UserError of the copy the adapter uses", async () => {
+        const { UserError: Foreign } = otherCopy();
+        expect(new Foreign("x") instanceof UserError).toBe(false);
+        const error = new Foreign("Order ord_1 has shipped.");
+        const { outcome, onError } = await throwing(error);
+        expect(outcome).toEqual({ thrown: error });
+        expect(onError).not.toHaveBeenCalled();
+      });
+
+      it("is rethrown for a subclass of it", async () => {
+        const { UserError: Foreign } = otherCopy();
+        const OrderError = named("OrderError", Foreign);
+        const error = new OrderError("no such order");
+        const { outcome, onError } = await throwing(error);
+        expect(outcome).toEqual({ thrown: error });
+        expect(onError).not.toHaveBeenCalled();
+      });
+
+      it("does not pass through an error that only looks like a UserError", async () => {
+        const sameName = Object.assign(new Error("secret one"), { name: "UserError" });
+        const SameClassName = named("UserError", Error);
+        const OnlyUserError = named("UserError", named("UnexpectedStateError", Error));
+        const { FastMCPError, UnexpectedStateError } = otherCopy();
+        for (const error of [
+          sameName,
+          new SameClassName("secret two"),
+          new OnlyUserError("secret three"),
+          new FastMCPError("secret five"),
+          new UnexpectedStateError("secret six"),
+          { name: "UserError", message: "secret four" },
+        ]) {
+          const { outcome, onError } = await throwing(error);
+          const text = JSON.stringify(outcome);
+          expect(text).toContain("Tool execution failed.");
+          expect(text).not.toContain("secret");
+          expect(onError).toHaveBeenCalledTimes(1);
+        }
+      });
+    });
+
     it("does not report denials and authentication errors as faults", async () => {
       const onError = vi.fn();
       for (const error of [

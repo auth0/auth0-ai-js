@@ -72,13 +72,37 @@ function scopeDenied(missing: readonly string[]): ToolErrorResult {
 }
 
 /**
+ * Whether `error` is a FastMCP `UserError`. The check is `instanceof` first. A package manager can
+ * install fastmcp twice (for example when a workspace pins a different `zod` or `jose` than the
+ * adapter), and then the `UserError` of the application is not an instance of the class this
+ * package imports. FastMCP names every error class after itself, so the fallback walks the
+ * prototype chain of an `Error` for classes called `UserError` and `FastMCPError`. A plain error
+ * that only has `name` set to `UserError` does not match.
+ */
+function isUserError(error: unknown): boolean {
+  if (error instanceof UserError) return true;
+  if (!(error instanceof Error)) return false;
+  let sawUserError = false;
+  let sawFastMcpError = false;
+  let proto: unknown = Object.getPrototypeOf(error);
+  while (proto !== null && typeof proto === "object") {
+    const name = (proto as { constructor?: { name?: unknown } }).constructor?.name;
+    if (name === "UserError") sawUserError = true;
+    else if (name === "FastMCPError") sawFastMcpError = true;
+    proto = Object.getPrototypeOf(proto);
+  }
+  return sawUserError && sawFastMcpError;
+}
+
+/**
  * Turns an error thrown inside a tool into a result that is safe to show. FastMCP copies the
  * message of a thrown error into the result, so anything that is not meant for the client is
  * replaced here by fixed text. `UserError` is the one exception: FastMCP defines it as the error
- * whose message is meant for the user, so it is rethrown for FastMCP to handle.
+ * whose message is meant for the user, so it is rethrown for FastMCP to handle, also when it comes
+ * from another installed copy of fastmcp.
  */
 function toToolResult(error: unknown, session: Auth0Session, options: WithAuth0ExecuteOptions): ToolErrorResult {
-  if (error instanceof UserError) throw error;
+  if (isUserError(error)) throw error;
   if (error instanceof InsufficientScopeError) {
     const missing = missingScopes(error.requiredScopes, session.scopes);
     return scopeDenied(missing.length > 0 ? missing : error.requiredScopes);
