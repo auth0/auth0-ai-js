@@ -42,7 +42,7 @@ This serves `POST /mcp`, requires a valid Auth0 access token for the audience, a
 
 `createFastMcpAuth` returns `{ authenticate, oauth }`. Spread both into `new FastMCP({...})`.
 
-- **`authenticate`** is FastMCP's hook. It verifies the Bearer token with the core client, enforces `requiredScopes`, and resolves to a session `{ principal, scopes, mcpClient }`. Every failure is a thrown `Response` with the right status (400, 401, 403 or 500), a generic body and, for authentication failures, a `WWW-Authenticate` challenge that names the metadata document. It never throws anything else: FastMCP would turn a plain error into a 401 that echoes the message.
+- **`authenticate`** is FastMCP's hook. It verifies the Bearer token with the core client, enforces `requiredScopes`, and resolves to a session `{ principal, scopes, mcpClient }`. Every failure is a thrown `Response` with the right status (400, 401, 403 or 500), a generic body and, for authentication failures, a `WWW-Authenticate` challenge that names the metadata document. For an HTTP request it never throws anything else: FastMCP would turn a plain error into a 401 that echoes the message.
 - **`oauth`** makes FastMCP serve the protected resource metadata at `/.well-known/oauth-protected-resource` and at `/.well-known/oauth-protected-resource<endpoint>`. The document and the challenge are built from the same resource and endpoint, so they cannot drift.
 
 ## The session and the accessors
@@ -127,6 +127,7 @@ The binding is a mitigation. Stateless mode is the fix: it has no session ids to
 ## Limits
 
 - **Bearer tokens only.** A request that carries a `DPoP` header, and a token that is bound to a key (a `cnf` claim), both get a 401 and a Bearer challenge. The adapter never accepts such a token as a plain Bearer token. `createFastMcpAuth` throws for a client that requires DPoP mode. The metadata document does not mention DPoP.
+- **HTTP transports only.** FastMCP calls `authenticate` with no request for the stdio transport, so there is no token to verify. The hook then rejects with an error that tells you to start the server with `transportType: "httpStream"`, FastMCP logs it, and the session stays unset, so wrapped tools answer `Authentication is required.`
 - **No legacy SSE transport.** FastMCP runs on mcp-proxy, which opens a legacy SSE session on `GET /sse` and takes that session's messages on `POST /messages?sessionId=...`. mcp-proxy authenticates the first request only, so anyone who knew the session id could post tool calls without a token and they would run as the user who opened the stream. FastMCP has no option to turn the route off, so `authenticate` answers `GET /sse` with 404 before it looks at the token, and no legacy session can exist. Clients must use Streamable HTTP. If you serve the MCP route itself on `/sse`, `authenticate` refuses its `GET` requests too.
 - **Protocol revisions.** The tests verify FastMCP with the revisions 2025-03-26, 2025-06-18 and 2025-11-25. FastMCP answers an initialize request for a newer revision with 2025-11-25.
 - **Public routes.** FastMCP serves `/health`, `/ready` and the metadata routes without authentication. In stateless mode it answers `GET` and `DELETE` on the MCP route with 405 before `authenticate` runs.

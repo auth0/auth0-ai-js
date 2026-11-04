@@ -476,6 +476,21 @@ describe("createFastMcpAuth", () => {
     });
   });
 
+  describe("without a request", () => {
+    it("rejects with a plain error that names the transport, the way FastMCP calls it for stdio", async () => {
+      const onError = vi.fn();
+      const { auth, client } = setup({ onError });
+      const error = await thrown(auth.authenticate(undefined as unknown as IncomingMessage));
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(TypeError);
+      expect(error).not.toBeInstanceOf(Response);
+      expect((error as Error).message).toContain("stdio");
+      expect((error as Error).message).toContain('"httpStream"');
+      expect(client.verifyCalls).toHaveLength(0);
+      expect(onError).not.toHaveBeenCalled();
+    });
+  });
+
   describe("oauth", () => {
     it("builds the metadata from the same resource the challenge names", async () => {
       const { auth } = setup();

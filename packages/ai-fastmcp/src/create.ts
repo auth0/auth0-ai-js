@@ -22,8 +22,10 @@ import type { Auth0Session } from "./session.js";
 /** What {@link createFastMcpAuth} returns: the two FastMCP options, to be spread into `new FastMCP({...})`. */
 export interface FastMcpAuth {
   /**
-   * FastMCP's `authenticate` hook. Resolves to an {@link Auth0Session}. Every failure is a thrown
-   * `Response` with the right status and a generic body; it never throws anything else.
+   * FastMCP's `authenticate` hook. Resolves to an {@link Auth0Session}. Every failure of an HTTP
+   * request is a thrown `Response` with the right status and a generic body; it never throws
+   * anything else for a request. FastMCP calls it with no request for the stdio transport, which
+   * this adapter does not support, and then it rejects with an `Error` that says so.
    */
   authenticate: (request: IncomingMessage) => Promise<Auth0Session>;
   /** FastMCP's `oauth` option: serves the RFC 9728 protected resource metadata. */
@@ -78,6 +80,8 @@ function opensLegacySseSession(req: IncomingMessage): boolean {
   }
 }
 
+const STDIO_UNSUPPORTED =
+  '@auth0/ai-fastmcp authenticates HTTP requests and cannot authenticate the stdio transport. Start the server with transportType: "httpStream".';
 const DPOP_UNSUPPORTED = "DPoP is not supported by this server.";
 const SENDER_CONSTRAINED_UNSUPPORTED = "DPoP-bound access tokens are not supported by this server.";
 
@@ -197,6 +201,9 @@ export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth
   }
 
   async function authenticate(req: IncomingMessage): Promise<Auth0Session> {
+    // FastMCP calls the hook with no request for the stdio transport, which has no HTTP request to
+    // read a token from. Say so plainly: FastMCP logs this message, and the session stays unset.
+    if ((req as IncomingMessage | undefined) === undefined) throw new Error(STDIO_UNSUPPORTED);
     // Refused before any token work. Only this request can open a session on the route whose
     // messages are never authenticated, so refusing it leaves nothing for `POST /messages` to reach.
     if (opensLegacySseSession(req)) {
