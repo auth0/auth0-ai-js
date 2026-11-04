@@ -108,6 +108,8 @@ describe("default log line for a failed tool", () => {
     expect(line).toContain('auth0_error="two words code=9"');
     expect(line).toContain("code=token_exchange_error");
     expect(describeFailure(exchangeFailure({ error: "invalid_grant" }))).toContain("auth0_error=invalid_grant ");
+    const odd = Object.assign(new AuthError("x", "bad code=1", 400));
+    expect(describeFailure(odd)).toContain('code="bad code=1"');
     const named = Object.assign(new Error("x"), { name: "Odd Name code=1" });
     expect(describeFailure(named)).toContain('Tool failed: "Odd Name code=1"');
   });
