@@ -46,20 +46,21 @@ const WELL_KNOWN_ROOT = "/.well-known/";
 // authenticates only the first request: the message route never calls `authenticate`.
 const LEGACY_SSE_OPEN_PATH = "/sse";
 const MAX_WARNED_PATHS = 20;
-const warnedPaths = new Set<string>();
 
 /**
- * Writes one warning per process and distinct path when a request reaches `authenticate` on a path
- * that is not the configured endpoint, which means `server.start` was given another endpoint.
- * Only the path is read: the query string never reaches the log. It never changes a response.
+ * Writes one warning per distinct path when a request reaches `authenticate` on a path that is
+ * not the configured endpoint, which means `server.start` was given another endpoint. `warned`
+ * belongs to one `createFastMcpAuth` call, so another instance in the same process, or a path
+ * seen by that other instance, never silences this one. Only the path is read: the query string
+ * never reaches the log. It never changes a response.
  */
-function warnOnUnexpectedPath(url: string | undefined, endpoint: string): void {
+function warnOnUnexpectedPath(url: string | undefined, endpoint: string, warned: Set<string>): void {
   try {
     if (url === undefined) return;
     const path = new URL(url, "http://localhost").pathname;
     if (path === endpoint || path.startsWith(WELL_KNOWN_ROOT)) return;
-    if (warnedPaths.has(path) || warnedPaths.size >= MAX_WARNED_PATHS) return;
-    warnedPaths.add(path);
+    if (warned.has(path) || warned.size >= MAX_WARNED_PATHS) return;
+    warned.add(path);
     const shown = path.length > 100 ? `${path.slice(0, 97)}...` : path;
     console.warn(
       `[ai-fastmcp] A request arrived on "${shown}", but the configured endpoint is "${endpoint}", so the metadata URL in the challenge names "${endpoint}". Pass the same endpoint to server.start({ httpStream: { endpoint } }), for example endpoint: auth.endpoint.`,
@@ -161,6 +162,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth
     ...(rest.realm !== undefined && { realm: rest.realm }),
     onError: reportUnexpected,
   };
+  const warnedPaths = new Set<string>();
   const bindings = rest.sessionBinding === false ? undefined : new SessionBindings(rest.sessionBinding);
 
   const reject = (status: number, description: string): Response =>
@@ -204,7 +206,7 @@ export function createFastMcpAuth(options: FastMcpAuthOptions = {}): FastMcpAuth
     if (opensLegacySseSession(req)) {
       throw jsonResponse(404, { error: "not_found", error_description: "Not found." });
     }
-    warnOnUnexpectedPath(req.url, endpoint);
+    warnOnUnexpectedPath(req.url, endpoint, warnedPaths);
     try {
       return await authenticateOrThrow(req);
     } catch (error) {

@@ -135,6 +135,28 @@ describe("warning for a request on another path", () => {
     expect(warn).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the warning state per instance, so a second server in the process still warns", async () => {
+    const first = setup("https://mcp.example.com/mcp");
+    const second = setup("https://other.example.com/api/mcp", { endpoint: "/api/mcp" });
+    await request(first, "/shared-path");
+    await request(first, "/shared-path");
+    expect(warn).toHaveBeenCalledTimes(1);
+    await request(second, "/shared-path");
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(String(warn.mock.calls[1]![0])).toContain('"/api/mcp"');
+    await request(second, "/shared-path");
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops warning one instance after 20 distinct paths and leaves the others alone", async () => {
+    const noisy = setup("https://mcp.example.com/mcp");
+    const quiet = setup("https://other.example.com/mcp");
+    for (let i = 0; i < 25; i++) await request(noisy, `/junk-${i}`);
+    expect(warn).toHaveBeenCalledTimes(20);
+    await request(quiet, "/real-mismatch");
+    expect(warn).toHaveBeenCalledTimes(21);
+  });
+
   it("does not log the query string", async () => {
     const auth = setup("https://mcp.example.com/mcp");
     await request(auth, "/warn-query?token=abc123&x=1");
