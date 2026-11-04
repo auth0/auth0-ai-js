@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { callTool, connect, createRig, parseMessage, rawRequest, withServer } from "./harness.js";
 import type { Session, TestServer } from "./harness.js";
@@ -148,6 +149,39 @@ describe("session binding switched off", () => {
   });
 });
 
+describe("session binding under a flood of session ids", () => {
+  /** A request on a session id nobody issued. FastMCP answers 404, but `authenticate` has already run. */
+  async function floodWithUnissuedIds(server: TestServer, token: string, count: number): Promise<number[]> {
+    const statuses: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const response = await rawRequest(server, {
+        body: { jsonrpc: "2.0", id: i, method: "tools/list" },
+        headers: { authorization: `Bearer ${token}`, "mcp-session-id": randomUUID(), "mcp-protocol-version": "2025-06-18" },
+      });
+      statuses.push(response.status);
+    }
+    return statuses;
+  }
+
+  it("keeps another caller's binding when a caller sends many session ids FastMCP never issued", async () => {
+    const limits = { maxSessions: 4, maxSessionsPerSubject: 2 };
+    await withServer({ stateless: false, auth: { sessionBinding: limits } }, async (server) => {
+      const alice = await connect(server, await rig().token(server, { sub: "user|alice" }));
+      try {
+        const bob = await rig().token(server, { sub: "user|bob" });
+        const statuses = await floodWithUnissuedIds(server, bob, 12);
+        // FastMCP knows none of these ids; the adapter still saw each one.
+        expect(new Set(statuses)).toEqual(new Set([404]));
+        const reply = await callOnSession(server, sessionIdOf(alice), bob);
+        expect(reply.status).toBe(403);
+        expect((await callTool<{ sessionSub: string }>(alice, "whoami")).value.sessionSub).toBe("user|alice");
+      } finally {
+        await alice.close();
+      }
+    });
+  });
+});
+
 describe("session binding limits", () => {
   it("forgets a session id after the ttl, so the binding is per process and bounded in time", async () => {
     await withServer({ stateless: false, auth: { sessionBinding: { ttlMs: 50 } } }, async (server) => {
@@ -163,7 +197,7 @@ describe("session binding limits", () => {
     });
   });
 
-  it("does not apply to a stateless server, which has no session ids", async () => {
+  it("binds nothing on a stateless server while no session id is sent", async () => {
     await withServer({ stateless: true }, async (server) => {
       const alice = await connect(server, await rig().token(server, { sub: "user|alice" }));
       try {
@@ -177,6 +211,21 @@ describe("session binding limits", () => {
       } finally {
         await alice.close();
       }
+    });
+  });
+
+  it("binds a session id that a gateway forwards to a stateless server, because the adapter cannot tell the mode", async () => {
+    await withServer({ stateless: true }, async (server) => {
+      const headers = (token: string) => ({
+        authorization: `Bearer ${token}`,
+        "mcp-session-id": "fixed-by-the-gateway",
+        "mcp-protocol-version": "2025-06-18",
+      });
+      const list = { jsonrpc: "2.0", id: 1, method: "tools/list" };
+      const first = await rawRequest(server, { body: list, headers: headers(await rig().token(server, { sub: "user|alice" })) });
+      const second = await rawRequest(server, { body: list, headers: headers(await rig().token(server, { sub: "user|bob" })) });
+      expect(first.status).not.toBe(403);
+      expect(second.status).toBe(403);
     });
   });
 });

@@ -47,9 +47,12 @@ export interface FastMcpAuthBaseOptions {
   };
   /**
    * Binds each `mcp-session-id` to the subject that used it first and answers 403 to any other
-   * subject on the same id. It applies only to requests that carry a session id, so stateless
-   * servers are unaffected. Pass `false` to turn it off, or limits to tune it. The state is in
-   * memory, per process.
+   * subject on the same id. It applies only to requests that carry a session id; a stateless
+   * server issues none. The adapter cannot tell which mode FastMCP runs in, so a stateless server
+   * behind a gateway that forwards a fixed session id binds that id like any other. Pass `false`
+   * to turn it off, or limits to tune it. The state is in memory, per process, and an id is
+   * forgotten after `ttlMs` without a request on it, even while FastMCP keeps the session alive
+   * (for example behind an open event stream, which is authenticated only when it opens).
    */
   sessionBinding?: false | SessionBindingOptions;
   /**
@@ -251,7 +254,7 @@ export function assertRealm(realm: string | undefined): void {
  */
 export function assertSessionBinding(option: false | SessionBindingOptions | undefined): void {
   if (option === undefined || option === false) return;
-  for (const name of ["maxSessions", "ttlMs"] as const) {
+  for (const name of ["maxSessions", "maxSessionsPerSubject", "ttlMs"] as const) {
     const value = option[name];
     if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
       throw new InvalidConfigurationError(`Invalid configuration: "sessionBinding.${name}" must be a positive number.`);

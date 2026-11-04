@@ -115,12 +115,14 @@ Run FastMCP with `stateless: true`. Every request is then authenticated on its o
 
 FastMCP also offers stateful sessions, and then `authenticate` runs on every request, but FastMCP accepts a second valid token on another caller's `mcp-session-id` and runs the call as the new caller. Nothing ties a session id to the subject that created it. `createFastMcpAuth` therefore binds each session id to the subject that used it first and answers any other subject with 403. The binding:
 
-- applies only to requests that carry a session id, and is on by default (`sessionBinding: false` turns it off);
+- applies only to requests that carry a session id, and is on by default (`sessionBinding: false` turns it off). The adapter cannot tell which mode FastMCP runs in, so a stateless server behind a gateway that forwards a fixed session id binds that id too, and a second user behind the same id gets 403;
 - lives in the memory of one process, so it does not span several instances, and a restart forgets it;
-- has limits: `sessionBinding: { maxSessions, ttlMs }` sets them (10000 ids and one hour of idle time by default), and the least recently used id goes first;
-- cannot bind the first request of a session, which has no id yet.
+- has limits: `sessionBinding: { maxSessions, maxSessionsPerSubject, ttlMs }` sets them (10000 ids, 100 per subject and one hour of idle time by default). When the whole map is full the least recently used id goes first;
+- cannot bind the first request of a session, which has no id yet;
+- records the id of any request that passes authentication, including ids FastMCP never issued, because `authenticate` runs before FastMCP looks the session up. The per-subject limit keeps one caller from filling the map: a subject that reaches it replaces its own oldest id and cannot push out another subject's. It raises the cost of the attack without ending it, because several accounts together can still fill the map (on a tenant with open sign-up, creating them is cheap). Raise `maxSessionsPerSubject` for a subject that legitimately holds many sessions, such as a gateway;
+- forgets an id after `ttlMs` without a request on it, even while FastMCP keeps the session alive. FastMCP does not close a session that has an open event stream, and the token is checked only when the stream opens, so a client that holds a stream open longer than `ttlMs` leaves a live session without a binding, which another subject who knows the id can then take. Set `ttlMs` above the longest stream you expect.
 
-For a deployment with several instances, use stateless mode.
+The binding is a mitigation. Stateless mode is the fix: it has no session ids to take over, and it is the right choice for a deployment with several instances.
 
 ## Limits
 

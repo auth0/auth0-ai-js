@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MAX_SESSIONS, DEFAULT_TTL_MS, SessionBindings } from "../src/binding.js";
+import { DEFAULT_MAX_SESSIONS, DEFAULT_MAX_SESSIONS_PER_SUBJECT, DEFAULT_TTL_MS, SessionBindings } from "../src/binding.js";
 
 function clock(start = 1_000_000) {
   let now = start;
@@ -105,5 +105,83 @@ describe("SessionBindings", () => {
     expect(bindings.accept("s1", "bob")).toBe(false);
     time.advance(2);
     expect(bindings.accept("s1", "bob")).toBe(true);
+  });
+});
+
+describe("SessionBindings per subject limit", () => {
+  it("has a default of 100 ids per subject", () => {
+    expect(DEFAULT_MAX_SESSIONS_PER_SUBJECT).toBe(100);
+    const bindings = new SessionBindings();
+    for (let i = 0; i < 101; i++) bindings.accept(`s${i}`, "alice");
+    expect(bindings.size).toBe(100);
+    // s0 was alice's oldest id and is the one that went.
+    expect(bindings.accept("s0", "mallory")).toBe(true);
+    expect(bindings.accept("s1", "mallory")).toBe(false);
+  });
+
+  it("replaces the oldest id of the same subject once the subject is at its limit", () => {
+    const bindings = new SessionBindings({ maxSessions: 10, maxSessionsPerSubject: 2 });
+    bindings.accept("s1", "alice");
+    bindings.accept("s2", "alice");
+    bindings.accept("s3", "alice");
+    expect(bindings.size).toBe(2);
+    expect(bindings.accept("s2", "mallory")).toBe(false);
+    expect(bindings.accept("s3", "mallory")).toBe(false);
+    expect(bindings.accept("s1", "mallory")).toBe(true);
+  });
+
+  it("does not let one subject push out the ids of another", () => {
+    const bindings = new SessionBindings({ maxSessions: 4, maxSessionsPerSubject: 2 });
+    bindings.accept("a1", "alice");
+    for (let i = 0; i < 20; i++) bindings.accept(`junk${i}`, "mallory");
+    expect(bindings.accept("a1", "mallory")).toBe(false);
+    expect(bindings.accept("a1", "alice")).toBe(true);
+  });
+
+  it("counts a used id as recent within its subject", () => {
+    const bindings = new SessionBindings({ maxSessions: 10, maxSessionsPerSubject: 2 });
+    bindings.accept("s1", "alice");
+    bindings.accept("s2", "alice");
+    bindings.accept("s1", "alice");
+    bindings.accept("s3", "alice");
+    expect(bindings.accept("s1", "mallory")).toBe(false);
+    expect(bindings.accept("s3", "mallory")).toBe(false);
+    expect(bindings.accept("s2", "mallory")).toBe(true);
+  });
+
+  it("never lets a subject hold more than maxSessions, even when the limit is larger", () => {
+    const bindings = new SessionBindings({ maxSessions: 3, maxSessionsPerSubject: 50 });
+    for (let i = 0; i < 10; i++) bindings.accept(`s${i}`, "alice");
+    expect(bindings.size).toBe(3);
+  });
+
+  it("still drops the least recently used id of anyone once the whole map is full", () => {
+    const bindings = new SessionBindings({ maxSessions: 3, maxSessionsPerSubject: 2 });
+    bindings.accept("a1", "alice");
+    bindings.accept("a2", "alice");
+    bindings.accept("b1", "bob");
+    bindings.accept("c1", "carol");
+    expect(bindings.size).toBe(3);
+    expect(bindings.accept("a1", "mallory")).toBe(true);
+  });
+
+  it("gives the slot back to the previous owner of an expired id that another subject takes", () => {
+    const time = clock();
+    const bindings = new SessionBindings({ maxSessions: 10, maxSessionsPerSubject: 1, ttlMs: 1000 }, time.now);
+    bindings.accept("s1", "alice");
+    time.advance(1000);
+    expect(bindings.accept("s1", "bob")).toBe(true);
+    // alice no longer holds s1, so a new id of hers must not evict bob's.
+    expect(bindings.accept("s2", "alice")).toBe(true);
+    expect(bindings.accept("s1", "alice")).toBe(false);
+    expect(bindings.size).toBe(2);
+  });
+
+  it("keeps the newest id when the limit is one", () => {
+    const bindings = new SessionBindings({ maxSessions: 5, maxSessionsPerSubject: 1 });
+    bindings.accept("s1", "alice");
+    bindings.accept("s2", "alice");
+    expect(bindings.accept("s2", "mallory")).toBe(false);
+    expect(bindings.accept("s1", "mallory")).toBe(true);
   });
 });

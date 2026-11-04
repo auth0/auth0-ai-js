@@ -184,12 +184,14 @@ describe("assertSessionBinding", () => {
     expect(() => assertSessionBinding(false)).not.toThrow();
     expect(() => assertSessionBinding(undefined)).not.toThrow();
     expect(() => assertSessionBinding({})).not.toThrow();
-    expect(() => assertSessionBinding({ maxSessions: 10, ttlMs: 1000 })).not.toThrow();
+    expect(() => assertSessionBinding({ maxSessions: 10, maxSessionsPerSubject: 5, ttlMs: 1000 })).not.toThrow();
   });
 
   it.each([
     [{ maxSessions: 0 }],
     [{ maxSessions: -1 }],
+    [{ maxSessionsPerSubject: 0 }],
+    [{ maxSessionsPerSubject: Number.NaN }],
     [{ ttlMs: 0 }],
     [{ ttlMs: Number.NaN }],
     [{ ttlMs: Number.POSITIVE_INFINITY }],
