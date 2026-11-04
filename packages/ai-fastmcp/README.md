@@ -10,7 +10,7 @@ FastMCP stays the server. This package only fills two of its options.
 npm install @auth0/ai-fastmcp @auth0/ai-mcp fastmcp
 ```
 
-`@auth0/ai-mcp` and `fastmcp` are peer dependencies, so your app and this package share one copy of each. The test suite passes against FastMCP 4.7.0, the oldest release supported, and 4.23.8, the newest tested, and against a sample of the releases in between.
+`@auth0/ai-mcp` and `fastmcp` are peer dependencies, so your app and this package share one copy of each. The test suite passes against FastMCP 4.22.0, the oldest release supported, and 4.23.8, the newest tested, and against a sample of the releases in between.
 
 ## Quickstart
 
@@ -132,7 +132,7 @@ The binding is a mitigation. Stateless mode is the fix: it has no session ids to
 - **Protocol revisions.** The tests verify FastMCP with the revisions 2025-03-26, 2025-06-18 and 2025-11-25. FastMCP answers an initialize request for a newer revision with 2025-11-25.
 - **Public routes.** FastMCP serves `/health`, `/ready` and the metadata routes without authentication. In stateless mode it answers `GET` and `DELETE` on the MCP route with 405 before `authenticate` runs.
 - **Discovery and key outages.** When the tenant's discovery or key endpoints cannot be reached, the adapter answers the way the core client reports it, today with a 401 `invalid_token`.
-- **FastMCP releases often.** The peer range is `^4.7.0`. Releases before 4.7.0 reject the `_meta` field of the tool errors this package returns.
+- **FastMCP releases often.** The peer range is `^4.22.0`. FastMCP 4.22.0 is the first release that requires mcp-proxy 6.7.19, and mcp-proxy 6.7.17 is the first that calls `authenticate` for `GET` and `DELETE` on a live session. Older mcp-proxy releases, which FastMCP 4.21 and older accept, hand the event stream and the termination of a session to anyone who holds the session id without calling `authenticate`, so neither the token check nor the session binding applies to those requests.
 - **Unwrapped tools.** The accessors of `@auth0/ai-mcp` only work inside `withAuth0Execute`. Resources and prompts get the session as FastMCP passes it.
 
 ## Feedback
