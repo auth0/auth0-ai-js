@@ -295,7 +295,12 @@ describe("Errors.md: why authenticate throws only responses", () => {
     } finally {
       await bare.stop();
     }
-    documented("Errors.md", "It never throws anything else, because FastMCP would turn another error into a 401 that repeats its message.");
+    documented("Errors.md", "For an HTTP request it never throws anything else, because FastMCP would turn another error into a 401 that repeats its message.");
+    documented(
+      "Errors.md",
+      "The one exception is a call without a request, which FastMCP makes for the stdio transport: the hook then rejects with an `Error`",
+      "FastMCP logs the message, the session stays unset and wrapped tools answer `Authentication is required.`",
+    );
     documented("README.md", "FastMCP would turn a plain error into a 401 that echoes the message.");
   });
 });
@@ -482,5 +487,17 @@ describe("Errors.md: errors inside tools", () => {
       spy.mockRestore();
       await guide.stop();
     }
+  });
+});
+
+describe("Errors.md: a call without a request", () => {
+  it("rejects with an Error that names the transport, the way FastMCP calls authenticate for stdio", async () => {
+    const auth = createFastMcpAuth({ client: stubClient() });
+    const error = await thrown(auth.authenticate(undefined as never));
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(Response);
+    expect((error as Error).message).toBe(
+      '@auth0/ai-fastmcp authenticates HTTP requests and cannot authenticate the stdio transport. Start the server with transportType: "httpStream".',
+    );
   });
 });

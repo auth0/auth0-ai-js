@@ -80,19 +80,37 @@ describe("the default log line of a failed tool", () => {
     documented("Troubleshooting.md", `\`statusCode=${status} auth0_error=${code} auth0_error_description="${description}"\``);
   });
 
-  it("is not written by authenticate: an unexpected fault there answers 500 and is silent without an onError", async () => {
+  it("is written by authenticate for an unexpected fault, starting with Authentication failed, and not for a failure the client caused", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const client = stubClient({ verify: async () => Promise.reject(new TypeError("boom")) });
       const auth = createFastMcpAuth({ client });
       const response = (await thrown(auth.authenticate(fakeRequest(bearer("t"))))) as Response;
       expect(response.status).toBe(500);
-      expect(error).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(String(error.mock.calls[0]![0])).toBe("[ai-fastmcp] Authentication failed: TypeError");
       expect(warn).not.toHaveBeenCalled();
+      error.mockClear();
+      expect(((await thrown(auth.authenticate(fakeRequest()))) as Response).status).toBe(401);
+      expect(((await thrown(auth.authenticate(fakeRequest({ authorization: "Bearer abcĀ" })))) as Response).status).toBe(400);
+      expect(error).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
-    documented("Errors.md", "Unlike the log line for tools, `authenticate` writes nothing by itself.");
+    documented(
+      "Errors.md",
+      "Without an `onError`, `authenticate` writes the same kind of line as for a failed tool",
+      "starting `[ai-fastmcp] Authentication failed:`. Failures the client caused (400, 401, 403) are not logged.",
+    );
+  });
+
+  it("is silent for authenticate when an onError is set, which receives the raw error instead", async () => {
+    const onError = vi.fn();
+    const boom = new TypeError("boom");
+    const auth = createFastMcpAuth({ client: stubClient({ verify: async () => Promise.reject(boom) }), onError });
+    expect(((await thrown(auth.authenticate(fakeRequest(bearer("t"))))) as Response).status).toBe(500);
+    expect(onError).toHaveBeenCalledExactlyOnceWith(boom);
+    expect(error).not.toHaveBeenCalled();
   });
 
   it("does not go through context.log, which FastMCP sends to the connected client", () => {
@@ -285,6 +303,15 @@ describe("the warning for a request on another path", () => {
     warn.mockRestore();
   });
 
+  it("keeps the warning state per createFastMcpAuth call", async () => {
+    const first = createFastMcpAuth({ client: stubClient() });
+    const second = createFastMcpAuth({ client: stubClient() });
+    for (const auth of [first, first, second, second]) {
+      await thrown(auth.authenticate(fakeRequest({}, "/docs-per-instance")));
+    }
+    expect(warn.mock.calls.filter((call) => String(call[0]).includes('"/docs-per-instance"'))).toHaveLength(2);
+  });
+
   it("names the path and the configured endpoint once, reads no query string, and changes no response", async () => {
     const server = await startDocsServer({
       auth: (audience) => createFastMcpAuth({ domain: DOMAIN, audience }),
@@ -308,8 +335,8 @@ describe("the warning for a request on another path", () => {
     documented(
       "Configuration.md",
       "the first request that reaches `authenticate` on the other path makes the adapter write one warning",
-      "The warning appears once per path and process, shows the path only and never the query string, and changes no response.",
-      "Requests for the endpoint, the well-known metadata routes and the legacy SSE routes (`/sse`, `/messages`) do not trigger it.",
+      "The warning appears once per path and per `createFastMcpAuth` call, shows the path only and never the query string, and changes no response.",
+      "Requests for the endpoint and the well-known metadata routes do not trigger it.",
     );
     documented("Troubleshooting.md", '[ai-fastmcp] A request arrived on "/orders", but the configured endpoint is "/mcp"');
   });

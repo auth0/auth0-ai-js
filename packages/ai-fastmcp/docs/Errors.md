@@ -4,7 +4,7 @@ Failures reach the caller in two ways. A request that does not pass authenticati
 
 ## Authentication failures
 
-`authenticate` fails by throwing a `Response`, which FastMCP sends to the client as it is. It never throws anything else, because FastMCP would turn another error into a 401 that repeats its message. Every body is JSON with an `error` and an `error_description`, and every response has `cache-control: no-store`.
+`authenticate` fails by throwing a `Response`, which FastMCP sends to the client as it is. For an HTTP request it never throws anything else, because FastMCP would turn another error into a 401 that repeats its message. The one exception is a call without a request, which FastMCP makes for the stdio transport: the hook then rejects with an `Error` that says the adapter authenticates HTTP requests and names `transportType: "httpStream"`. FastMCP logs the message, the session stays unset and wrapped tools answer `Authentication is required.` Every body is JSON with an `error` and an `error_description`, and every response has `cache-control: no-store`.
 
 | Status | `error` | `error_description` | When |
 | --- | --- | --- | --- |
@@ -36,7 +36,7 @@ The descriptions are fixed. A verification failure always gets the same text, wh
 
 ### 500 and onError
 
-A 500 means something on the server failed: a thrown error that is not an authentication error, a client that raised an unexpected fault. The body never names the cause. `onError` of `createFastMcpAuth` receives the raw error, so log it there. Unlike the log line for tools, `authenticate` writes nothing by itself.
+A 500 means something on the server failed: a thrown error that is not an authentication error, a client that raised an unexpected fault. The body never names the cause. `onError` of `createFastMcpAuth` receives the raw error, so log it there. Without an `onError`, `authenticate` writes the same kind of line as for a failed tool (see [the default log line](#the-default-log-line)), starting `[ai-fastmcp] Authentication failed:`. Failures the client caused (400, 401, 403) are not logged.
 
 ### A tenant that cannot be reached
 

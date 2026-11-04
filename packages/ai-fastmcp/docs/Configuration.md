@@ -96,7 +96,7 @@ An audience whose path ends in a slash, such as `https://mcp.example.com/mcp/`, 
 
 ### A request on another path
 
-If `server.start` gets an endpoint other than `auth.endpoint`, the server starts, and the first request that reaches `authenticate` on the other path makes the adapter write one warning to the server's standard error stream: it names the path that arrived and the configured endpoint. The warning appears once per path and process, shows the path only and never the query string, and changes no response. The metadata document and the challenge still name the configured endpoint, so fix the call to `server.start`. Requests for the endpoint, the well-known metadata routes and the legacy SSE routes (`/sse`, `/messages`) do not trigger it.
+If `server.start` gets an endpoint other than `auth.endpoint`, the server starts, and the first request that reaches `authenticate` on the other path makes the adapter write one warning to the server's standard error stream: it names the path that arrived and the configured endpoint. The warning appears once per path and per `createFastMcpAuth` call, shows the path only and never the query string, and changes no response. The metadata document and the challenge still name the configured endpoint, so fix the call to `server.start`. Requests for the endpoint and the well-known metadata routes do not trigger it.
 
 ### Behind a proxy
 
@@ -180,5 +180,5 @@ export const auth = createFastMcpAuth({
 | `requiredScopes` | Scopes every request must carry. Also the default `scopes_supported` and the `scope` of the 401 challenge. |
 | `realm` | The `realm` of challenges. |
 | `metadata` | `scopesSupported`, `resourceName` and `resourceDocumentation` for the document. |
-| `sessionBinding` | `false`, or `{ maxSessions, ttlMs }`. |
+| `sessionBinding` | `false`, or `{ maxSessions, maxSessionsPerSubject, ttlMs }`. |
 | `onError` | Observer for the raw error of every 500 and the default for every wrapped tool. |
