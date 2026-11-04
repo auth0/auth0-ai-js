@@ -199,6 +199,10 @@ console.log(Object.keys(fromEnv));
 export const client = createMcpClient(resolveMcpClientOptions({ scopeMatching: 'strict' }));
 ```
 
+`createMcpClient` also takes `requireClientId`. By default a token with neither `azp` nor `client_id` is accepted and `Principal.clientId` is `null`; with `requireClientId: true` such a token is refused with `UnauthenticatedError`. See [Token verification](./docs/TokenVerification.md).
+
+The package writes a few diagnostic lines with `console.warn` (standard error in Node.js), each prefixed `[auth0-ai-mcp]`. They report an issued token that is expired or about to expire, and a problem in the encrypted token store, such as a changed secret. The text is fixed: no token, claim value, key or error message goes into it. See [On Behalf Of](./docs/OnBehalfOf.md) and [Token caching](./docs/TokenCaching.md).
+
 ## Documentation
 
 - [Handler and adapters](./docs/Handler.md): the framework-agnostic handler, the MCP SDK adapter, the Node adapter and how to write your own adapter.
