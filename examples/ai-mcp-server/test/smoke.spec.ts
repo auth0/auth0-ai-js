@@ -172,11 +172,15 @@ describe("example MCP server", () => {
     expect(response.headers.get("www-authenticate")).toMatch(/^Bearer /);
   });
 
-  it("serves its metadata at the suffixed and the root route, and the challenge names a route that serves it", async () => {
+  it("serves its metadata at the suffixed route for GET and HEAD, leaves the root route to authentication, and the challenge names the route that serves it", async () => {
     const suffixed = await fetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource/mcp`);
     const root = await fetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource`);
     expect(suffixed.status).toBe(200);
-    expect(root.status).toBe(200);
+    // The resource has a path, so the root URL does not stand for it: it goes through authentication.
+    expect(root.status).toBe(401);
+    const head = await fetch(`http://127.0.0.1:${mcpPort}/.well-known/oauth-protected-resource/mcp`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe("");
     const document = (await suffixed.json()) as {
       resource: string;
       authorization_servers: string[];
@@ -190,7 +194,6 @@ describe("example MCP server", () => {
       "tool:fulfill_order",
       "tool:sales_analytics_report",
     ]);
-    expect(await root.json()).toEqual(document);
 
     const refused = await callTool("order_status_report");
     const advertised = /resource_metadata="([^"]+)"/.exec(refused.headers.get("www-authenticate") ?? "")?.[1];
