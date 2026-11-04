@@ -268,7 +268,7 @@ createServer((req, res) => void listener(req, res)).listen(3000);
 
 On success, `authInfo` is what the handler passes to its own `handler`, `caller` is the `RequestContext`, and `scheme` is the scheme the request authenticated with. Call `run(fn)` to execute your code inside the request context, so `getCallerMcpClient()`, `getCallerPrincipal()` and `withRequiredScopes()` work in everything `fn` starts. An error thrown inside `fn` propagates unchanged: mapping it to a response is up to you, which is how you keep control over what the client sees. Pass a `Request` whose URL is the public one, because DPoP proofs are checked against `request.url`.
 
-This adapter serves the metadata document, authenticates, and turns a missing tool scope into a 403 challenge that names only that scope:
+This adapter serves the metadata document, authenticates, and turns a missing tool scope into a 403 challenge that lists the scopes of that check together with the server-wide ones, so a client that authorizes again keeps what it already has:
 
 ```ts
 import {
@@ -322,7 +322,7 @@ export async function handle(request: Request): Promise<Response> {
         schemes: [result.scheme],
         error: 'insufficient_scope',
         errorDescription: 'The access token does not include the required scope.',
-        scope: ['tool:admin'],
+        scope: ['mcp:access', 'tool:admin'],
         resourceMetadata: METADATA_URL,
       });
       for (const challenge of challenges) {

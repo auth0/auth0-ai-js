@@ -964,11 +964,14 @@ describe("an explicit resource that is not a URL (Handler.md)", () => {
 });
 
 describe("the custom adapter example (Handler.md)", () => {
-  it("serves the metadata only for GET on the exact paths and answers other methods with 405", () => {
+  it("serves the metadata only for GET and HEAD on the exact path and answers other methods with 405", () => {
     const section = doc("docs", "Handler.md").split("## Writing your own adapter")[1] ?? "";
-    expect(section).toContain("METADATA_PATHS.has(new URL(request.url).pathname)");
+    expect(section).toContain("new URL(request.url).pathname === METADATA_PATH");
     expect(section).toContain("request.method === 'GET'");
+    expect(section).toContain("request.method === 'HEAD'");
     expect(section).toContain("status: 405");
+    expect(section).toContain("allow: 'GET, HEAD', 'cache-control': 'no-store'");
+    expect(section).toContain("scope: ['mcp:access', 'tool:admin']");
     expect(section).not.toContain("startsWith('/.well-known");
   });
 });
