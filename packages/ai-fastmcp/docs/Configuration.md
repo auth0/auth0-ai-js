@@ -86,7 +86,7 @@ await server.start({
 });
 ```
 
-You can also set `endpoint` yourself. It must equal the path of the audience, and `createFastMcpAuth` throws when it does not.
+You can also set `endpoint` yourself. When the audience has a path, `endpoint` must equal it, and `createFastMcpAuth` throws when it does not. An audience without a path accepts any endpoint.
 
 FastMCP serves the metadata document at `/.well-known/oauth-protected-resource` and at that path followed by the endpoint, for example `/.well-known/oauth-protected-resource/api/mcp`. A client finds the document by putting the path of the resource after the well-known path (RFC 9728). That works only when the path of the resource is the endpoint or is empty, so `createFastMcpAuth` throws `InvalidConfigurationError` for any other path. The message reads `the path of "resource" ("/mcp") must equal "endpoint" ("/other") or be empty` and ends with the fix: `Set "endpoint" to the path of "resource".`
 

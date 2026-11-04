@@ -237,11 +237,13 @@ describe("the endpoint", () => {
     expect(() => createFastMcpAuth({ domain: DOMAIN, audience: "https://mcp.example.com/api/mcp", endpoint: "/mcp" })).toThrow(
       /must equal "endpoint"/,
     );
+    // An audience without a path accepts any endpoint.
+    expect(createFastMcpAuth({ domain: DOMAIN, audience: "https://mcp.example.com", endpoint: "/other" }).endpoint).toBe("/other");
     documented(
       "Configuration.md",
       "It defaults to the path of the audience when the audience has one (`/api/mcp` for `https://mcp.example.com/api/mcp`), and to `/mcp` when the audience is an origin only.",
       "a read-only property that is not enumerable, so `...auth` does not hand it to `new FastMCP`",
-      "It must equal the path of the audience, and `createFastMcpAuth` throws when it does not.",
+      "When the audience has a path, `endpoint` must equal it, and `createFastMcpAuth` throws when it does not. An audience without a path accepts any endpoint.",
     );
     documented("GettingStarted.md", "It is not enumerable, so the spread does not hand it to FastMCP.");
     documented("README.md", "`auth.endpoint` is the path of the audience (`/mcp` here)");
