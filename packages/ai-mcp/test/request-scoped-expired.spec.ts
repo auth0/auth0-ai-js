@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import type { CachedToken, TokenStore } from '@auth0/auth0-api-js';
@@ -14,11 +15,22 @@ let key: TestKey;
 let tenant: ReturnType<typeof createAuth0Handlers>;
 const server = setupServer();
 
+/** Keeps the package's diagnostic lines out of the test output and lets tests read them. */
+let warn: MockInstance<typeof console.warn>;
+const logged = () => warn.mock.calls.map((call) => String(call[0])).join('\n');
+
 beforeAll(async () => {
   key = await createTestKey();
   server.listen({ onUnhandledRequest: 'error' });
 });
-afterEach(() => server.resetHandlers());
+beforeEach(() => {
+  warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => {
+  server.resetHandlers();
+  warn.mockRestore();
+  vi.restoreAllMocks();
+});
 afterAll(() => server.close());
 
 async function scopedClient(expiresIn: number, tokenStore?: TokenStore, callerExpiresIn = 3600) {
@@ -170,5 +182,73 @@ describe('request-scoped client: the caller token about to expire', () => {
     const result = await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM });
     expect(result.accessToken).toBeTruthy();
     expect(tenant.state.exchangeCount).toBe(1);
+  });
+});
+
+describe('request-scoped client: the expiry buffer', () => {
+  type Operation = 'on_behalf_of' | 'client_credentials' | 'connection';
+
+  /** Runs one operation, with the tenant issuing a token that expires in `expiresIn` seconds. */
+  async function issue(operation: Operation, expiresIn: number) {
+    const scoped = await scopedClient(expiresIn);
+    // Fix the clock after the caller token exists, so `expires_in` maps to an exact second.
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    if (operation === 'on_behalf_of') return scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM });
+    if (operation === 'client_credentials') return scoped.getClientCredentialsToken({ audience: DOWNSTREAM });
+    server.use(
+      http.post(tenant.tokenEndpoint, async ({ request }) => {
+        const params = Object.fromEntries(new URLSearchParams(await request.text()));
+        if (!params['requested_token_type']) return undefined;
+        return HttpResponse.json({ access_token: 'connection-token', expires_in: expiresIn, token_type: 'Bearer' });
+      })
+    );
+    return scoped.getTokenForConnection({ connection: 'github' });
+  }
+
+  const operations: Operation[] = ['on_behalf_of', 'client_credentials', 'connection'];
+
+  describe.each(operations)('%s', (operation) => {
+    it.each([1, 4, 5])('rejects a token that expires in %i seconds', async (expiresIn) => {
+      const error = await failure(issue(operation, expiresIn));
+      expect(error.message).toBe('The token operation failed.');
+      expect(rootCause(error).message).toMatch(/already expired or expires within 5 seconds/);
+    });
+
+    it('accepts a token that expires in 6 seconds', async () => {
+      const result = await issue(operation, 6);
+      expect(result.accessToken).toBeTruthy();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('logs which operation produced an expired token, without any token data', async () => {
+      await failure(issue(operation, 2));
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(logged()).toContain('[auth0-ai-mcp]');
+      expect(logged()).toContain(`Operation: ${operation}.`);
+      expect(logged()).toMatch(/expired or expires within 5 seconds/);
+      expect(logged()).not.toContain('connection-token');
+      expect(logged()).not.toContain(DOWNSTREAM);
+    });
+  });
+
+  it('logs a missing expiry as such, not as an expired token', async () => {
+    const scoped = await scopedClient(3600);
+    server.use(
+      http.post(tenant.tokenEndpoint, () =>
+        HttpResponse.json({ access_token: 'secret-token-value', token_type: 'Bearer', scope: 'read:a' })
+      )
+    );
+    await failure(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM }));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(logged()).toMatch(/without a usable expiry/);
+    expect(logged()).not.toMatch(/already expired/);
+    expect(logged()).toContain('Operation: on_behalf_of.');
+    expect(logged()).not.toContain('secret-token-value');
+  });
+
+  it('logs nothing when the token is fine', async () => {
+    const scoped = await scopedClient(3600);
+    await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM });
+    expect(warn).not.toHaveBeenCalled();
   });
 });

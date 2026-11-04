@@ -1,6 +1,7 @@
 import * as core from '@auth0/auth0-api-js';
 import { ApiClient, AuthError, buildOboTokenKey, normalizeScopes, VerifyAccessTokenError } from '@auth0/auth0-api-js';
 import type { OboCacheKeyLayout, OnBehalfOfTokenResult, TokenStore, VerifiedToken } from '@auth0/auth0-api-js';
+import { warn } from './diagnostics.js';
 import { DownscopedTokenError, InsufficientScopeError, UnauthenticatedError } from './errors.js';
 import type { SingleFlight } from './single-flight.js';
 import type {
@@ -124,24 +125,38 @@ function withCause<T extends Error>(error: T, cause: unknown): T {
 }
 
 /**
- * Rejects a token the authorization server issued that is already expired, or that came
- * back without a usable expiry, so it is never returned to tool code. The failure carries
- * the generic message and a diagnostic `cause` that holds no token data and says which of
- * the two happened. `expiresAt` is epoch seconds, the convention of the core client. The
- * core client computes it from `expires_in`, so a response without that field arrives here
+ * Seconds before its expiry at which an issued token already counts as expired. It is the
+ * margin the core client's cache uses when it decides whether a stored token can be served,
+ * so a token this package returns is never one the cache would refuse a moment later. It also
+ * covers the time the tool needs to use the token before the downstream API checks it.
+ */
+const EXPIRY_BUFFER_SECONDS = 5;
+
+/** Which token operation produced a result, for diagnostics only. */
+type TokenOperation = 'on_behalf_of' | 'client_credentials' | 'connection';
+
+/**
+ * Rejects a token the authorization server issued that is expired or about to expire (within
+ * {@link EXPIRY_BUFFER_SECONDS}), or that came back without a usable expiry, so it is never
+ * returned to tool code. The failure carries the generic message and a diagnostic `cause` that
+ * holds no token data and says which of the two happened. The same line is written with
+ * `console.warn` (operation name only), because the generic error alone does not tell an
+ * operator why a call failed. `expiresAt` is epoch seconds, the convention of the core client.
+ * The core client computes it from `expires_in`, so a response without that field arrives here
  * as `NaN`.
  * The core client stores an exchange result before this check runs and its cache treats an
  * expired entry as a miss, so an expired entry may remain in a store but is never served.
  */
-function assertNotExpired(expiresAt: number): void {
+function assertNotExpired(expiresAt: number, operation: TokenOperation): void {
   if (!Number.isFinite(expiresAt)) {
-    throw withCause(
-      new Error(GENERIC_FAILURE_MESSAGE),
-      new Error('The token endpoint issued a token without a usable expiry (expires_in is missing or invalid).')
-    );
+    const reason = 'The token endpoint issued a token without a usable expiry (expires_in is missing or invalid).';
+    warn(`${reason} Operation: ${operation}.`);
+    throw withCause(new Error(GENERIC_FAILURE_MESSAGE), new Error(reason));
   }
-  if (expiresAt <= Math.floor(Date.now() / 1000)) {
-    throw withCause(new Error(GENERIC_FAILURE_MESSAGE), new Error('The token endpoint issued an already expired token.'));
+  if (expiresAt <= Math.floor(Date.now() / 1000) + EXPIRY_BUFFER_SECONDS) {
+    const reason = `The token endpoint issued a token that is already expired or expires within ${EXPIRY_BUFFER_SECONDS} seconds.`;
+    warn(`${reason} Operation: ${operation}.`);
+    throw withCause(new Error(GENERIC_FAILURE_MESSAGE), new Error(reason));
   }
 }
 
@@ -308,7 +323,7 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
         const shared = key === undefined ? await exchange(options) : await exchanges.run(key, () => exchange(options));
         // Each caller gets its own copy, so one caller changing its result cannot alter another's.
         const result = { ...shared, grantedScopes: [...shared.grantedScopes] };
-        assertNotExpired(result.expiresAt);
+        assertNotExpired(result.expiresAt, 'on_behalf_of');
 
         // The core client caches the token under the scopes it was granted and does not
         // reject a narrowed result. Rejecting it here keeps the cache correct (a later,
@@ -324,7 +339,7 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
           audience: options.audience,
           ...(options.scope !== undefined && { scope: options.scope }),
         });
-        assertNotExpired(issued.expiresAt);
+        assertNotExpired(issued.expiresAt, 'client_credentials');
         return issued;
       });
       // RFC 6749 section 5.1: an absent `scope` means the grant equals the request, while an
@@ -344,7 +359,7 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
             loginHint: options.loginHint,
           }),
         });
-        assertNotExpired(issued.expiresAt);
+        assertNotExpired(issued.expiresAt, 'connection');
         return issued;
       }),
 
