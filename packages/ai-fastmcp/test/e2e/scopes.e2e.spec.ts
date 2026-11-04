@@ -128,6 +128,30 @@ describeLive("fastmcp scopes", LIMITED_CLIENT_VARS, (e2e) => {
     });
   });
 
+  describe.each(MODES)("$label server with two server-wide scopes", ({ stateless }) => {
+    let server: FastMcpServer;
+
+    beforeAll(async () => {
+      server = await startFastMcpServer({
+        env: e2e,
+        downstreamUrl: downstream.url,
+        stateless,
+        auth: { requiredScopes: ["tool:whoami", "tool:delegate"] },
+      });
+    });
+
+    afterAll(async () => {
+      await server?.stop();
+    });
+
+    it("E-S-01 the 403 challenge lists every required scope, the one the caller holds and the one it lacks", async () => {
+      const res = await postInitialize(server, `Bearer ${limitedToken}`);
+      expect(res.status).toBe(403);
+      expect(res.challenge?.params["error"]).toBe("insufficient_scope");
+      expect(res.challenge?.params["scope"]).toBe("tool:whoami tool:delegate");
+    });
+  });
+
   describe.each(MODES)("$label server with a server-wide scope", ({ stateless }) => {
     let server: FastMcpServer;
 

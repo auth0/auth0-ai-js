@@ -62,7 +62,7 @@ need a stateful one, and E-C-01 uses a stateless one.
 | E-N-02 | `session-binding` | The second real user sends many session ids FastMCP never issued, and the first user's session stays bound to the first user. |
 | E-N-03 | `session-binding` | `GET /sse` with a real token gets 404 and opens no legacy session, and `POST /messages` has nothing to reach. |
 | E-P-01 | `dpop` | A DPoP header, the DPoP scheme or a key-bound token gets a Bearer challenge before any tenant call. |
-| E-S-01 | `scopes` | The server-wide gate answers 403, a request without credentials gets a 401 that names the scope and a metadata document that lists it, the tool wrapper names the missing scope, and `canAccess` hides a tool. |
+| E-S-01 | `scopes` | The server-wide gate answers 403 with a challenge that lists every required scope, a request without credentials gets a 401 that names the scope and a metadata document that lists it, the tool wrapper names the missing scope, and `canAccess` hides a tool. |
 | E-X-01 | `slow/expiry` | A caller token that expires inside a stateful session, or on a stateless server, gets a 401. |
 | E-X-02 | `slow/expiry` | A cached exchanged token past its expiry gives way to a new exchange. |
 
