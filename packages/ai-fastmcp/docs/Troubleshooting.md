@@ -16,7 +16,7 @@ Find the symptom, then read the cause and the fix. The messages are the ones the
 | `Invalid configuration: "endpoint" must be a normalized absolute path such as "/mcp"` | The endpoint is `/`, has no leading slash, ends in a slash, or has a query or fragment. |
 | `Invalid configuration: "realm" must be a non-empty string without quotes, backslashes or control characters.` | The realm cannot be written into a challenge. |
 | `Invalid configuration: every entry of "requiredScopes" must be a non-blank string.` | An entry of `requiredScopes` is empty, only whitespace, or not a string. The server-wide list and the list of `withAuth0Execute` follow the same rule, so a typo cannot leave a route open. |
-| `Invalid configuration: "sessionBinding.maxSessions" must be a positive number.` | A binding limit is zero, negative or not a number. The same message exists for `ttlMs`. |
+| `Invalid configuration: "sessionBinding.maxSessions" must be a positive number.` | A binding limit is zero, negative or not a number. The same message shape exists for `maxSessionsPerSubject` and `ttlMs`. |
 | `Invalid configuration: DPoP mode "required" is not supported by the FastMCP adapter` | The adapter accepts Bearer tokens only. Use the default DPoP mode. See [DPoP](./DPoP.md). |
 
 Setting the audience to an identifier that is not an absolute `http` or `https` URL, such as `urn:acme:mcp`, also throws. Name your Auth0 API with the public URL of the server.

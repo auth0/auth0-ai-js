@@ -88,6 +88,11 @@ describe("Troubleshooting.md: the server does not start", () => {
         false,
       ],
       [
+        () => createFastMcpAuth({ client: client(), sessionBinding: { maxSessionsPerSubject: 0 } }),
+        'Invalid configuration: "sessionBinding.maxSessionsPerSubject" must be a positive number.',
+        false,
+      ],
+      [
         () => createFastMcpAuth({ domain: DOMAIN, audience: URL_AUDIENCE, dpop: { mode: "required" } }),
         'Invalid configuration: DPoP mode "required" is not supported by the FastMCP adapter',
         true,
@@ -98,11 +103,11 @@ describe("Troubleshooting.md: the server does not start", () => {
       expect(call).toThrow(message);
       if (quoted) documented(GUIDE, message);
     }
-    // The same messages exist for ttlMs and for the audience, as the guide says.
+    // The same messages exist for maxSessionsPerSubject, ttlMs and for the audience, as the guide says.
     documented(
       GUIDE,
       "The same message exists for `\"audience\"` and `AUTH0_AUDIENCE`.",
-      "The same message exists for `ttlMs`.",
+      "The same message shape exists for `maxSessionsPerSubject` and `ttlMs`.",
       "A trailing slash counts as a difference.",
     );
   });
