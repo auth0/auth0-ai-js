@@ -20,7 +20,7 @@
   "dependencies": {
     "@auth0/ai-fastmcp": "*",
     "@auth0/ai-mcp": "*",
-    "fastmcp": "^4.7.0",
+    "fastmcp": "^4.22.0",
     "jose": "^6.0.0",
     "zod": "^4.2.0"
   },
