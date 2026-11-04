@@ -5,7 +5,7 @@ import {
   VerifyAccessTokenError,
 } from "@auth0/auth0-api-js";
 import type { ApiClient } from "@auth0/auth0-api-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/server";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -130,15 +130,15 @@ describe("handler responses (Handler.md, ScopeEnforcement.md, Errors.md)", () =>
     expect(await response.text()).not.toContain("secret detail");
   });
 
-  it("answers a missing server-wide scope with 403 and lists only the missing scopes", async () => {
+  it("answers a missing server-wide scope with 403 and lists every required scope (Handler.md)", async () => {
     const response = await handlerFor(
-      stubClient(async () => ({ principal: principalWith(["other"]) })),
-      { requiredScopes: ["mcp:access"] },
+      stubClient(async () => ({ principal: principalWith(["other", "mcp:access"]) })),
+      { requiredScopes: ["mcp:access", "mcp:write"] },
     )(post({ authorization: "Bearer abc.def.ghi" }));
     expect(response.status).toBe(403);
     const challenges = response.headers.get("www-authenticate") ?? "";
     expect(challenges).toContain('error="insufficient_scope"');
-    expect(challenges).toContain('scope="mcp:access"');
+    expect(challenges).toContain('scope="mcp:access mcp:write"');
     expect(challenges).not.toContain("other");
   });
 
@@ -531,7 +531,7 @@ describe("configuration tiers and the environment (README.md, Handler.md, Errors
     expect(blocks[1]).not.toContain("client:");
   });
 
-  it("serves both metadata routes and names the suffixed one in the challenge (Handler.md)", async () => {
+  it("serves the metadata route for GET and HEAD, answers 405 for other methods and leaves the root route to authentication when the resource has a path (Handler.md)", async () => {
     const client: McpClient = {
       ...stubClient(async () => ({ principal: principalWith([]) })),
       domain: "your-tenant.us.auth0.com",
@@ -539,14 +539,20 @@ describe("configuration tiers and the environment (README.md, Handler.md, Errors
     };
     const handle = createMcpHandler({ client, handler: async () => new Response("ok") });
     const suffixed = await handle(new Request("https://mcp.example.com/.well-known/oauth-protected-resource/mcp"));
-    const root = await handle(new Request("https://mcp.example.com/.well-known/oauth-protected-resource"));
     expect(suffixed.status).toBe(200);
-    expect(await root.json()).toEqual(await suffixed.json());
+    const head = await handle(
+      new Request("https://mcp.example.com/.well-known/oauth-protected-resource/mcp", { method: "HEAD" }),
+    );
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe("");
     const other = await handle(
-      new Request("https://mcp.example.com/.well-known/oauth-protected-resource", { method: "POST" }),
+      new Request("https://mcp.example.com/.well-known/oauth-protected-resource/mcp", { method: "OPTIONS" }),
     );
     expect(other.status).toBe(405);
-    expect(other.headers.get("allow")).toBe("GET");
+    expect(other.headers.get("allow")).toBe("GET, HEAD");
+    expect(other.headers.get("cache-control")).toBe("no-store");
+    const root = await handle(new Request("https://mcp.example.com/.well-known/oauth-protected-resource"));
+    expect(root.status).toBe(401);
     const challenge = (await handle(post())).headers.get("www-authenticate") ?? "";
     expect(challenge).toContain(
       'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"',
@@ -708,8 +714,8 @@ describe("expired token results (OnBehalfOf.md, TokenVault.md)", () => {
     return client.withToken(await client.verifyAccessToken({ accessToken: "t", scheme: "bearer" }));
   }
 
-  it("rejects an expired or non-finite expiry with the generic error and no token data", async () => {
-    for (const expiresAt of [nowSeconds() - 5, nowSeconds(), Number.NaN]) {
+  it("rejects an expired, near-expiry or non-finite expiry with the generic error and no token data (OnBehalfOf.md)", async () => {
+    for (const expiresAt of [nowSeconds() - 5, nowSeconds(), nowSeconds() + 4, Number.NaN]) {
       const scoped = await scopedWithExpiry(expiresAt);
       const calls = [
         () => scoped.getTokenOnBehalfOf({ audience: "https://api.example.com", scope: "read:reports" }),
@@ -725,6 +731,23 @@ describe("expired token results (OnBehalfOf.md, TokenVault.md)", () => {
         expect(JSON.stringify(error)).not.toContain("secret-token-value");
         expect(String((error as { cause?: unknown }).cause)).not.toContain("secret-token-value");
       }
+    }
+  });
+
+  it("writes one console.warn line that names the operation and holds no token data (OnBehalfOf.md)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const scoped = await scopedWithExpiry(nowSeconds() + 4);
+      await expect(scoped.getTokenForConnection({ connection: "google-oauth2" })).rejects.toThrow(
+        "The token operation failed.",
+      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]?.[0]);
+      expect(line).toContain("connection");
+      expect(line).toContain("5 seconds");
+      expect(line).not.toContain("secret-token-value");
+    } finally {
+      warn.mockRestore();
     }
   });
 
