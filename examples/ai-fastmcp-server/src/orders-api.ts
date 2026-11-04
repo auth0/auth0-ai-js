@@ -11,6 +11,7 @@ import { READ_ORDERS, WRITE_ORDERS } from "./scopes.js";
  * A small orders service. Every request is verified before it reaches any data: the signature
  * (from the tenant's JWKS), the issuer, the audience of this service, the expiry, the subject and
  * the scope. Each answer includes a `verified` block that names what was checked, never the token.
+ * The subject of the verified token decides whose orders the request reads and cancels.
  */
 
 interface Verified {
@@ -90,7 +91,7 @@ export function createOrdersListener(
       const verified = await verify(req, res, READ_ORDERS);
       if (!verified) return;
       send(res, 200, {
-        orders: data.orders().map((order) => ({ ...order, customer: verified.subject })),
+        orders: data.orders(verified.subject),
         verified,
       });
       return;
@@ -100,7 +101,7 @@ export function createOrdersListener(
       const verified = await verify(req, res, WRITE_ORDERS);
       if (!verified) return;
       const id = decodeURIComponent(parts[1] ?? "");
-      const result = data.cancel(id);
+      const result = data.cancel(verified.subject, id);
       if (result === "not_found") return send(res, 404, { error: "not_found" });
       if (result === "shipped") return send(res, 409, { error: "already_shipped" });
       send(res, 200, { order_id: id, result, verified });

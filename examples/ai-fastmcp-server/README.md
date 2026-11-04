@@ -11,7 +11,7 @@ A small MCP server built with FastMCP and `@auth0/ai-fastmcp`. It plays an order
 - Only the exchanged token goes to the orders API, never the caller's own token. Expected failures, such as an unknown order, reach the caller as a `UserError` with a fixed message. Anything unexpected becomes `Tool execution failed.`, and the wrapper writes one line to the server log with the error name, its code and status, and the `error` and `error_description` Auth0 returned, never the message of the error. Each call stops after `DOWNSTREAM_TIMEOUT_MS`.
 - `src/orders-api.ts` verifies every token (RS256 signature from the tenant JWKS, issuer, the audience of the orders API, expiry, subject and scope) before it returns data. Each answer includes a `verified` block that names the audience, the scope and the acting client of the token if it carries an `act` claim, never the token itself.
 
-Seed data lives in memory and resets on restart: ord_1001 (shipped), ord_1002 and ord_1003 (processing).
+Seed data lives in memory and resets on restart. Each shopper gets their own three starter orders the first time they ask: ord_1001 (shipped), ord_1002 and ord_1003 (processing). The orders API returns and cancels only the orders of the caller, whose subject comes from the verified token. A fourth order, ord_9001, belongs to another shopper, so asking to cancel it answers "not found".
 
 ## Set up your tenant
 

@@ -260,6 +260,26 @@ describe("example MCP server", () => {
     expect(list.text).toContain("- ord_1003 USB-C Dock x2, cancelled");
   });
 
+  it("keeps the orders of each caller apart: a cancellation by one caller changes nothing for another", async () => {
+    const alice = await run("cancel_order", ALL_TOOLS, "user|alice", { order_id: "ord_1003" });
+    expect(alice.text).toContain("Order ord_1003 cancelled");
+
+    const bob = await run("list_orders", ALL_TOOLS, "user|bob");
+    expect(bob.text).toContain("Orders of user|bob:");
+    expect(bob.text).toContain("- ord_1003 USB-C Dock x2, processing");
+    const aliceList = await run("list_orders", ALL_TOOLS, "user|alice");
+    expect(aliceList.text).toContain("- ord_1003 USB-C Dock x2, cancelled");
+  });
+
+  it("does not let a caller see or cancel an order of another shopper", async () => {
+    const list = await run("list_orders", ALL_TOOLS, "user|snoop");
+    expect(list.text).not.toContain("ord_9001");
+
+    const cancel = await run("cancel_order", ALL_TOOLS, "user|snoop", { order_id: "ord_9001" });
+    expect(cancel.isError).toBe(true);
+    expect(cancel.text).toBe("Order ord_9001 was not found.");
+  });
+
   it("refuses to cancel a shipped order and reports an unknown order", async () => {
     const shipped = await run("cancel_order", ALL_TOOLS, "user|refuse", { order_id: "ord_1001" });
     expect(shipped.isError).toBe(true);
@@ -449,6 +469,25 @@ describe("example orders API", () => {
       });
     expect((await cancel(await mint(ORDERS, "read:orders"))).status).toBe(403);
     expect((await get("/nothing", await mint(ORDERS, "read:orders"))).status).toBe(404);
+  });
+
+  it("returns only the orders of the caller and answers 404 when the caller cancels an order of someone else", async () => {
+    const post = (path: string, token: string) =>
+      socketFetch(`http://127.0.0.1:${ordersPort}${path}`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+    const orderIds = async (sub: string) => {
+      const res = await get("/orders", await mint(ORDERS, "read:orders", { sub }));
+      return ((await res.json()) as { orders: Array<{ id: string; customer: string }> }).orders;
+    };
+
+    const carol = await orderIds("user|carol");
+    expect(carol.map((order) => order.id)).toEqual(["ord_1001", "ord_1002", "ord_1003"]);
+    expect(new Set(carol.map((order) => order.customer))).toEqual(new Set(["user|carol"]));
+
+    const write = await mint(ORDERS, "write:orders", { sub: "user|dave" });
+    expect((await post("/orders/ord_9001/cancel", write)).status).toBe(404);
+    expect((await post("/orders/ord_1002/cancel", write)).status).toBe(200);
+    // Dave's cancellation is not visible to Carol.
+    expect((await orderIds("user|carol")).find((order) => order.id === "ord_1002")).toMatchObject({ status: "processing" });
   });
 
   it("answers 401 for an unsigned alg:none token", async () => {
