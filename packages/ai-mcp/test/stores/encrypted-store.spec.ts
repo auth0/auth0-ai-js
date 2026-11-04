@@ -1,4 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
+import { CompactEncrypt, compactDecrypt } from 'jose';
 import { setupServer } from 'msw/node';
 import { ApiClient } from '@auth0/auth0-api-js';
 import { createAuth0Handlers, createTestKey, mintAccessToken } from '../support/index.js';
@@ -7,6 +9,11 @@ import { InvalidConfigurationError } from '@auth0/auth0-api-js';
 import type { CachedToken, IndexedTokenStore, TokenStore } from '@auth0/auth0-api-js';
 import { createEncryptedTokenStore } from '../../src/stores/encrypted-store.js';
 import { MemoryIndexedTokenStore } from '../../src/stores/memory-indexed-store.js';
+
+vi.mock('jose', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('jose')>();
+  return { ...actual, compactDecrypt: vi.fn(actual.compactDecrypt) };
+});
 
 const SECRET = 'a-secret-that-is-at-least-32-characters-long';
 const OTHER_SECRET = 'a-different-secret-with-32-or-more-characters';
@@ -65,6 +72,15 @@ function tamper(jwe: string): string {
   parts[3] = ct.slice(0, mid) + (ct[mid] === 'A' ? 'B' : 'A') + ct.slice(mid + 1);
   return parts.join('.');
 }
+
+/** Keeps the store's diagnostic lines out of the test output and lets tests read them. */
+let warn: MockInstance<typeof console.warn>;
+beforeEach(() => {
+  warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => {
+  warn.mockRestore();
+});
 
 describe('createEncryptedTokenStore', () => {
   describe('secret validation', () => {
@@ -308,6 +324,151 @@ describe('createEncryptedTokenStore', () => {
     it('types an indexed inner store as indexed', () => {
       const indexed: IndexedTokenStore = createEncryptedTokenStore(new RawStore(), { secret: SECRET });
       expect(indexed).toBeDefined();
+    });
+  });
+
+  describe('algorithm allowlists', () => {
+    it('asks jose to accept only direct encryption with A256CBC-HS512', async () => {
+      // With the fixed 512 bit key, jose's own defaults happen to reject every other algorithm
+      // too, so no sealed value can tell the two apart. This pins the explicit allowlists, so
+      // the restriction does not depend on those defaults staying as they are.
+      const store = createEncryptedTokenStore(new RawStore(), { secret: SECRET });
+      await store.set('k', value());
+      await store.get('k');
+
+      expect(vi.mocked(compactDecrypt)).toHaveBeenCalledWith(expect.any(String), expect.anything(), {
+        keyManagementAlgorithms: ['dir'],
+        contentEncryptionAlgorithms: ['A256CBC-HS512'],
+      });
+    });
+
+    it('treats a value sealed under another content encryption as a miss', async () => {
+      const inner = new RawStore();
+      const store = createEncryptedTokenStore(inner, { secret: SECRET });
+      const halfKey = new Uint8Array(32).fill(1);
+      const sealed = await new CompactEncrypt(new TextEncoder().encode(JSON.stringify(value())))
+        .setProtectedHeader({ alg: 'dir', enc: 'A256GCM', bnd: JSON.stringify(['t', 'k']) })
+        .encrypt(halfKey);
+      inner.tokens.set('k', { accessToken: sealed, expiresAt: value().expiresAt, grantedScopes: [] });
+      expect(await store.get('k')).toBeUndefined();
+    });
+  });
+
+  describe('diagnostics', () => {
+    const logged = () => warn.mock.calls.map((call) => String(call[0])).join('\n');
+
+    it('logs nothing for reads, misses and writes that work', async () => {
+      const store = createEncryptedTokenStore(new RawStore(), { secret: SECRET });
+      await store.set('k', value());
+      await store.get('k');
+      await store.get('missing');
+      await store.delete('k');
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('warns that entries cannot be decrypted after the secret changed, once, without any value', async () => {
+      const inner = new RawStore();
+      await createEncryptedTokenStore(inner, { secret: SECRET }).set('k', value());
+      await createEncryptedTokenStore(inner, { secret: SECRET }).set('other-key', value());
+      const store = createEncryptedTokenStore(inner, { secret: OTHER_SECRET });
+
+      expect(await store.get('k')).toBeUndefined();
+      expect(await store.get('other-key')).toBeUndefined();
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(logged()).toContain('[auth0-ai-mcp]');
+      expect(logged()).toContain('could not be decrypted');
+      expect(logged()).toContain('secret');
+      expect(logged()).not.toContain(ACCESS_TOKEN);
+      expect(logged()).not.toContain(SECRET);
+      expect(logged()).not.toContain(OTHER_SECRET);
+      expect(logged()).not.toContain('other-key');
+    });
+
+    it('warns about a tampered ciphertext', async () => {
+      const inner = new RawStore();
+      const store = createEncryptedTokenStore(inner, { secret: SECRET });
+      await store.set('k', value());
+      const stored = inner.tokens.get('k')!;
+      inner.tokens.set('k', { ...stored, accessToken: tamper(stored.accessToken) });
+      expect(await store.get('k')).toBeUndefined();
+      expect(logged()).toContain('could not be decrypted');
+    });
+
+    it('warns about an entry found under a different key', async () => {
+      const inner = new RawStore();
+      const store = createEncryptedTokenStore(inner, { secret: SECRET });
+      await store.set('a', value());
+      inner.tokens.set('b', inner.tokens.get('a')!);
+      expect(await store.get('b')).toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(logged()).toContain('different key');
+    });
+
+    it('warns about a malformed entry', async () => {
+      const inner = new RawStore();
+      inner.tokens.set('k', { accessToken: 5, expiresAt: 1, grantedScopes: [] } as unknown as CachedToken);
+      const store = createEncryptedTokenStore(inner, { secret: SECRET });
+      expect(await store.get('k')).toBeUndefined();
+      expect(logged()).toContain('malformed');
+    });
+
+    it('warns about an entry whose expiry differs from the sealed one', async () => {
+      const inner = new RawStore();
+      const store = createEncryptedTokenStore(inner, { secret: SECRET });
+      await store.set('k', value());
+      const stored = inner.tokens.get('k')!;
+      inner.tokens.set('k', { ...stored, expiresAt: stored.expiresAt + 86_400 });
+      expect(await store.get('k')).toBeUndefined();
+      expect(logged()).toContain('malformed');
+    });
+
+    it('warns about index members that cannot be read', async () => {
+      const inner = new RawStore();
+      await createEncryptedTokenStore(inner, { secret: SECRET }).addIndexMember('idx', {
+        tokenKey: 'tk',
+        grantedScopes: ['read:data'],
+        expiresAt: value().expiresAt,
+      });
+      const store = createEncryptedTokenStore(inner, { secret: OTHER_SECRET });
+      expect(await store.listIndexMembers('idx')).toEqual([]);
+      expect(logged()).toContain('could not be decrypted');
+      expect(logged()).not.toContain('read:data');
+    });
+
+    it('reports each kind of problem once per store, and a new store reports again', async () => {
+      const inner = new RawStore();
+      await createEncryptedTokenStore(inner, { secret: SECRET }).set('k', value());
+      inner.tokens.set('bad', { accessToken: 5, expiresAt: 1, grantedScopes: [] } as unknown as CachedToken);
+
+      const first = createEncryptedTokenStore(inner, { secret: OTHER_SECRET });
+      await first.get('k');
+      await first.get('bad');
+      await first.get('k');
+      await first.get('bad');
+      expect(warn).toHaveBeenCalledTimes(2);
+
+      await createEncryptedTokenStore(inner, { secret: OTHER_SECRET }).get('k');
+      expect(warn).toHaveBeenCalledTimes(3);
+    });
+
+    it('warns when the inner store fails and still passes the error on unchanged', async () => {
+      const failure = new Error('backend down: password=hunter2');
+      const inner = new RawStore();
+      inner.get = async () => {
+        throw failure;
+      };
+      inner.set = async () => {
+        throw failure;
+      };
+      const store = createEncryptedTokenStore(inner, { secret: SECRET });
+
+      await expect(store.get('k')).rejects.toBe(failure);
+      await expect(store.set('k', value())).rejects.toBe(failure);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(logged()).toContain('underlying store');
+      expect(logged()).not.toContain('hunter2');
     });
   });
 });

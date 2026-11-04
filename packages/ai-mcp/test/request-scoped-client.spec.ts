@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { inspect } from 'node:util';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
@@ -6,6 +6,7 @@ import { decodeJwt } from 'jose';
 import { AuthError, MissingClientAuthError } from '@auth0/auth0-api-js';
 import type { CachedToken, IndexedTokenStore, TokenIndexMember } from '@auth0/auth0-api-js';
 import { createMcpClient } from '../src/client.js';
+import { createEncryptedTokenStore } from '../src/stores/encrypted-store.js';
 import type { McpClient, VerifiedCaller } from '../src/client.js';
 import { DownscopedTokenError } from '../src/errors.js';
 import { createAuth0Handlers, createTestKey, mintAccessToken, scopeMode } from './support/index.js';
@@ -120,6 +121,60 @@ describe('request-scoped client: getTokenOnBehalfOf', () => {
 
     expect(tenant.state.exchangeCount).toBe(1);
     expect(narrow.accessToken).toBe(wide.accessToken);
+  });
+
+  it('treats a store that fails on every call as a cache miss and still returns the token', async () => {
+    useTenant();
+    const failing = {
+      get: async () => {
+        throw new Error('backend down');
+      },
+      set: async () => {
+        throw new Error('backend down');
+      },
+      delete: async () => {
+        throw new Error('backend down');
+      },
+    };
+    const client = makeClient({ tokenStore: failing });
+    const scoped = client.withToken(await caller(client));
+
+    const first = await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: 'read:a' });
+    const second = await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: 'read:a' });
+
+    expect(first.accessToken).toEqual(expect.any(String));
+    expect(second.accessToken).toEqual(expect.any(String));
+    expect(tenant.state.exchangeCount).toBe(2);
+  });
+
+  it('treats a failing store behind the encrypted wrapper as a miss, and the wrapper says so once', async () => {
+    useTenant();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const failing = {
+        get: async () => {
+          throw new Error('backend down');
+        },
+        set: async () => {
+          throw new Error('backend down');
+        },
+        delete: async () => undefined,
+      };
+      const client = makeClient({
+        tokenStore: createEncryptedTokenStore(failing, { secret: 'a-secret-that-is-at-least-32-characters-long' }),
+      });
+      const scoped = client.withToken(await caller(client));
+
+      await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: 'read:a' });
+      await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: 'read:a' });
+
+      expect(tenant.state.exchangeCount).toBe(2);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain('underlying store');
+      expect(String(warn.mock.calls[0]![0])).not.toContain('backend down');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('exchanges on every call when no store is configured', async () => {

@@ -1,6 +1,7 @@
 import { InvalidConfigurationError } from '@auth0/auth0-api-js';
 import type { CachedToken, IndexedTokenStore, TokenIndexMember, TokenStore } from '@auth0/auth0-api-js';
 import { CompactEncrypt, compactDecrypt } from 'jose';
+import { warn } from '../diagnostics.js';
 
 /** Shortest accepted secret, in characters. */
 const MIN_SECRET_LENGTH = 32;
@@ -26,6 +27,21 @@ export interface EncryptedTokenStoreOptions {
    */
   secret: string;
 }
+
+/**
+ * What a store writes the first time each kind of problem happens. Fixed text only, so no
+ * token, key or error message can reach a log through it.
+ */
+const WARNINGS = {
+  undecryptable:
+    'An entry in the encrypted token store could not be decrypted and was treated as a cache miss. This is expected right after the secret changed. Otherwise check that every process sharing the store uses the same secret and that nothing else writes to it. Further entries like this are not logged again by this store.',
+  binding:
+    'An entry in the encrypted token store was found under a different key than it was written under and was treated as a cache miss. Check that nothing else writes to the underlying store. Further entries like this are not logged again by this store.',
+  malformed:
+    'An entry in the encrypted token store was malformed and was treated as a cache miss. Check that nothing else writes to the underlying store. Further entries like this are not logged again by this store.',
+  inner:
+    'The underlying store of the encrypted token store failed. The error is passed on to the caller, and the token client treats it as a cache miss. Further failures are not logged again by this store.',
+} as const;
 
 /** Injective encodings, so no pair of distinct keys can produce the same binding. */
 const tokenBinding = (key: string): string => JSON.stringify(['t', key]);
@@ -78,16 +94,22 @@ async function deriveKey(secret: string): Promise<Uint8Array> {
  * scopes of an index member are encrypted, so the inner indexed store must treat index
  * members as opaque: their `grantedScopes` hold ciphertext, not scope names.
  *
- * Encryption does not defend against an attacker with write access to the inner store.
- * Such an attacker can delete entries, or replay an older ciphertext under the same key
- * until it expires, which is still bounded by the expiry sealed inside it.
+ * Encryption does not defend against someone with write access to the inner store. They
+ * can delete entries, or replay an older ciphertext under the same key until it expires,
+ * which is still bounded by the expiry sealed inside it.
  *
  * ## Failures
  *
- * Reads fail open. Tampered or malformed ciphertext, a different secret or a key mismatch
- * produces a miss, never an exception, and nothing about the value is logged. Failures
- * raised by the inner store itself are not swallowed here. Writes and deletes pass
- * through, so an inner write failure propagates to the caller.
+ * An entry that cannot be read is a cache miss, not an error. Tampered or malformed
+ * ciphertext, a different secret or a key mismatch produces a miss, never an exception, so
+ * the caller falls back to a fresh token exchange and access is never widened. Each kind of
+ * unreadable entry writes one `console.warn` line per store instance, the first time it
+ * happens, so a wrong or changed secret shows up in the logs instead of silently turning
+ * every read into a miss. The line holds fixed text only: no value, key or error message.
+ *
+ * Failures raised by the inner store itself are not swallowed here. They are reported the
+ * same way (once) and then rethrown unchanged, so an inner write failure propagates to the
+ * caller of this store. The token client treats any error from a store as a miss.
  *
  * The returned store has index methods when `inner` does. This is decided at run time by
  * the presence of the methods, so an indexed store typed as a plain {@link TokenStore}
@@ -122,34 +144,74 @@ export function createEncryptedTokenStore(inner: TokenStore, options: EncryptedT
       .setProtectedHeader({ alg: 'dir', enc: 'A256CBC-HS512', bnd: binding })
       .encrypt(await getKey());
 
+  /** Reasons already reported by this store, so a persistent problem logs once per kind. */
+  const reported = new Set<string>();
+  const report = (reason: keyof typeof WARNINGS): void => {
+    if (!reported.has(reason)) {
+      reported.add(reason);
+      warn(WARNINGS[reason]);
+    }
+  };
+
+  /** Runs a call on the inner store, reporting a failure before it propagates unchanged. */
+  const viaInner = async <T>(call: () => Promise<T>): Promise<T> => {
+    try {
+      return await call();
+    } catch (error) {
+      report('inner');
+      throw error;
+    }
+  };
+
   /** Returns the decrypted JSON value, or `undefined` for any failure. */
   const open = async (jwe: unknown, binding: string): Promise<unknown> => {
+    if (typeof jwe !== 'string') {
+      report('malformed');
+      return undefined;
+    }
+    let plaintext: Uint8Array;
     try {
-      if (typeof jwe !== 'string') {
-        return undefined;
-      }
-      const { plaintext, protectedHeader } = await compactDecrypt(jwe, await getKey(), {
+      const opened = await compactDecrypt(jwe, await getKey(), {
         keyManagementAlgorithms: ['dir'],
         contentEncryptionAlgorithms: ['A256CBC-HS512'],
       });
-      if (protectedHeader.bnd !== binding) {
+      if (opened.protectedHeader.bnd !== binding) {
+        report('binding');
         return undefined;
       }
+      plaintext = opened.plaintext;
+    } catch {
+      report('undecryptable');
+      return undefined;
+    }
+    try {
       return JSON.parse(decoder.decode(plaintext));
     } catch {
+      report('malformed');
       return undefined;
     }
   };
 
   const store: TokenStore = {
     async get(key) {
-      const envelope: unknown = await inner.get(key);
+      const envelope: unknown = await viaInner(() => inner.get(key));
+      if (envelope === undefined || envelope === null) {
+        return undefined;
+      }
       if (!isRecord(envelope)) {
+        report('malformed');
         return undefined;
       }
       const value = await open(envelope.accessToken, tokenBinding(key));
+      if (value === undefined) {
+        return undefined;
+      }
       // The plaintext expiry is what the inner store acts on, so it has to match the sealed one.
-      return isCachedToken(value) && value.expiresAt === envelope.expiresAt ? value : undefined;
+      if (!isCachedToken(value) || value.expiresAt !== envelope.expiresAt) {
+        report('malformed');
+        return undefined;
+      }
+      return value;
     },
 
     async set(key, value) {
@@ -158,11 +220,11 @@ export function createEncryptedTokenStore(inner: TokenStore, options: EncryptedT
         expiresAt: value.expiresAt,
         grantedScopes: [],
       };
-      await inner.set(key, envelope);
+      await viaInner(() => inner.set(key, envelope));
     },
 
     delete(key) {
-      return inner.delete(key);
+      return viaInner(() => inner.delete(key));
     },
   };
 
@@ -178,26 +240,35 @@ export function createEncryptedTokenStore(inner: TokenStore, options: EncryptedT
         { grantedScopes: member.grantedScopes, expiresAt: member.expiresAt },
         indexBinding(indexKey, member.tokenKey)
       );
-      await inner.addIndexMember(indexKey, {
-        tokenKey: member.tokenKey,
-        grantedScopes: [sealed],
-        expiresAt: member.expiresAt,
-      });
+      await viaInner(() =>
+        inner.addIndexMember(indexKey, {
+          tokenKey: member.tokenKey,
+          grantedScopes: [sealed],
+          expiresAt: member.expiresAt,
+        })
+      );
     },
 
     async listIndexMembers(indexKey) {
-      const stored: unknown = await inner.listIndexMembers(indexKey);
+      const stored: unknown = await viaInner(() => inner.listIndexMembers(indexKey));
       if (!Array.isArray(stored)) {
+        report('malformed');
         return [];
       }
       const members: TokenIndexMember[] = [];
       for (const item of stored as unknown[]) {
         if (!isRecord(item) || typeof item.tokenKey !== 'string' || !Array.isArray(item.grantedScopes)) {
+          report('malformed');
           continue;
         }
         const value = await open(item.grantedScopes[0], indexBinding(indexKey, item.tokenKey));
+        if (value === undefined) {
+          continue;
+        }
         if (isRecord(value) && isStringArray(value.grantedScopes) && typeof value.expiresAt === 'number') {
           members.push({ tokenKey: item.tokenKey, grantedScopes: value.grantedScopes, expiresAt: value.expiresAt });
+        } else {
+          report('malformed');
         }
       }
       return members;
