@@ -26,7 +26,7 @@ export function createAuthenticatedHandler(
     audience: config.serverUrl,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
-    // Reuses exchanged tokens for repeat calls by the same caller.
+    // Reuses exchanged tokens for repeat calls by the same caller, and the server's own token for all callers.
     tokenStore: new MemoryIndexedTokenStore(),
     requiredScopes: config.requiredScopes,
     // MCP clients ask for the scopes the server lists here. A client that finds none asks for

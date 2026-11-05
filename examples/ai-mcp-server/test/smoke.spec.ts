@@ -304,8 +304,15 @@ describe("example MCP server", () => {
     expect(out.text).toContain(
       `Checked by: Analytics (aud ${ANALYTICS}, scope read:analytics, service token for the server itself)`,
     );
-    expect(tenant.state.clientCredentialsCount).toBe(1);
+    // The server's own token is cached for all callers, so an earlier test may already have
+    // fetched it. This call never makes more than one grant, and never an exchange.
+    expect(tenant.state.clientCredentialsCount).toBeLessThanOrEqual(1);
     expect(tenant.state.successfulExchangeCount).toBe(0);
+
+    const grantsAfterFirst = tenant.state.clientCredentialsCount;
+    const again = await run("sales_analytics_report", ALL_TOOLS, "user|sales-again");
+    expect(again.text).toContain("Monthly revenue: $142,000");
+    expect(tenant.state.clientCredentialsCount).toBe(grantsAfterFirst);
   });
 
   it("denies a tool per tool, with HTTP 200 and an error result", async () => {

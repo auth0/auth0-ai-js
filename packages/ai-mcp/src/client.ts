@@ -10,6 +10,7 @@ import { UnauthenticatedError } from './errors.js';
 import { buildPrincipal } from './principal.js';
 import { createRequestScopedClient } from './request-scoped-client.js';
 import { SingleFlight } from './single-flight.js';
+import { createTokenCache } from './token-cache.js';
 import { DEFAULT_REQUEST_TIMEOUT_MS, assertValidTimeout, createTimeoutFetch } from './timeout-fetch.js';
 import type { McpClientOptions, Principal, RequestScopedMcpClient } from './types.js';
 
@@ -172,6 +173,9 @@ export function createMcpClient(options: McpClientOptions): McpClient {
     audience: options.audience,
     layout: options.scopeMatching === 'non_strict' ? ('index' as const) : ('strict' as const),
   };
+  // Caches client credentials and Token Vault tokens in the same store. It needs the client id
+  // in every key, which a supplied `apiClient` does not reveal, so that case caches nothing.
+  const tokenCache = createTokenCache({ store: tokenStore, tenant: options.domain, clientId: options.clientId });
   // Maps each handle this client issued to the token the core client verified. Without a
   // store the core client only compares token strings and never re-verifies, so a handle
   // this client did not issue must never reach it. The core claims object is stored as
@@ -211,6 +215,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
         verified,
         exchanges,
         exchangeIdentity,
+        tokenCache,
       });
     },
   };
