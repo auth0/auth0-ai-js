@@ -56,7 +56,7 @@ When the discovery document or the key set of your tenant cannot be fetched (the
 ## Other things to know
 
 - `MemoryIndexedTokenStore` lives in one process. Workers do not share it, and it is empty after a restart.
-- Client credentials tokens and Token Vault tokens are not cached by this package.
+- Client credentials tokens and Token Vault tokens are cached when you configure a `tokenStore`, and are not cached when you pass your own `apiClient`. A cached Token Vault token stays usable until its own expiry, whatever happens to the user's linked account. See [What is cached](./TokenCaching.md#what-is-cached).
 - The core client stores an On Behalf Of result before this package checks its expiry. If the authorization server returns a token that is expired or expires within five seconds, the call fails, and that entry can stay in the token store. The cache treats such entries as misses, so it is never served.
 - The handler cannot serve an Auth0 API whose identifier is not the public URL of the server. See [resource and audience](./Handler.md#resource-and-audience).
 - The exchange request to Auth0 carries no DPoP proof. See [DPoP](./TokenVerification.md#dpop).

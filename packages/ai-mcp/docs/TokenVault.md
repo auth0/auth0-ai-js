@@ -53,7 +53,12 @@ For the tenant setup, follow the Auth0 guides:
 
 ## Caching
 
-This package does not cache connection tokens. Each call performs an exchange, so cache the result in your tool if the provider rate-limits you.
+With a `tokenStore` configured, the package caches connection tokens. The entry is keyed by the caller (issuer, client, subject, organization and session), the connection and the login hint, so one user never receives the token of another. A call without `loginHint`, with an empty one and with a value are separate entries. Without a store, or with your own `apiClient`, each call performs an exchange.
+
+Two things to plan for:
+
+- The entries are your users' tokens at the provider. Wrap a shared store with `createEncryptedTokenStore`.
+- A cached token stays usable until its own expiry, even if the user unlinks the account in the meantime. A hit only checks that the caller's own token has not expired or is about to. See [What is cached](./TokenCaching.md#what-is-cached).
 
 ## Errors
 
