@@ -341,7 +341,7 @@ describe('request-scoped client: other operations', () => {
     expect(tenant.state.clientCredentialsCount).toBe(1);
   });
 
-  it('does not cache client credentials or connection tokens, even with a store configured', async () => {
+  it('caches client credentials and connection tokens when a store is configured', async () => {
     useTenant();
     const store = new TestStore();
     const client = makeClient({ tokenStore: store });
@@ -349,7 +349,7 @@ describe('request-scoped client: other operations', () => {
 
     await scoped.getClientCredentialsToken({ audience: DOWNSTREAM, scope: 'a' });
     await scoped.getClientCredentialsToken({ audience: DOWNSTREAM, scope: 'a' });
-    expect(tenant.state.clientCredentialsCount).toBe(2);
+    expect(tenant.state.clientCredentialsCount).toBe(1);
 
     let connectionRequests = 0;
     server.use(
@@ -362,9 +362,9 @@ describe('request-scoped client: other operations', () => {
     );
     await scoped.getTokenForConnection({ connection: 'github' });
     await scoped.getTokenForConnection({ connection: 'github' });
-    expect(connectionRequests).toBe(2);
+    expect(connectionRequests).toBe(1);
 
-    expect(store.entries.size).toBe(0);
+    expect(store.entries.size).toBe(2);
   });
 
   it('falls back to the requested scopes for client credentials when the response has none', async () => {
@@ -421,7 +421,7 @@ describe('request-scoped client: other operations', () => {
     expect(result.grantedScopes).toEqual([]);
   });
 
-  it('requests a connection token with the caller token and is not cached', async () => {
+  it('requests a connection token with the caller token and passes the login hint', async () => {
     useTenant();
     const seen: Record<string, string>[] = [];
     server.use(
@@ -442,6 +442,7 @@ describe('request-scoped client: other operations', () => {
     const scoped = client.withToken(await client.verifyAccessToken({ accessToken: token }));
 
     const first = await scoped.getTokenForConnection({ connection: 'github', loginHint: 'octo' });
+    // No login hint is a different request, so it is not served from the first call's entry.
     await scoped.getTokenForConnection({ connection: 'github' });
 
     expect(first.accessToken).toBe('connection-token');
