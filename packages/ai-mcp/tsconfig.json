@@ -1,0 +1,10 @@
+{
+  "extends": "../../tools/tsconfig/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "lib": ["dom", "ES2022"]
+  },
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist", "test/smoke/fixtures"]
+}
