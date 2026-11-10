@@ -38,15 +38,47 @@ function issuerFromDomain(domain: unknown): string | undefined {
   return `https://${url.host}/`;
 }
 
+/** Throws unless `value` is an absolute https URL with a host and no query, fragment, credentials or whitespace. */
+function assertAuthorizationServer(value: unknown, index: number): asserts value is string {
+  const fail = (): never => {
+    throw new InvalidConfigurationError(
+      `Invalid configuration: "authorizationServers[${index}]" must be an absolute https URL with a host and no query, fragment, credentials or whitespace.`,
+    );
+  };
+  if (typeof value !== "string" || value === "" || /\s/.test(value) || !/^https:\/\//i.test(value)) fail();
+  let url: URL;
+  try {
+    url = new URL(value as string);
+  } catch {
+    return fail();
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.hostname === "" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    (value as string).includes("?") ||
+    (value as string).includes("#")
+  ) {
+    fail();
+  }
+}
+
 /**
  * Returns the issuer URLs a server advertises as its authorization servers: the explicit list
- * unchanged, or `https://<domain>/` built from the client domain.
+ * (each entry checked), or `https://<domain>/` built from the client domain.
  *
- * @throws {InvalidConfigurationError} When no list is given and the client does not declare a
- * usable single tenant domain.
+ * @throws {InvalidConfigurationError} When an explicit entry is not an absolute https URL with a
+ * host and no query, fragment, credentials or whitespace, or when no list is given and the client
+ * does not declare a usable single tenant domain.
  */
 export function resolveAuthorizationServers(client: McpClient, explicit: string[] | undefined): string[] {
-  if (explicit !== undefined) return explicit;
+  if (explicit !== undefined) {
+    explicit.forEach(assertAuthorizationServer);
+    return explicit;
+  }
   const issuer = issuerFromDomain(client.domain);
   if (issuer === undefined) {
     throw new InvalidConfigurationError(
