@@ -68,52 +68,21 @@ async function deriveKey(secret: string): Promise<Uint8Array> {
  * Wraps a {@link TokenStore} so that everything it holds is encrypted at rest.
  *
  * Use it in front of any store that persists or shares tokens, such as one backed by a
- * database or a cache server. Token values are sealed as compact JWE (`dir` with
- * `A256CBC-HS512`) using a key derived from `secret` with HKDF-SHA-256. The inner store
- * never sees an access token in the clear.
+ * database or a cache server. Token values are sealed as compact JWE with a key derived
+ * from `secret`, and each ciphertext is bound to the storage key it was written under. The
+ * inner store never sees an access token in the clear. Storage keys and expiry times stay
+ * readable, and the granted scopes of an index member are encrypted, so an inner indexed
+ * store must treat index members as opaque.
  *
- * ## Secret
+ * The secret should be at least 32 random bytes from a secret manager. There is no rotation:
+ * changing it makes every existing entry unreadable.
  *
- * The secret should be at least 32 random bytes from a secret manager, for example the
- * base64 or hex encoding of 32 random bytes. The length check counts characters and cannot
- * measure entropy, so a long but guessable string passes the check and is still weak. Only
- * one secret is supported and there is no rotation yet: changing it makes every existing
- * entry unreadable, which the cache treats as a miss.
+ * An entry that cannot be read (tampered, malformed, a different secret or key) is a cache
+ * miss, never an exception, and writes one fixed `console.warn` line per kind and store
+ * instance. Failures of the inner store are reported once and then rethrown unchanged; the
+ * token client treats them as a miss. The returned store has index methods when `inner` does.
  *
- * ## What is and is not protected
- *
- * Each ciphertext is bound, through its authenticated protected header, to the storage key
- * it was written under. A ciphertext copied to a different key fails to decrypt and reads
- * as a miss. Each token entry also repeats its expiry time inside the sealed payload, and a
- * read whose plaintext expiry differs from the sealed one is a miss.
- *
- * Stored in the clear, because the cache needs it to find entries: the storage keys, each
- * entry's expiry time (so the inner store can apply its own time to live), and the token
- * key and expiry of each index member. Storage keys are opaque hashes that carry no claim
- * value, but they are stable pseudonymous identifiers for a given caller. The granted
- * scopes of an index member are encrypted, so the inner indexed store must treat index
- * members as opaque: their `grantedScopes` hold ciphertext, not scope names.
- *
- * Encryption does not defend against someone with write access to the inner store. They
- * can delete entries, or replay an older ciphertext under the same key until it expires,
- * which is still bounded by the expiry sealed inside it.
- *
- * ## Failures
- *
- * An entry that cannot be read is a cache miss, not an error. Tampered or malformed
- * ciphertext, a different secret or a key mismatch produces a miss, never an exception, so
- * the caller falls back to a fresh token exchange and access is never widened. Each kind of
- * unreadable entry writes one `console.warn` line per store instance, the first time it
- * happens, so a wrong or changed secret shows up in the logs instead of silently turning
- * every read into a miss. The line holds fixed text only: no value, key or error message.
- *
- * Failures raised by the inner store itself are not swallowed here. They are reported the
- * same way (once) and then rethrown unchanged, so an inner write failure propagates to the
- * caller of this store. The token client treats any error from a store as a miss.
- *
- * The returned store has index methods when `inner` does. This is decided at run time by
- * the presence of the methods, so an indexed store typed as a plain {@link TokenStore}
- * still yields a store with index methods.
+ * See the token caching guide in the package docs for the full threat model and format.
  *
  * @param inner - The store that holds the encrypted values.
  * @param options - Encryption options.

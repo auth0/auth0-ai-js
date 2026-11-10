@@ -295,6 +295,31 @@ describe('request-scoped client: scope edge cases and configuration', () => {
     await expect(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: '' })).resolves.toBeDefined();
   });
 
+  it('sends no scope parameter for an empty or omitted exchange scope', async () => {
+    useTenant(scopeMode.echo);
+    const client = makeClient();
+    const scoped = client.withToken(await caller(client));
+
+    await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM });
+    expect(tenant.state.lastExchangeRequest?.params).not.toHaveProperty('scope');
+
+    await scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM, scope: '' });
+    expect(tenant.state.exchangeCount).toBe(2);
+    expect(tenant.state.lastExchangeRequest?.params).not.toHaveProperty('scope');
+  });
+
+  it('rejects an empty client credentials scope before any request, unlike an omitted one', async () => {
+    useTenant(scopeMode.echo);
+    const client = makeClient();
+    const scoped = client.withToken(await caller(client));
+
+    await expect(scoped.getClientCredentialsToken({ audience: DOWNSTREAM, scope: '' })).rejects.toThrow();
+    expect(tenant.state.clientCredentialsCount).toBe(0);
+
+    await expect(scoped.getClientCredentialsToken({ audience: DOWNSTREAM })).resolves.toBeDefined();
+    expect(tenant.state.clientCredentialsCount).toBe(1);
+  });
+
   it('fails with the core missing-client-auth error when the client has no secret', async () => {
     useTenant();
     const client = makeClient({ clientSecret: undefined });

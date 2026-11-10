@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { ApiClient, InvalidConfigurationError } from '@auth0/auth0-api-js';
@@ -13,6 +13,8 @@ const AUDIENCE = 'https://mcp.example.com';
 const DOWNSTREAM = 'https://downstream.example.com/resource';
 const TOKEN_URL = 'https://tenant.example.com/oauth/token';
 const TIMEOUT_MS = 150;
+/** The documented default of `requestTimeoutMs`, written out so a change to it fails a test. */
+const DOCUMENTED_DEFAULT_MS = 10_000;
 
 let key: TestKey;
 let tenant: ReturnType<typeof createAuth0Handlers>;
@@ -150,6 +152,33 @@ describe('requestTimeoutMs', () => {
     const c = await scoped(client);
     const result = await c.getTokenOnBehalfOf({ audience: DOWNSTREAM });
     expect(result.accessToken).toBeTruthy();
+  });
+
+  it('aborts a stalled exchange at the documented default of 10 seconds', async () => {
+    useTenant();
+    const client = makeClient();
+    const c = await scoped(client);
+    const hung = hangTokenEndpoint();
+
+    const realSetTimeout = globalThis.setTimeout;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let settled = false;
+      const pending = rejection(c.getTokenOnBehalfOf({ audience: DOWNSTREAM })).finally(() => {
+        settled = true;
+      });
+      // Wait on the real clock: vi.waitFor would advance the fake one while it polls.
+      for (let i = 0; i < 100 && hung.calls === 0; i++) await new Promise((r) => realSetTimeout(r, 10));
+      expect(hung.calls).toBe(1);
+      await vi.advanceTimersByTimeAsync(DOCUMENTED_DEFAULT_MS - 1);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      const error = await pending;
+      expect(error.message).toBe('The token operation failed.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([0, -5, Number.NaN, Infinity, 2_147_483_648, '100' as unknown as number])(

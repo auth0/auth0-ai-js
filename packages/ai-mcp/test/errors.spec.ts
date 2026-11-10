@@ -114,6 +114,9 @@ describe('core error classes re-exported from the package entry', () => {
   it('are the core classes themselves, so instanceof works against errors from every path', () => {
     expect(entry.AuthError).toBe(core.AuthError);
     expect(entry.InvalidConfigurationError).toBe(core.InvalidConfigurationError);
+    expect(entry.VerifyAccessTokenError).toBe(core.VerifyAccessTokenError);
+    expect(entry.MissingOrganizationError).toBe(core.MissingOrganizationError);
+    expect(entry.OrganizationNotAllowedError).toBe(core.OrganizationNotAllowedError);
 
     // An error thrown inside the core package, and one thrown by this package.
     const fromCore = (() => {
