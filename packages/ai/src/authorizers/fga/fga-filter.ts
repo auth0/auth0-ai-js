@@ -132,7 +132,7 @@ export class FGAFilter<T extends Record<string, any>> {
     // Include `context` and `contextualTuples` (both sent per check item in
     // BatchCheck) so checks that differ only by either are treated as
     // distinct and are neither incorrectly deduplicated nor correlated to the
-    // wrong batch-check result.
+    // wrong batch-check result. See GHSA-rcmp-9f79-cfm9.
     return `${check.user}|${check.object}|${check.relation}|${canonicalize(
       check.context
     )}|${canonicalize(check.contextualTuples)}`;
