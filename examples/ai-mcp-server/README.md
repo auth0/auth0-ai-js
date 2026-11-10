@@ -67,6 +67,10 @@ If sign-in fails:
 
 [MCP clients and tenant settings](../../packages/ai-mcp/docs/McpClients.md) explains both settings and lists more errors. The exchange client's id and secret go in `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`.
 
+## Beyond one process
+
+The example keeps tokens in `MemoryIndexedTokenStore`, which lives in the memory of one process. For several instances, back the store with shared storage and wrap it with `createEncryptedTokenStore` (see [Token caching](../../packages/ai-mcp/docs/TokenCaching.md)). The example does not use Token Vault or organization policy; see [Token Vault](../../packages/ai-mcp/docs/TokenVault.md) and [Organization policy](../../packages/ai-mcp/docs/OrganizationPolicy.md) for those.
+
 ## Run
 
 ```sh
