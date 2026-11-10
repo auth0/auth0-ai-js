@@ -1648,6 +1648,40 @@ describe("resource and authorizationServers defaults", () => {
     ]);
   });
 
+  it.each([
+    ["http scheme", "http://tenant.example.com/"],
+    ["blank", "  "],
+    ["empty", ""],
+    ["query", "https://tenant.example.com/?a=1"],
+    ["fragment", "https://tenant.example.com/#a"],
+    ["credentials", "https://user:pw@tenant.example.com/"],
+    ["whitespace", "https://tenant .example.com/"],
+    ["no scheme", "tenant.example.com"],
+    ["non-string", 42 as unknown as string],
+  ])("rejects an explicit authorizationServers entry with %s", (_name, entry) => {
+    expect(() => makeHandler({ authorizationServers: ["https://ok.example.com/", entry] })).toThrow(
+      /"authorizationServers\[1\]" must be an absolute https URL/,
+    );
+  });
+
+  it.each([
+    ["blank", ["read", " "]],
+    ["empty", [""]],
+    ["non-string", ["read", 7 as unknown as string]],
+    ["inner space", ["read write"]],
+  ])("rejects scopesSupported with a %s entry", (_name, scopes) => {
+    expect(() => makeHandler({ metadata: { scopesSupported: scopes } })).toThrow(
+      /"scopesSupported" must be an array of non-blank strings/,
+    );
+  });
+
+  it("keeps an https issuer with a path in explicit authorizationServers", async () => {
+    const { body } = await metadataFor(makeClient(), {
+      authorizationServers: ["https://a.example.com/tenant1"],
+    });
+    expect(body.authorization_servers).toEqual(["https://a.example.com/tenant1"]);
+  });
+
   it("works with a supplied apiClient that declares domain and audience next to it", async () => {
     const apiClient = new ApiClient({
       domain: "tenant.example.com",

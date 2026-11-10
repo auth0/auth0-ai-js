@@ -118,7 +118,7 @@ describe("an exchange answered with an empty scope (OnBehalfOf.md)", () => {
       '`The API must have "Allow Skipping User Consent for Verifiable First-Party Clients" enabled.`',
     );
     expect(text).toContain("400 `invalid_target` with `Invalid audience specified.`");
-    expect(text).toContain("has not been reproduced");
+    expect(text).not.toContain("has not been reproduced");
     expect(text).not.toContain("error named `on_behalf_of_token_exchange`");
   });
 });

@@ -231,7 +231,7 @@ Feedback and contributions are welcome. Before you start, read:
 
 To report a bug or request a feature, [raise an issue on the issue tracker](https://github.com/auth0/auth0-ai-js/issues).
 
-## Vulnerability reporting
+### Vulnerability Reporting
 
 Do not report security vulnerabilities on the public GitHub issue tracker. The [Responsible Disclosure Program](https://auth0.com/responsible-disclosure-policy) explains how to report them.
 

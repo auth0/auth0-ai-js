@@ -18,7 +18,7 @@ A tool often needs to call a downstream API as the user who invoked it. Forwardi
   - `This client cannot exchange access tokens for this audience.`: the subject token was issued for another API than the one the exchange client is tied to.
   - `The API must have "Allow Skipping User Consent for Verifiable First-Party Clients" enabled.`: the downstream API does not allow the exchange without user consent.
 
-  An audience that matches no API identifier exactly gets 400 `invalid_target` with `Invalid audience specified.`. A report of a 403 `unauthorized_client` with a "Profile not enabled" text for a Custom API client without the profile has not been reproduced, so this guide does not rely on it.
+  An audience that matches no API identifier exactly gets 400 `invalid_target` with `Invalid audience specified.`.
 - A request context. The exchange is available on the request-scoped client, which the handler binds to the request.
 
 ## Exchanging the caller's token
