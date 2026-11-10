@@ -1664,6 +1664,17 @@ describe("resource and authorizationServers defaults", () => {
     );
   });
 
+  it.each([
+    ["blank", ["read", " "]],
+    ["empty", [""]],
+    ["non-string", ["read", 7 as unknown as string]],
+    ["inner space", ["read write"]],
+  ])("rejects scopesSupported with a %s entry", (_name, scopes) => {
+    expect(() => makeHandler({ metadata: { scopesSupported: scopes } })).toThrow(
+      /"scopesSupported" must be an array of non-blank strings/,
+    );
+  });
+
   it("keeps an https issuer with a path in explicit authorizationServers", async () => {
     const { body } = await metadataFor(makeClient(), {
       authorizationServers: ["https://a.example.com/tenant1"],

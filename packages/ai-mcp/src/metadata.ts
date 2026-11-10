@@ -66,6 +66,18 @@ function assertAuthorizationServer(value: unknown, index: number): asserts value
   }
 }
 
+/** Throws unless `scopes` is an array of non-blank strings without whitespace inside an entry. */
+function assertScopesSupported(scopes: unknown): asserts scopes is string[] {
+  if (
+    !Array.isArray(scopes) ||
+    scopes.some((scope) => typeof scope !== "string" || scope === "" || /\s/.test(scope))
+  ) {
+    throw new InvalidConfigurationError(
+      'Invalid configuration: "scopesSupported" must be an array of non-blank strings, each without whitespace.',
+    );
+  }
+}
+
 /**
  * Returns the issuer URLs a server advertises as its authorization servers: the explicit list
  * (each entry checked), or `https://<domain>/` built from the client domain.
@@ -125,7 +137,8 @@ export type ProtectedResourceMetadataDocument = ReturnType<
  * @param options - The client and the optional document fields.
  * @returns The document.
  * @throws {InvalidConfigurationError} When `resource` cannot be derived or differs from the
- * client audience, or `authorizationServers` cannot be derived.
+ * client audience, `authorizationServers` cannot be derived or has an invalid entry, or
+ * `scopesSupported` has a blank, non-string or whitespace-containing entry.
  */
 export function buildProtectedResourceMetadata(
   options: ProtectedResourceMetadataOptions,
@@ -137,7 +150,10 @@ export function buildProtectedResourceMetadata(
   builder.withBearerMethodsSupported([BearerMethod.HEADER]);
   if (dpop !== "disabled") builder.withDpopSigningAlgValuesSupported(["ES256"]);
   if (dpop === "required") builder.withDpopBoundAccessTokensRequired(true);
-  if (options.scopesSupported !== undefined) builder.withScopesSupported(options.scopesSupported);
+  if (options.scopesSupported !== undefined) {
+    assertScopesSupported(options.scopesSupported);
+    builder.withScopesSupported(options.scopesSupported);
+  }
   if (options.resourceName !== undefined) builder.withResourceName(options.resourceName);
   if (options.resourceDocumentation !== undefined) {
     builder.withResourceDocumentation(options.resourceDocumentation);
