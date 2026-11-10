@@ -142,4 +142,5 @@ The result is the core `TokenSet` (`accessToken`, `expiresAt`, `scope`, `tokenTy
 
 When you leave out `scope` on a client credentials call, Auth0 issues the scopes of the client grant and the package checks nothing against them: read `grantedScopes` if the tool depends on a scope. When you pass it, the call fails unless every requested scope was granted.
 
-This package does not cache client credentials tokens.
+With a `tokenStore` configured, the package caches the token. The entry is keyed by tenant, client id, audience and scope, and every caller shares it, because the credentials belong to this server. A grant narrower than requested is never stored. Without a store, or with your own `apiClient`, every call asks the tenant. See [What is cached](./TokenCaching.md#what-is-cached).
+

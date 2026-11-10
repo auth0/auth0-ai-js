@@ -4,9 +4,12 @@ import type { OboCacheKeyLayout, OnBehalfOfTokenResult, TokenStore, VerifiedToke
 import { warn } from './diagnostics.js';
 import { DownscopedTokenError, InsufficientScopeError, UnauthenticatedError } from './errors.js';
 import type { SingleFlight } from './single-flight.js';
+import { EXPIRY_BUFFER_SECONDS, KEYED_CLAIMS } from './token-cache.js';
+import type { TokenCache } from './token-cache.js';
 import type {
   ClientCredentialsOptions,
   ClientCredentialsTokenResult,
+  ConnectionTokenResult,
   OnBehalfOfOptions,
   Principal,
   RequestScopedMcpClient,
@@ -34,6 +37,13 @@ export interface RequestScopedClientInit {
    * so the key stays a superset of what the core cache distinguishes.
    */
   readonly exchangeIdentity: ExchangeIdentity;
+  /**
+   * Caches client credentials and Token Vault tokens in `tokenStore`, shared by every
+   * request-scoped client of the same parent. `undefined` when there is no store, or when the
+   * parent client does not know its own client id (a supplied `apiClient`): those two token
+   * operations then go to the tenant on every call.
+   */
+  readonly tokenCache?: TokenCache | undefined;
 }
 
 /** The parent client's side of an exchange: who performs it and how scopes are matched. */
@@ -47,8 +57,6 @@ export interface ExchangeIdentity {
   /** The scope matching layout the core client caches under. */
   readonly layout: OboCacheKeyLayout;
 }
-
-const KEYED_CLAIMS = ['iss', 'client_id', 'azp', 'sub', 'org_id', 'sid', 'jti'] as const;
 
 /**
  * Builds the key that decides which concurrent exchanges may share one result, or
@@ -124,14 +132,6 @@ function withCause<T extends Error>(error: T, cause: unknown): T {
   return error;
 }
 
-/**
- * Seconds before its expiry at which an issued token already counts as expired. It is the
- * margin the core client's cache uses when it decides whether a stored token can be served,
- * so a token this package returns is never one the cache would refuse a moment later. It also
- * covers the time the tool needs to use the token before the downstream API checks it.
- */
-const EXPIRY_BUFFER_SECONDS = 5;
-
 /** Which token operation produced a result, for diagnostics only. */
 type TokenOperation = 'on_behalf_of' | 'client_credentials' | 'connection';
 
@@ -144,8 +144,10 @@ type TokenOperation = 'on_behalf_of' | 'client_credentials' | 'connection';
  * operator why a call failed. `expiresAt` is epoch seconds, the convention of the core client.
  * The core client computes it from `expires_in`, so a response without that field arrives here
  * as `NaN`.
- * The core client stores an exchange result before this check runs and its cache treats an
- * expired entry as a miss, so an expired entry may remain in a store but is never served.
+ * The core client stores an On Behalf Of result before this check runs and its cache treats an
+ * expired entry as a miss, so an expired entry may remain in a store but is never served. The
+ * client credentials and connection caches of this package are the other way round: they write
+ * only after this check passed.
  */
 function assertNotExpired(expiresAt: number, operation: TokenOperation): void {
   if (!Number.isFinite(expiresAt)) {
@@ -179,7 +181,10 @@ function coreErrorPrototype(error: Error): object | undefined {
 
 /** True for a fetch `Headers` object, including one created by another implementation of the class. */
 function isHeaders(value: object): value is Headers {
-  return value instanceof Headers || (typeof (value as Headers).get === 'function' && typeof (value as Headers).forEach === 'function');
+  return (
+    value instanceof Headers ||
+    (typeof (value as Headers).get === 'function' && typeof (value as Headers).forEach === 'function')
+  );
 }
 
 /**
@@ -293,7 +298,7 @@ export function sanitizeTokenError(error: unknown): Error {
  * @returns A frozen client that always acts for the given caller.
  */
 export function createRequestScopedClient(init: RequestScopedClientInit): RequestScopedMcpClient {
-  const { apiClient, tokenStore, principal, verified, exchanges, exchangeIdentity } = init;
+  const { apiClient, tokenStore, principal, verified, exchanges, exchangeIdentity, tokenCache } = init;
 
   const exchange = (options: OnBehalfOfOptions) =>
     apiClient.getTokenOnBehalfOf(
@@ -312,6 +317,130 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
     } catch (error) {
       throw sanitizeTokenError(error);
     }
+  };
+
+  /** Requests a client credentials token from the tenant and rejects one that is unusable. */
+  const issueClientCredentials = async (options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult> => {
+    const issued = await apiClient.getClientCredentialsToken({
+      audience: options.audience,
+      ...(options.scope !== undefined && { scope: options.scope }),
+    });
+    assertNotExpired(issued.expiresAt, 'client_credentials');
+    // RFC 6749 section 5.1: an absent `scope` means the grant equals the request, while an
+    // empty string means nothing was granted. `??` keeps those two apart; `||` would not.
+    return { ...issued, grantedScopes: normalizeScopes(issued.scope ?? options.scope ?? '') };
+  };
+
+  /**
+   * Serves a client credentials token from the store when it holds a fresh one that covers the
+   * request, and otherwise requests one. The credentials belong to this server, so the entry is
+   * shared by every caller; the key holds no caller identity.
+   *
+   * A token is written only after it passed the expiry check and only when its grant covers the
+   * request, so a narrowed grant (which the caller is refused) is never stored for a later call
+   * to receive. An entry that does not cover the request, which only a store that was written
+   * to by something else can hold, is a miss.
+   */
+  const cachedClientCredentials = async (
+    cache: TokenCache,
+    options: ClientCredentialsOptions
+  ): Promise<ClientCredentialsTokenResult> => {
+    const key = await cache.clientCredentialsKey(options.audience, options.scope);
+    if (key === undefined) return issueClientCredentials(options);
+
+    const hit = await cache.read(key);
+    if (hit !== undefined && covers(options.scope, hit.grantedScopes)) {
+      return {
+        accessToken: hit.accessToken,
+        expiresAt: hit.expiresAt,
+        ...(hit.scope !== undefined && { scope: hit.scope }),
+        ...(hit.tokenType !== undefined && { tokenType: hit.tokenType }),
+        grantedScopes: hit.grantedScopes,
+      };
+    }
+
+    // Concurrent identical requests share one grant. The outcome is not remembered once it
+    // settles, so a failure is retried by the next call.
+    const shared = await cache.clientCredentialsFlights.run(key, async () => {
+      const issued = await issueClientCredentials(options);
+      if (covers(options.scope, issued.grantedScopes)) await cache.write(key, issued);
+      return issued;
+    });
+    // Each caller gets its own copy.
+    return { ...shared, grantedScopes: [...shared.grantedScopes] };
+  };
+
+  /** Requests a connection token from the tenant and rejects one that is unusable. */
+  const issueConnectionToken = async (options: TokenForConnectionOptions): Promise<ConnectionTokenResult> => {
+    const issued = await apiClient.getAccessTokenForConnection({
+      connection: options.connection,
+      accessToken: verified.accessToken,
+      ...(options.loginHint !== undefined && {
+        loginHint: options.loginHint,
+      }),
+    });
+    assertNotExpired(issued.expiresAt, 'connection');
+    return issued;
+  };
+
+  /**
+   * Rejects a caller whose own token is expired or within {@link EXPIRY_BUFFER_SECONDS} of
+   * expiry. A stored connection token is served without asking the tenant, so this is the
+   * only check that the caller still holds a valid token. It also covers a caller that joins
+   * another caller's request of the same session. Both the principal's expiry and the `exp`
+   * claim count, whichever is earlier.
+   */
+  const assertCallerNotExpired = (): void => {
+    const exp = (verified.claims as Record<string, unknown>)['exp'];
+    const expiries = [principal.expiresAt, ...(typeof exp === 'number' ? [exp] : [])];
+    const earliest = Math.min(...expiries);
+    if (!Number.isFinite(earliest) || earliest <= Math.floor(Date.now() / 1000) + EXPIRY_BUFFER_SECONDS) {
+      throw new UnauthenticatedError('Access token has expired.');
+    }
+  };
+
+  /**
+   * Serves a Token Vault token from the store when it holds a fresh one for this caller,
+   * connection and login hint, and otherwise requests one. The stored token belongs to the
+   * user's account at the provider, so the key holds the caller's identity as the On Behalf Of
+   * key does, and `connection` and `loginHint` of the result always come from the request.
+   *
+   * A caller whose claims cannot be keyed safely is never cached and never shares a request.
+   */
+  const cachedConnectionToken = async (
+    cache: TokenCache,
+    options: TokenForConnectionOptions
+  ): Promise<ConnectionTokenResult> => {
+    const key = await cache.connectionKey(verified, options.connection, options.loginHint);
+    if (key === undefined) return issueConnectionToken(options);
+    assertCallerNotExpired();
+
+    const fromRequest = (token: {
+      accessToken: string;
+      expiresAt: number;
+      scope?: string | undefined;
+    }): ConnectionTokenResult => ({
+      accessToken: token.accessToken,
+      scope: token.scope,
+      expiresAt: token.expiresAt,
+      connection: options.connection,
+      ...(options.loginHint !== undefined && { loginHint: options.loginHint }),
+    });
+
+    const hit = await cache.read(key);
+    if (hit !== undefined) return fromRequest(hit);
+
+    const shared = await cache.connectionFlights.run(key, async () => {
+      const issued = await issueConnectionToken(options);
+      await cache.write(key, {
+        accessToken: issued.accessToken,
+        expiresAt: issued.expiresAt,
+        ...(issued.scope !== undefined && { scope: issued.scope }),
+        grantedScopes: normalizeScopes(issued.scope ?? ''),
+      });
+      return issued;
+    });
+    return fromRequest(shared);
   };
 
   return Object.freeze({
@@ -334,34 +463,18 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
       }),
 
     getClientCredentialsToken: async (options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult> => {
-      const result = await guarded(async () => {
-        const issued = await apiClient.getClientCredentialsToken({
-          audience: options.audience,
-          ...(options.scope !== undefined && { scope: options.scope }),
-        });
-        assertNotExpired(issued.expiresAt, 'client_credentials');
-        return issued;
-      });
-      // RFC 6749 section 5.1: an absent `scope` means the grant equals the request, while an
-      // empty string means nothing was granted. `??` keeps those two apart; `||` would not.
-      const grantedScopes = normalizeScopes(result.scope ?? options.scope ?? '');
+      const result = await guarded(() =>
+        tokenCache === undefined ? issueClientCredentials(options) : cachedClientCredentials(tokenCache, options)
+      );
       // Thrown outside `guarded`: this error is already sanitized and must keep its own cause.
-      assertServerGrantCovers(options.scope, grantedScopes);
-      return { ...result, grantedScopes };
+      assertServerGrantCovers(options.scope, result.grantedScopes);
+      return result;
     },
 
     getTokenForConnection: (options: TokenForConnectionOptions) =>
-      guarded(async () => {
-        const issued = await apiClient.getAccessTokenForConnection({
-          connection: options.connection,
-          accessToken: verified.accessToken,
-          ...(options.loginHint !== undefined && {
-            loginHint: options.loginHint,
-          }),
-        });
-        assertNotExpired(issued.expiresAt, 'connection');
-        return issued;
-      }),
+      guarded(() =>
+        tokenCache === undefined ? issueConnectionToken(options) : cachedConnectionToken(tokenCache, options)
+      ),
 
     getPrincipal(): Principal {
       return principal;

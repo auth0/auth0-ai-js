@@ -8,7 +8,7 @@ A small MCP server built with `@auth0/ai-mcp` and the MCP TypeScript SDK. It pla
 - Every tool is wrapped in `withRequiredScopes`. A caller without the tool's scope gets an error result for that tool only (HTTP 200); the other tools stay available.
 - `order_status_report` (scope `tool:order_status_report`, optional `order_id`) exchanges the caller's token twice, once for Orders (`read:orders`) and once for Inventory (`read:inventory`), and lists the orders with stock levels.
 - `fulfill_order` (scope `tool:fulfill_order`, required `order_id`) asks Orders for the same `read:orders` token, so a call right after a status report reuses the saved token, and asks Inventory for `read:inventory write:inventory` to reserve stock. Fulfilling the same order twice changes stock only once.
-- `sales_analytics_report` (scope `tool:sales_analytics_report`) uses `getClientCredentialsToken`: the server acts as itself, with no shopper involved.
+- `sales_analytics_report` (scope `tool:sales_analytics_report`) uses `getClientCredentialsToken`: the server acts as itself, with no shopper involved. The store caches that token, so all shoppers share one until it expires.
 - Only the exchanged token is sent downstream, never the caller's own token. Failures come back as fixed messages, and each call stops after `DOWNSTREAM_TIMEOUT_MS`.
 - `src/downstream-api.ts` verifies every token (RS256 signature from the tenant JWKS, issuer, the audience of the service being called, expiry, subject and scope) before it returns data. Each answer includes a `verified` block naming the audience, scope and acting client it checked, never the token.
 

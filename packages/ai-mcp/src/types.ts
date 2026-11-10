@@ -117,18 +117,17 @@ export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessToken
  * forward it.
  *
  * Every method rejects a token that is already expired or expires within 5 seconds, so tool
- * code never receives one it cannot use. Only `getTokenOnBehalfOf` can be cached, through the
- * `tokenStore` option. `getClientCredentialsToken` and `getTokenForConnection` go to the
- * tenant on every call and their results are not cached by this package, so a tool that calls
- * either in a loop makes one token request per call: keep the result in the tool for as long
- * as it is valid if that matters.
+ * code never receives one it cannot use. All three token methods are cached through the
+ * `tokenStore` option, and without a store each call makes one token request. Client
+ * credentials and connection tokens are not cached when the client was built with your own
+ * `apiClient`. The cache is automatic: there is no per-call option.
  */
 export interface RequestScopedMcpClient {
   /** Exchanges the caller's token for a token to a downstream API. */
   getTokenOnBehalfOf(options: OnBehalfOfOptions): Promise<OnBehalfOfTokenResult>;
-  /** Obtains a token for this server using its own client credentials. Not cached. */
+  /** Obtains a token for this server using its own client credentials. Cached in `tokenStore`, shared by all callers. */
   getClientCredentialsToken(options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult>;
-  /** Obtains a token for a third-party service linked to the caller through a connection. Not cached. */
+  /** Obtains a token for a third-party service linked to the caller through a connection. Cached in `tokenStore`, per caller. */
   getTokenForConnection(options: TokenForConnectionOptions): Promise<ConnectionTokenResult>;
   /** Returns the identity of the caller this client is bound to. */
   getPrincipal(): Principal;
@@ -153,7 +152,11 @@ export interface McpClientOptions {
   /** Client secret of the application used for token exchanges. */
   clientSecret?: string;
   /**
-   * Cache for exchanged tokens. Omit it to exchange on every call. Must be an
+   * Cache for On Behalf Of, client credentials and Token Vault tokens. Omit it to request a
+   * token on every call. The two last kinds are cached automatically whenever a store is set,
+   * under their own key prefixes, and not when you pass your own `apiClient`. Token Vault
+   * entries are your users' provider tokens and client credentials entries are this server's
+   * own token, so wrap a shared store with `createEncryptedTokenStore`. Must be an
    * {@link IndexedTokenStore} when `scopeMatching` is `'non_strict'`: `createMcpClient`
    * throws `InvalidConfigurationError` at construction otherwise. That check is skipped
    * when you pass your own `apiClient`, because its matching mode cannot be read; the
@@ -213,7 +216,9 @@ export interface McpClientOptions {
    * `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop` or `requestTimeoutMs` makes
    * `createMcpClient` throw `InvalidConfigurationError`, so no setting is silently
    * ignored: configure those on the client you pass in. `tokenStore` is still honoured
-   * because it is supplied per call. The client is not exposed on the returned
+   * for On Behalf Of because it is supplied per call. Client credentials and Token Vault tokens
+   * are then not cached, because their keys need the client id, which this package cannot read
+   * from the client you pass in. The client is not exposed on the returned
    * `McpClient`.
    */
   apiClient?: ApiClient;
