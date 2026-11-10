@@ -62,6 +62,8 @@ If sign-in fails:
 
 - `Unknown client`: Client ID Metadata Document Registration is off, or the client is not registered. Turn it on, then run the register command in step 6.
 - `userinfo audience is not allowed for this client`: Resource Parameter Compatibility Profile is still `audience`. Set it to `compatibility`.
+- Every tool answers with an insufficient scope error (HTTP 200): the client grant for the MCP API was not updated with the tool scope, so the token does not carry it. Add the scope to the grant, then sign in again.
+- Every call returns 401: `AUTH0_AUDIENCE` does not match the API identifier in Auth0 exactly. Make them equal.
 
 [MCP clients and tenant settings](../../packages/ai-mcp/docs/McpClients.md) explains both settings and lists more errors. The exchange client's id and secret go in `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`.
 
