@@ -1,0 +1,116 @@
+# Scope enforcement
+
+Scope enforcement checks the scopes in the caller's incoming access token, which are the permissions Auth0 granted the caller for your MCP server. It is separate from the scopes of any downstream token that an [On Behalf Of exchange](./OnBehalfOf.md) produces.
+
+There are two levels, and they fail differently on purpose.
+
+| Level | Where | Failure |
+| --- | --- | --- |
+| Server-wide | `requiredScopes` option of the handler | HTTP 403 with `WWW-Authenticate: ... error="insufficient_scope"`. The request never reaches MCP. |
+| Per tool | `withRequiredScopes` or `requireScopes` inside a tool | A tool result with `isError: true` and HTTP 200. Other tools keep working. |
+
+Both compare against the `scope` claim only. The `permissions` claim is never consulted. Every listed scope must be present (AND semantics).
+
+Matching is exact, and the package applies no scope hierarchy. A broader scope does not cover a narrower one: a token with `mcp:write` does not satisfy a requirement for `mcp:read`. This fails closed, so a caller never gets more than it was granted. If you want `write` to include `read`, grant both scopes, or check for either inside the tool.
+
+## Server-wide scopes
+
+Scopes every request needs go in `requiredScopes`. The handler checks them after verification and before the request reaches MCP:
+
+```ts
+import { createMcpClient, createMcpHandler } from '@auth0/ai-mcp';
+
+const client = createMcpClient({
+  domain: 'your-tenant.us.auth0.com',
+  audience: 'https://mcp.example.com/mcp',
+});
+
+export const handle = createMcpHandler({
+  client,
+  requiredScopes: ['mcp:access'],
+  handler: async () => Response.json({ ok: true }),
+});
+```
+
+Each entry of `requiredScopes` is split on whitespace, so `'read write'` names two scopes, and duplicates count once. A blank or non-string entry is a mistake, so the handler throws `InvalidConfigurationError` when you create it, and an empty list means no requirement. The same scopes go out in the `scope` parameter of the 401 challenge that answers a request without a credential, so a client learns what to ask for when it authorizes, and the metadata document lists them as `scopes_supported` unless you set `metadata.scopesSupported`.
+
+When a scope is missing the response is a 403 whose challenge lists the full requirement in its `scope` parameter, so a client that authorizes again asks for the scopes it already has as well as the missing ones. The server-wide list is already public in the 401 challenge and in `scopes_supported`, so the challenge discloses nothing new. In this example the token holds none of the required scopes:
+
+```http
+HTTP/1.1 403 Forbidden
+WWW-Authenticate: Bearer error="insufficient_scope", error_description="The access token does not include the required scope.", scope="mcp:access", resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"
+WWW-Authenticate: DPoP algs="ES256", resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp"
+```
+
+The handler sends one challenge per scheme the DPoP mode accepts, and the error parameters go on the scheme the client used. With `dpop.mode` set to `'disabled'` only the Bearer line is sent.
+
+## Per-tool scopes
+
+`withRequiredScopes(required, handler)` wraps a tool callback. It reads the caller from the [request context](./RequestContext.md) and runs the callback only when the caller holds every required scope. Otherwise it returns a sanitized MCP error result instead of throwing:
+
+```ts
+import { withRequiredScopes } from '@auth0/ai-mcp';
+
+export const getOrderSummary = withRequiredScopes(
+  ['read:orders', 'read:payments'],
+  async (orderId: string) => ({
+    content: [{ type: 'text' as const, text: `Summary for ${orderId}` }],
+  }),
+);
+```
+
+Calling `getOrderSummary('42')` for a caller without `read:payments` resolves to:
+
+```json
+{
+  "content": [{ "type": "text", "text": "Missing one or more required scopes." }],
+  "isError": true,
+  "_meta": { "error": "insufficient_scope" }
+}
+```
+
+The text is generic and never names the scopes the server expects or the caller holds. Every other error, including errors thrown by your callback, propagates unchanged.
+
+**Why a result and not an error.** A tool call that fails reaches the MCP client as a result with `isError: true` whatever the cause, because the MCP SDK turns an error thrown inside a tool into one. The client sees the same thing either way. Returning the result keeps the failure machine readable through `_meta.error` and leaves the other tools of the server working. A tool result cannot carry an HTTP 403 challenge, so only the server-wide `requiredScopes` check can make a client authorize again with more scopes. If you want the error itself, for example to map it to your own response, call `requireScopes`, which throws `InsufficientScopeError`.
+
+`required` accepts one scope, a space-delimited string of scopes, or an array. A requirement that names no scope is a mistake, so `withRequiredScopes` throws `InvalidConfigurationError` for an empty string, a whitespace-only string, an empty array, or an array with a blank or non-string entry. It throws when you wrap the callback, not on each call, and it keeps its own copy of the list, so changing the array afterwards has no effect.
+
+## Imperative checks
+
+`requireScopes(required, principal?)` throws instead of returning a result. It is useful for a secondary check partway through a tool, or when you want to turn the failure into your own response.
+
+```ts
+import { InsufficientScopeError, getCallerPrincipal, requireScopes } from '@auth0/ai-mcp';
+
+export function canWriteOrders(): boolean {
+  try {
+    requireScopes('write:orders', getCallerPrincipal());
+    return true;
+  } catch (error) {
+    if (error instanceof InsufficientScopeError) {
+      return false;
+    }
+    throw error;
+  }
+}
+```
+
+It throws:
+
+- `InvalidConfigurationError` when the requirement names no scope, with the same rules as `withRequiredScopes`.
+- `UnauthenticatedError` when you pass no principal and no request context is active. Passing `undefined` explicitly means "use the current caller".
+- `InsufficientScopeError` when any scope is missing. The error's `requiredScopes` property holds the normalized list for server-side use. Do not echo it to clients.
+
+When `InsufficientScopeError` escapes a custom `createMcpHandler` handler, the handler answers HTTP 403 with `insufficient_scope`. The challenge lists the scopes of the failing check together with the server-wide `requiredScopes`. On `createMcpSdkHandler` and `createNodeMcpHandler`, the official MCP SDK's `McpServer` turns an error thrown inside a tool callback into a tool result with `isError: true` and the error's own message, and the HTTP status stays 200. The message of `InsufficientScopeError` and `DownscopedTokenError` is generic. The same applies to `DownscopedTokenError` from a downscoped exchange inside a tool.
+
+## Tenant-side setup
+
+Auth0 puts a scope in a token only when you define the scope on the API (resource server) and the application's client grant lists it. Defining a scope on the API alone is not enough. If the client grant for the application that requests tokens for your MCP server does not include the scope, the check fails for every caller, even after a fresh login.
+
+When you add a gated tool, define the scope on your MCP API and add it to the client grant. A client grant update replaces the whole scope list, so include the existing scopes as well.
+
+```bash
+auth0 api get "client-grants?audience=https://mcp.example.com/mcp"
+auth0 api patch "client-grants/YOUR_GRANT_ID" \
+  --data '{"scope":["mcp:access","tool:list_reports","tool:new_tool"]}'
+```

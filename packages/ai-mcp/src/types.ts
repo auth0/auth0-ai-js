@@ -57,11 +57,11 @@ export interface OnBehalfOfOptions {
   audience: string;
   /**
    * Space-separated scopes to request. Optional. When you leave it out, the exchange asks
-   * for no particular scope and the authorization server issues whatever it grants by default
-   * for this client and audience. Nothing is then checked against the grant, so a token with
-   * fewer scopes than your tool needs is returned as is: read `grantedScopes` on the result
-   * if the tool depends on a scope. When you pass it, the call fails with
-   * `DownscopedTokenError` unless every requested scope was granted.
+   * for no scope, and Auth0 issues a token with no scope (the response has no `scope` field;
+   * unlike a client credentials request, the exchange does not fall back to the scopes of the
+   * client grant). Nothing is checked against the grant, so a downstream API that requires a
+   * scope refuses that token: pass the scopes your tool needs. When you pass it, the call
+   * fails with `DownscopedTokenError` unless every requested scope was granted.
    */
   scope?: string;
 }
