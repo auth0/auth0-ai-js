@@ -57,11 +57,11 @@ export interface OnBehalfOfOptions {
   audience: string;
   /**
    * Space-separated scopes to request. Optional. When you leave it out, the exchange asks
-   * for no particular scope and the authorization server issues whatever it grants by default
-   * for this client and audience. Nothing is then checked against the grant, so a token with
-   * fewer scopes than your tool needs is returned as is: read `grantedScopes` on the result
-   * if the tool depends on a scope. When you pass it, the call fails with
-   * `DownscopedTokenError` unless every requested scope was granted.
+   * for no scope, and Auth0 issues a token with no scope (the response has no `scope` field;
+   * unlike a client credentials request, the exchange does not fall back to the scopes of the
+   * client grant). Nothing is checked against the grant, so a downstream API that requires a
+   * scope refuses that token: pass the scopes your tool needs. When you pass it, the call
+   * fails with `DownscopedTokenError` unless every requested scope was granted.
    */
   scope?: string;
 }
@@ -111,10 +111,10 @@ export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessToken
  *
  * The verified access token is closed over by the implementation and is never
  * exposed through this interface, so tool code cannot forward or log it by accident.
- * On the MCP SDK adapter `extra.authInfo.token` is intentionally an empty string, so tools
- * call downstream APIs through this client. The SDK still exposes raw request headers,
- * including Authorization, through `extra.requestInfo.headers`; tool code must not log or
- * forward them.
+ * On the MCP SDK adapter `ctx.http.authInfo.token` is intentionally an empty string, so tools
+ * call downstream APIs through this client. The SDK still exposes the original request,
+ * including the Authorization header, as `ctx.http.req`; tool code must not log or
+ * forward it.
  *
  * Every method rejects a token that is already expired or expires within 5 seconds, so tool
  * code never receives one it cannot use. Only `getTokenOnBehalfOf` can be cached, through the
