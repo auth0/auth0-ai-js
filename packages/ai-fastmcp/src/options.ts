@@ -1,0 +1,266 @@
+import { InvalidConfigurationError, createMcpClient, resolveMcpClientOptions } from "@auth0/ai-mcp";
+import type { McpClient, McpClientOptions, McpHandlerClientConfig } from "@auth0/ai-mcp";
+import type { SessionBindingOptions } from "./binding.js";
+
+/** Options of {@link createFastMcpAuth} other than the client configuration. */
+export interface FastMcpAuthBaseOptions {
+  /**
+   * Identifier of this MCP server: the absolute URL clients use to reach it, published as the
+   * `resource` of the RFC 9728 metadata document. Defaults to the client audience when that is an
+   * absolute `http` or `https` URL. When set, it must equal the client audience.
+   *
+   * Its path must be empty or equal `endpoint`, because FastMCP serves the metadata document at
+   * the well-known path followed by `endpoint`, and the challenge has to point at that route.
+   */
+  resource?: string;
+  /**
+   * The path FastMCP serves the MCP route on. Pass the same value to
+   * `server.start({ httpStream: { endpoint } })`; the object `createFastMcpAuth` returns exposes
+   * the chosen value as `auth.endpoint` for that purpose.
+   * @defaultValue The path of the resource when it has one (`/orders` for `https://host/orders`),
+   * otherwise `"/mcp"`.
+   */
+  endpoint?: `/${string}`;
+  /**
+   * Issuer URLs of the authorization servers that can issue tokens for this server. Defaults to
+   * `https://<domain>/`.
+   */
+  authorizationServers?: string[];
+  /**
+   * Scopes every request must carry (all of them). A request without them is answered with 403.
+   * Each entry is split on whitespace, so `"read write"` means two scopes, and repeats are
+   * dropped. A blank or non-string entry is a configuration error. The challenge of a request
+   * without credentials names these scopes in `scope`, and they are published as
+   * `scopes_supported` unless `metadata.scopesSupported` is set.
+   */
+  requiredScopes?: readonly string[];
+  /** Protection space reported as `realm` in challenges. */
+  realm?: string;
+  /** Fields of the RFC 9728 metadata document. */
+  metadata?: {
+    /** Scopes to publish as `scopes_supported`. Defaults to `requiredScopes` when that is set. */
+    scopesSupported?: string[];
+    /** Human readable name to publish as `resource_name`. */
+    resourceName?: string;
+    /** Documentation URL to publish as `resource_documentation`. */
+    resourceDocumentation?: string;
+  };
+  /**
+   * Binds each `mcp-session-id` to the subject that used it first and answers 403 to any other
+   * subject on the same id. It applies only to requests that carry a session id; a stateless
+   * server issues none. The adapter cannot tell which mode FastMCP runs in, so a stateless server
+   * behind a gateway that forwards a fixed session id binds that id like any other. Pass `false`
+   * to turn it off, or limits to tune it. The state is in memory, per process, and an id is
+   * forgotten after `ttlMs` without a request on it, even while FastMCP keeps the session alive
+   * (for example behind an open event stream, which is authenticated only when it opens).
+   */
+  sessionBinding?: false | SessionBindingOptions;
+  /**
+   * Called with the raw error whenever `authenticate` answers 500, and for every tool wrapped with
+   * `withAuth0Execute` that has no `onError` of its own. A tool's own `onError` replaces this one.
+   * The error never reaches the client; the hook runs on the server only, and the error it
+   * receives can carry Auth0 response details, so treat it as sensitive. While a hook is in
+   * effect, the default log line is not written. Without a hook, a 500 from `authenticate` and a
+   * failed tool each leave one line on the server's standard error stream: the error name, its
+   * `code` and `statusCode`, and the `error` and `error_description` Auth0 returned. A throwing
+   * hook, or one that returns a rejected promise, is ignored.
+   */
+  onError?: (error: unknown) => void;
+}
+
+/**
+ * Options of {@link createFastMcpAuth}. Choose one of three ways to configure the client, the
+ * same three as the `@auth0/ai-mcp` handler: pass `client`, pass inline client options (anything
+ * you leave out of `domain`, `audience`, `clientId` and `clientSecret` is read from the
+ * environment), or pass nothing and read all four from the environment. Passing `client` together
+ * with an inline client option throws `InvalidConfigurationError`.
+ */
+export type FastMcpAuthOptions = McpHandlerClientConfig & FastMcpAuthBaseOptions;
+
+const DEFAULT_ENDPOINT = "/mcp";
+
+const CLIENT_OPTION_NAMES = [
+  "domain",
+  "audience",
+  "clientId",
+  "clientSecret",
+  "tokenStore",
+  "scopeMatching",
+  "organizationPolicy",
+  "organizationId",
+  "dpop",
+  "requestTimeoutMs",
+  "requireClientId",
+  "apiClient",
+] as const satisfies ReadonlyArray<keyof McpClientOptions>;
+
+// Fails to compile when McpClientOptions gains an option this list does not know about.
+type UnlistedClientOption = Exclude<keyof McpClientOptions, (typeof CLIENT_OPTION_NAMES)[number]>;
+const allClientOptionsListed: [UnlistedClientOption] extends [never] ? true : never = true;
+void allClientOptionsListed;
+
+/**
+ * Splits the options into the client and everything else. The client is the given `client`, or
+ * one built from the inline options and the environment.
+ *
+ * @throws {InvalidConfigurationError} When `client` is combined with inline client options, when
+ * a required value is missing from both the options and the environment, or when the client
+ * options are invalid.
+ */
+export function resolveClient(options: FastMcpAuthOptions): {
+  client: McpClient;
+  rest: FastMcpAuthBaseOptions;
+} {
+  const bag = options as Record<string, unknown>;
+  const inline = CLIENT_OPTION_NAMES.filter((name) => bag[name] !== undefined);
+  const rest: Record<string, unknown> = { ...bag };
+  delete rest["client"];
+  for (const name of CLIENT_OPTION_NAMES) delete rest[name];
+  if (bag["client"] !== undefined) {
+    if (inline.length > 0) {
+      throw new InvalidConfigurationError(
+        `Invalid configuration: "client" cannot be combined with ${inline.map((n) => `"${n}"`).join(", ")}. Pass either a client or client options.`,
+      );
+    }
+    return { client: bag["client"] as McpClient, rest: rest as FastMcpAuthBaseOptions };
+  }
+  const explicit: Record<string, unknown> = {};
+  for (const name of inline) explicit[name] = bag[name];
+  return {
+    client: createMcpClient(resolveMcpClientOptions(explicit as Partial<McpClientOptions>)),
+    rest: rest as FastMcpAuthBaseOptions,
+  };
+}
+
+/**
+ * A view of the client that accepts and advertises Bearer only. The adapter does not verify DPoP
+ * proofs, so `@auth0/ai-mcp` must neither accept the `DPoP` scheme nor list it in challenges or in
+ * the metadata document. Verification still goes to the real client, which keeps its own DPoP mode
+ * and refuses a DPoP-bound token presented as Bearer.
+ *
+ * @throws {InvalidConfigurationError} When the client requires DPoP, which this adapter cannot serve.
+ */
+export function bearerOnly(client: McpClient): McpClient {
+  if (client.dpopMode === "required") {
+    throw new InvalidConfigurationError(
+      'Invalid configuration: DPoP mode "required" is not supported by the FastMCP adapter, which accepts Bearer tokens only. Use the default DPoP mode.',
+    );
+  }
+  return Object.freeze({
+    domain: client.domain,
+    audience: client.audience,
+    dpopMode: "disabled" as const,
+    verifyAccessToken: (options: Parameters<McpClient["verifyAccessToken"]>[0]) => client.verifyAccessToken(options),
+    withToken: (caller: Parameters<McpClient["withToken"]>[0]) => client.withToken(caller),
+  });
+}
+
+const WELL_KNOWN_PRM = "/.well-known/oauth-protected-resource";
+
+/**
+ * Validates an explicit endpoint.
+ * @throws {InvalidConfigurationError} When it is not a normalized absolute path other than `/`.
+ */
+export function resolveEndpoint(endpoint: string | undefined): string {
+  const value = endpoint ?? DEFAULT_ENDPOINT;
+  let normalized: string | undefined;
+  if (value.startsWith("/")) {
+    try {
+      normalized = new URL(value, "http://localhost").pathname;
+    } catch {
+      normalized = undefined;
+    }
+  }
+  if (normalized !== value || value === "/" || value.endsWith("/")) {
+    throw new InvalidConfigurationError(
+      'Invalid configuration: "endpoint" must be a normalized absolute path such as "/mcp", without a trailing slash, query or fragment.',
+    );
+  }
+  return value;
+}
+
+/**
+ * The path of the resource: empty for an origin-only resource, otherwise the path.
+ *
+ * @throws {InvalidConfigurationError} When the path ends in a slash. FastMCP serves `/mcp` and not
+ * `/mcp/`, so the resource would publish a URL the server answers with 404.
+ */
+function resourcePath(resource: string): string {
+  const { pathname } = new URL(resource);
+  if (pathname === "/") return "";
+  if (pathname.endsWith("/")) {
+    const fixed = resource.replace(/\/+$/, "");
+    throw new InvalidConfigurationError(
+      `Invalid configuration: the resource "${resource}" ends with a slash, but FastMCP serves "${pathname.replace(/\/+$/, "")}" and not "${pathname}", so the published URL would answer 404. Use the audience without the trailing slash ("${fixed}"), here and in the API identifier in Auth0.`,
+    );
+  }
+  return pathname;
+}
+
+/**
+ * The endpoint to serve when none is given: the path of the resource when it has one, otherwise
+ * `/mcp`. A trailing slash on the resource path is an error (see {@link resolveMetadataUrl}).
+ *
+ * @throws {InvalidConfigurationError} When the resource path ends in a slash or is not a normalized path.
+ */
+export function defaultEndpoint(resource: string): string {
+  const path = resourcePath(resource);
+  if (path === "") return DEFAULT_ENDPOINT;
+  try {
+    return resolveEndpoint(path);
+  } catch {
+    throw new InvalidConfigurationError(
+      `Invalid configuration: the path of "resource" ("${path}") cannot be used as the MCP endpoint. Use an audience whose path is a normalized absolute path such as "/mcp".`,
+    );
+  }
+}
+
+/**
+ * The URL of the metadata document the challenge names, and the check that FastMCP serves it.
+ *
+ * FastMCP serves the document at the well-known path and at the well-known path followed by the
+ * endpoint. The RFC 9728 URL of a resource is the well-known path followed by the resource path,
+ * so a resource with a path is reachable only when that path is the endpoint.
+ *
+ * @throws {InvalidConfigurationError} When the resource path ends in a slash, or is neither empty nor the endpoint.
+ */
+export function resolveMetadataUrl(resource: string, endpoint: string): string {
+  const url = new URL(resource);
+  const path = resourcePath(resource);
+  if (path !== "" && path !== endpoint) {
+    throw new InvalidConfigurationError(
+      `Invalid configuration: the path of "resource" ("${path}") must equal "endpoint" ("${endpoint}") or be empty, because FastMCP serves the metadata document at ${WELL_KNOWN_PRM}${endpoint}. Set "endpoint" to the path of "resource".`,
+    );
+  }
+  return new URL(`${WELL_KNOWN_PRM}${path}`, url.origin).href;
+}
+
+const REALM_PATTERN = /^[\x20\x21\x23-\x5B\x5D-\x7E]+$/;
+
+/**
+ * Validates the realm the way `@auth0/ai-mcp` does at request time, so a bad value fails at
+ * construction and not on the first request.
+ * @throws {InvalidConfigurationError} When it is blank or holds characters a challenge cannot carry.
+ */
+export function assertRealm(realm: string | undefined): void {
+  if (realm === undefined) return;
+  if (typeof realm !== "string" || realm.trim() === "" || !REALM_PATTERN.test(realm)) {
+    throw new InvalidConfigurationError(
+      'Invalid configuration: "realm" must be a non-empty string without quotes, backslashes or control characters.',
+    );
+  }
+}
+
+/**
+ * Validates the session binding limits.
+ * @throws {InvalidConfigurationError} When a limit is not a positive finite number.
+ */
+export function assertSessionBinding(option: false | SessionBindingOptions | undefined): void {
+  if (option === undefined || option === false) return;
+  for (const name of ["maxSessions", "maxSessionsPerSubject", "ttlMs"] as const) {
+    const value = option[name];
+    if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value <= 0)) {
+      throw new InvalidConfigurationError(`Invalid configuration: "sessionBinding.${name}" must be a positive number.`);
+    }
+  }
+}
