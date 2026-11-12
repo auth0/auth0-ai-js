@@ -129,6 +129,38 @@ export class FGAFilter<T extends Record<string, any>> {
   }
 
   private getCheckKey(check: ClientBatchCheckItem): string {
-    return `${check.user}|${check.object}|${check.relation}`;
+    // Include `context` and `contextualTuples` (both sent per check item in
+    // BatchCheck) so checks that differ only by either are treated as
+    // distinct and are neither incorrectly deduplicated nor correlated to the
+    // wrong batch-check result. See GHSA-rcmp-9f79-cfm9.
+    return `${check.user}|${check.object}|${check.relation}|${canonicalize(
+      check.context
+    )}|${canonicalize(check.contextualTuples)}`;
   }
+}
+
+/**
+ * Produces a stable string for a `context` value: object keys are sorted at
+ * every depth so two equal contexts share a key regardless of key order, while
+ * any value difference — including deeply nested ones — yields a distinct key.
+ *
+ * @remarks
+ * `JSON.stringify(context, Object.keys(context).sort())` is NOT a safe
+ * substitute: its second argument is a property allowlist, not a sort order,
+ * and applied recursively it drops every nested key, collapsing distinct
+ * nested contexts to the same string. Array order is preserved because FGA
+ * `list` context values are order-sensitive.
+ */
+function canonicalize(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value ?? null);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalize).join(",")}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  return `{${Object.keys(obj)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${canonicalize(obj[k])}`)
+    .join(",")}}`;
 }
