@@ -315,14 +315,14 @@ describe("Troubleshooting.md: the other symptoms", () => {
       expect(warn).toHaveBeenCalledTimes(1);
       const line = String(warn.mock.calls[0]?.[0]);
       expect(line.startsWith("[auth0-ai-mcp] ")).toBe(true);
-      expect(line).toContain("expires within 5 seconds");
+      expect(line).toContain("expires within 30 seconds");
     } finally {
       warn.mockRestore();
       await server.stop();
     }
     documented(
       GUIDE,
-      "- A warning that starts with `[auth0-ai-mcp]` and says the token endpoint issued a token that is already expired, expires within 5 seconds or came without a usable expiry",
+      "- A warning that starts with `[auth0-ai-mcp]` and says the token endpoint issued a token that is already expired, expires within 30 seconds or came without a usable expiry",
     );
   });
 

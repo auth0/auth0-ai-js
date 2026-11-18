@@ -13,7 +13,7 @@ import {
 const { rig, install } = createRig();
 install({ beforeAll, afterEach, afterAll });
 
-const LEEWAY = 5;
+const LEEWAY = 30;
 const DAY = 86_400;
 const START = new Date("2030-01-01T00:00:00Z");
 

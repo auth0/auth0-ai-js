@@ -2,12 +2,12 @@
 
 ## A token in its last seconds passes the gate but may not be exchanged
 
-Token verification applies no clock tolerance to the `exp` claim: the handler accepts a token until the moment it expires. The five second rule belongs to the cache path of the On Behalf Of exchange, so it applies only when a `tokenStore` is set. With a store, the exchange refuses a subject token that expires within the next five seconds, and the cache treats an entry within five seconds of expiry as a miss.
+Token verification applies no clock tolerance to the `exp` claim: the handler accepts a token until the moment it expires. The 30 second rule belongs to the cache path of the core client, so it applies only when a `tokenStore` is set. With a store, the exchange refuses a subject token that expires within the next 30 seconds, and the cache treats an entry within 30 seconds of expiry as a miss.
 
 The two cases differ in the error a tool sees:
 
-- **With a `tokenStore`.** A request that arrives with a token in its last five seconds passes authentication and runs your tool, but any token exchange inside that tool fails as `UnauthenticatedError` before a request reaches Auth0. Under the MCP SDK adapters that is a tool result with `isError: true` and HTTP 200.
-- **Without a `tokenStore`.** The five second rule does not run. A token with three seconds left is exchanged normally. A token that expires before Auth0 handles the request is refused by Auth0, and the call fails with the generic token operation error, not `UnauthenticatedError`.
+- **With a `tokenStore`.** A request that arrives with a token in its last 30 seconds passes authentication and runs your tool, but any token exchange inside that tool fails as `UnauthenticatedError` before a request reaches Auth0. Under the MCP SDK adapters that is a tool result with `isError: true` and HTTP 200.
+- **Without a `tokenStore`.** The 30 second rule does not run. A token with three seconds left is exchanged normally. A token that expires before Auth0 handles the request is refused by Auth0, and the call fails with the generic token operation error, not `UnauthenticatedError`.
 
 A handle whose token has already expired is refused earlier: `McpClient.withToken` throws `UnauthenticatedError` for it. The handler never hits this, because it calls `withToken` right after verification, but code that keeps a `VerifiedCaller` around (a queue consumer, for example) does.
 
@@ -56,8 +56,8 @@ When the discovery document or the key set of your tenant cannot be fetched (the
 ## Other things to know
 
 - `MemoryIndexedTokenStore` lives in one process. Workers do not share it, and it is empty after a restart.
-- Client credentials tokens and Token Vault tokens are not cached by this package.
-- The core client stores an On Behalf Of result before this package checks its expiry. If the authorization server returns a token that is expired or expires within five seconds, the call fails, and that entry can stay in the token store. The cache treats such entries as misses, so it is never served.
+- A cached Token Vault token stays usable until 30 seconds before the provider's expiry, even if the user disconnects the connection or the session ends. See [Token caching](./TokenCaching.md#token-vault-keys).
+- If the authorization server returns a token that is expired or expires within 30 seconds, the call fails. This check is this package's own and uses the same 30 second margin as the core client's cache, which does not store such a token and never serves a stored one inside the margin. A tenant that issues tokens with a lifetime of 30 seconds or less therefore cannot use the three token methods.
 - The handler cannot serve an Auth0 API whose identifier is not the public URL of the server. See [resource and audience](./Handler.md#resource-and-audience).
 - The exchange request to Auth0 carries no DPoP proof. See [DPoP](./TokenVerification.md#dpop).
 - The handler routes nothing but the metadata document. Mount it only on the path that serves MCP.

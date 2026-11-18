@@ -1,12 +1,21 @@
 import * as core from '@auth0/auth0-api-js';
-import { ApiClient, AuthError, buildOboTokenKey, normalizeScopes, VerifyAccessTokenError } from '@auth0/auth0-api-js';
-import type { OboCacheKeyLayout, OnBehalfOfTokenResult, TokenStore, VerifiedToken } from '@auth0/auth0-api-js';
+import {
+  ApiClient,
+  AuthError,
+  buildClientCredentialsCacheKey,
+  buildConnectionCacheKey,
+  buildOboTokenKey,
+  normalizeScopes,
+  VerifyAccessTokenError,
+} from '@auth0/auth0-api-js';
+import type { OboCacheKeyLayout, OnBehalfOfTokenResult, TokenSet, TokenStore, VerifiedToken } from '@auth0/auth0-api-js';
 import { warn } from './diagnostics.js';
 import { DownscopedTokenError, InsufficientScopeError, UnauthenticatedError } from './errors.js';
 import type { SingleFlight } from './single-flight.js';
 import type {
   ClientCredentialsOptions,
   ClientCredentialsTokenResult,
+  ConnectionTokenResult,
   OnBehalfOfOptions,
   Principal,
   RequestScopedMcpClient,
@@ -17,7 +26,7 @@ import type {
 export interface RequestScopedClientInit {
   /** The core client that performs the token operations. */
   readonly apiClient: ApiClient;
-  /** Cache for exchanged tokens, or `undefined` to exchange on every call. */
+  /** Cache for exchanged tokens, used by the core client, or `undefined` to request on every call. */
   readonly tokenStore: TokenStore | undefined;
   /** The caller's identity. */
   readonly principal: Principal;
@@ -28,6 +37,18 @@ export interface RequestScopedClientInit {
    * concurrent identical exchanges collapse into one.
    */
   readonly exchanges: SingleFlight<OnBehalfOfTokenResult>;
+  /**
+   * Like `exchanges`, for client credentials grants and Token Vault requests. Used only when
+   * a `tokenStore` is set. When omitted, those calls are never shared.
+   */
+  readonly clientCredentialsFlights?: SingleFlight<TokenSet>;
+  readonly connectionFlights?: SingleFlight<ConnectionTokenResult>;
+  /**
+   * The store handed to the core client for client credentials grants and Token Vault
+   * requests: `tokenStore` wrapped so a failing store is reported once per kind. Defaults to
+   * `tokenStore` itself.
+   */
+  readonly cacheStore?: TokenStore;
   /**
    * What the parent client fixes for every exchange it performs. These never differ
    * between request-scoped clients of one parent, and are part of the de-duplication key
@@ -85,6 +106,57 @@ async function flightKey(
 }
 
 /**
+ * The key that lets concurrent client credentials grants share one request, from the core
+ * client's own key builder, or `undefined` when the request cannot be keyed (no client id, as
+ * with a pre-built core client, or a value the builder refuses). Such a request is made alone
+ * and the core client reports any invalid input itself.
+ */
+async function clientCredentialsFlightKey(
+  identity: ExchangeIdentity,
+  audience: string,
+  scope: string | undefined
+): Promise<string | undefined> {
+  if (identity.clientId === undefined) return undefined;
+  try {
+    return await buildClientCredentialsCacheKey({
+      exchangeTenant: identity.tenant,
+      exchangeClientId: identity.clientId,
+      audience,
+      scope,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The key that lets concurrent Token Vault requests of one caller share one request. It is
+ * built from the verified claims the core client caches under, so two requests that core
+ * would cache separately never share a flight. `undefined` when core would not cache the
+ * request either (no usable `sub`, an unkeyable claim, no client id).
+ */
+async function connectionFlightKey(
+  identity: ExchangeIdentity,
+  verified: VerifiedToken,
+  connection: string,
+  loginHint: string | undefined
+): Promise<string | undefined> {
+  if (identity.clientId === undefined) return undefined;
+  try {
+    return await buildConnectionCacheKey({
+      exchangeTenant: identity.tenant,
+      exchangeClientId: identity.clientId,
+      exchangeAudience: identity.audience,
+      verified,
+      connection,
+      loginHint,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Throws when scopes were requested and the grant does not include all of them.
  * No scope requested means nothing to enforce.
  */
@@ -125,12 +197,14 @@ function withCause<T extends Error>(error: T, cause: unknown): T {
 }
 
 /**
- * Seconds before its expiry at which an issued token already counts as expired. It is the
- * margin the core client's cache uses when it decides whether a stored token can be served,
- * so a token this package returns is never one the cache would refuse a moment later. It also
- * covers the time the tool needs to use the token before the downstream API checks it.
+ * Seconds before its expiry at which an issued token already counts as expired. It equals the
+ * margin the core client uses to decide whether a stored token can be served (30 seconds), so
+ * a token this package returns is never one the cache would refuse a moment later. It also
+ * covers the time the tool needs to use the token before the downstream API checks it. The
+ * core client does not export its constant, so the value is repeated here; a test pins it
+ * against the core client's behaviour.
  */
-const EXPIRY_BUFFER_SECONDS = 5;
+const EXPIRY_BUFFER_SECONDS = 30;
 
 /** Which token operation produced a result, for diagnostics only. */
 type TokenOperation = 'on_behalf_of' | 'client_credentials' | 'connection';
@@ -144,8 +218,8 @@ type TokenOperation = 'on_behalf_of' | 'client_credentials' | 'connection';
  * operator why a call failed. `expiresAt` is epoch seconds, the convention of the core client.
  * The core client computes it from `expires_in`, so a response without that field arrives here
  * as `NaN`.
- * The core client stores an exchange result before this check runs and its cache treats an
- * expired entry as a miss, so an expired entry may remain in a store but is never served.
+ * The core client stores a result only when it is fresh by the same margin, and its cache
+ * treats an expired entry as a miss, so an expired entry is never served.
  */
 function assertNotExpired(expiresAt: number, operation: TokenOperation): void {
   if (!Number.isFinite(expiresAt)) {
@@ -235,7 +309,7 @@ function copyHttpDetails(from: unknown, to: Error & { code?: string; statusCode?
  *
  * The one exception is a core `VerifyAccessTokenError`, which becomes an
  * {@link UnauthenticatedError}. Core raises it only when a token store is configured and the
- * caller's token has expired or is within five seconds of expiring. An error whose class is
+ * caller's token has expired or is within 30 seconds of expiring. An error whose class is
  * not exported by the core package, and any non-core error (network failures, for example),
  * becomes a plain `AuthError` or `Error`, so no foreign prototype runs on the copy. Each call
  * returns a new instance.
@@ -248,8 +322,8 @@ export function sanitizeTokenError(error: unknown): Error {
   ) {
     return error;
   }
-  // With a token store configured, core 1.7.0 re-checks the caller's verified claims before it
-  // reads the cache and refuses a token that is expired or within five seconds of expiry.
+  // With a token store configured, the core client re-checks the caller's verified claims before
+  // it reads the cache and refuses a token that is expired or within 30 seconds of expiry.
   // Those claims come from this server's own ingress check, so the only way to fail here is a
   // caller token that ran out while the request was being handled. That is the caller's
   // credential, not a server fault, so it surfaces as the package's 401 rather than as an
@@ -294,6 +368,8 @@ export function sanitizeTokenError(error: unknown): Error {
  */
 export function createRequestScopedClient(init: RequestScopedClientInit): RequestScopedMcpClient {
   const { apiClient, tokenStore, principal, verified, exchanges, exchangeIdentity } = init;
+  const { clientCredentialsFlights, connectionFlights } = init;
+  const cacheStore = init.cacheStore ?? tokenStore;
 
   const exchange = (options: OnBehalfOfOptions) =>
     apiClient.getTokenOnBehalfOf(
@@ -334,11 +410,24 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
       }),
 
     getClientCredentialsToken: async (options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult> => {
+      const request = () =>
+        apiClient.getClientCredentialsToken(
+          {
+            audience: options.audience,
+            ...(options.scope !== undefined && { scope: options.scope }),
+          },
+          cacheStore === undefined ? undefined : { store: cacheStore }
+        );
       const result = await guarded(async () => {
-        const issued = await apiClient.getClientCredentialsToken({
-          audience: options.audience,
-          ...(options.scope !== undefined && { scope: options.scope }),
-        });
+        // With a store, concurrent identical grants share one request. The grant belongs to
+        // this server, not to the caller, so the key holds no caller data.
+        const key =
+          cacheStore === undefined || clientCredentialsFlights === undefined
+            ? undefined
+            : await clientCredentialsFlightKey(exchangeIdentity, options.audience, options.scope);
+        const shared = key === undefined ? await request() : await clientCredentialsFlights!.run(key, request);
+        // Each caller gets its own copy, so one caller changing its result cannot alter another's.
+        const issued = { ...shared };
         assertNotExpired(issued.expiresAt, 'client_credentials');
         return issued;
       });
@@ -352,13 +441,26 @@ export function createRequestScopedClient(init: RequestScopedClientInit): Reques
 
     getTokenForConnection: (options: TokenForConnectionOptions) =>
       guarded(async () => {
-        const issued = await apiClient.getAccessTokenForConnection({
-          connection: options.connection,
-          accessToken: verified.accessToken,
-          ...(options.loginHint !== undefined && {
-            loginHint: options.loginHint,
-          }),
-        });
+        const request = () =>
+          apiClient.getAccessTokenForConnection(
+            {
+              connection: options.connection,
+              accessToken: verified.accessToken,
+              ...(options.loginHint !== undefined && {
+                loginHint: options.loginHint,
+              }),
+            },
+            // The verified claims are the ones the core client produced for this token, so the
+            // cache key and the freshness check rest on checked data and the core client
+            // does not verify the token again.
+            cacheStore === undefined ? undefined : { store: cacheStore, verified }
+          );
+        const key =
+          cacheStore === undefined || connectionFlights === undefined
+            ? undefined
+            : await connectionFlightKey(exchangeIdentity, verified, options.connection, options.loginHint);
+        const shared = key === undefined ? await request() : await connectionFlights!.run(key, request);
+        const issued = { ...shared };
         assertNotExpired(issued.expiresAt, 'connection');
         return issued;
       }),

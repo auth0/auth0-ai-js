@@ -744,7 +744,7 @@ describe("expired token results (OnBehalfOf.md, TokenVault.md)", () => {
       expect(warn).toHaveBeenCalledTimes(1);
       const line = String(warn.mock.calls[0]?.[0]);
       expect(line).toContain("connection");
-      expect(line).toContain("5 seconds");
+      expect(line).toContain("30 seconds");
       expect(line).not.toContain("secret-token-value");
     } finally {
       warn.mockRestore();

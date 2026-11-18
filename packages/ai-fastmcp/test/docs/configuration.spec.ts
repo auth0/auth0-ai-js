@@ -133,6 +133,8 @@ describe("Configuration.md: the three ways to configure the client", () => {
       { organizationPolicy: "required", organizationId: "org_1" },
       { requestTimeoutMs: 2000 },
       { requireClientId: true },
+      { telemetry: { enabled: false } },
+      { telemetry: { name: "my-server", version: "1.0.0" } },
       { apiClient: new ApiClient({ domain: DOMAIN, audience: "https://mcp.example.com/mcp" }) },
     ];
     for (const extra of options) {
@@ -140,7 +142,7 @@ describe("Configuration.md: the three ways to configure the client", () => {
     }
     documented(
       "Configuration.md",
-      "`tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId` and `apiClient`",
+      "`tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId`, `telemetry` and `apiClient`",
     );
   });
 

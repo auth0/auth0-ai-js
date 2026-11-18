@@ -169,7 +169,7 @@ describe('request-scoped client: the caller token about to expire', () => {
     };
   };
 
-  it('becomes a 401 when a store is configured and the token has less than five seconds left', async () => {
+  it('becomes a 401 when a store is configured and the token has less than 30 seconds left', async () => {
     const scoped = await scopedClient(3600, memoryStore(), 3);
     const error = await failure(scoped.getTokenOnBehalfOf({ audience: DOWNSTREAM }));
     expect(error).toBeInstanceOf(UnauthenticatedError);
@@ -208,14 +208,14 @@ describe('request-scoped client: the expiry buffer', () => {
   const operations: Operation[] = ['on_behalf_of', 'client_credentials', 'connection'];
 
   describe.each(operations)('%s', (operation) => {
-    it.each([1, 4, 5])('rejects a token that expires in %i seconds', async (expiresIn) => {
+    it.each([1, 4, 5, 29, 30])('rejects a token that expires in %i seconds', async (expiresIn) => {
       const error = await failure(issue(operation, expiresIn));
       expect(error.message).toBe('The token operation failed.');
-      expect(rootCause(error).message).toMatch(/already expired or expires within 5 seconds/);
+      expect(rootCause(error).message).toMatch(/already expired or expires within 30 seconds/);
     });
 
-    it('accepts a token that expires in 6 seconds', async () => {
-      const result = await issue(operation, 6);
+    it('accepts a token that expires in 31 seconds', async () => {
+      const result = await issue(operation, 31);
       expect(result.accessToken).toBeTruthy();
       expect(warn).not.toHaveBeenCalled();
     });
@@ -225,7 +225,7 @@ describe('request-scoped client: the expiry buffer', () => {
       expect(warn).toHaveBeenCalledTimes(1);
       expect(logged()).toContain('[auth0-ai-mcp]');
       expect(logged()).toContain(`Operation: ${operation}.`);
-      expect(logged()).toMatch(/expired or expires within 5 seconds/);
+      expect(logged()).toMatch(/expired or expires within 30 seconds/);
       expect(logged()).not.toContain('connection-token');
       expect(logged()).not.toContain(DOWNSTREAM);
     });

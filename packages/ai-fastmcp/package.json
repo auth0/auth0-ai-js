@@ -20,6 +20,7 @@
     "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
     "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --outDir ./dist/cjs",
     "build:markers": "node ./scripts/write-module-markers.mjs",
+    "prepack": "node ./scripts/stamp-version.mjs",
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
@@ -53,7 +54,7 @@
   },
   "devDependencies": {
     "@auth0/ai-mcp": "*",
-    "@auth0/auth0-api-js": "^1.7.0",
+    "@auth0/auth0-api-js": "^1.8.0",
     "@eslint/compat": "^1.2.7",
     "@eslint/js": "^9.18.0",
     "@modelcontextprotocol/client": "^2.3.0",

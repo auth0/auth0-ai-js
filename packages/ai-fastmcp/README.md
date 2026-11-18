@@ -103,7 +103,7 @@ server.addTool({
 });
 ```
 
-Token exchange, caching (pass a `tokenStore` such as `MemoryIndexedTokenStore` to enable it), Token Vault and client credentials work as described in the `@auth0/ai-mcp` documentation.
+Token exchange, caching of all three token kinds (pass a `tokenStore` such as `MemoryIndexedTokenStore` to enable it), Token Vault and client credentials work as described in the `@auth0/ai-mcp` documentation.
 
 ## Scopes
 

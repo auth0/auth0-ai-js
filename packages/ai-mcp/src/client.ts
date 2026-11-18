@@ -2,6 +2,7 @@ import { ApiClient, InvalidConfigurationError } from '@auth0/auth0-api-js';
 import type {
   IndexedTokenStore,
   OnBehalfOfTokenResult,
+  TokenSet,
   TokenStore,
   VerifiedToken,
   VerifyAccessTokenOptions,
@@ -11,7 +12,14 @@ import { buildPrincipal } from './principal.js';
 import { createRequestScopedClient } from './request-scoped-client.js';
 import { SingleFlight } from './single-flight.js';
 import { DEFAULT_REQUEST_TIMEOUT_MS, assertValidTimeout, createTimeoutFetch } from './timeout-fetch.js';
-import type { McpClientOptions, Principal, RequestScopedMcpClient } from './types.js';
+import { PACKAGE_NAME, VERSION } from './version.js';
+import type {
+  ConnectionTokenResult,
+  McpClientOptions,
+  Principal,
+  RequestScopedMcpClient,
+} from './types.js';
+import { withFailureReport } from './store-failure-report.js';
 
 /**
  * An opaque handle for a caller whose access token has been verified by an
@@ -109,6 +117,7 @@ const CORE_CLIENT_OPTIONS = [
   'organizationId',
   'dpop',
   'requestTimeoutMs',
+  'telemetry',
 ] as const;
 
 /**
@@ -160,12 +169,19 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       ...(options.organizationPolicy !== undefined && { organizationPolicy: options.organizationPolicy }),
       ...(options.organizationId !== undefined && { organizationId: options.organizationId }),
       ...(options.dpop !== undefined && { dpop: options.dpop }),
+      telemetry: options.telemetry ?? { name: PACKAGE_NAME, version: VERSION },
       customFetch: createTimeoutFetch(timeoutMs),
     });
 
   const tokenStore = options.tokenStore;
   // One per client: request-scoped clients of this client share concurrent exchanges.
   const exchanges = new SingleFlight<OnBehalfOfTokenResult>();
+  const clientCredentialsFlights = new SingleFlight<TokenSet>();
+  const connectionFlights = new SingleFlight<ConnectionTokenResult>();
+  // What the core client caches client credentials and Token Vault tokens in. It is the caller's
+  // store behind a thin layer that reports a failing store once per kind. The core client
+  // treats a failed read as a miss and a failed write as nothing to cache.
+  const cacheStore = tokenStore === undefined ? undefined : withFailureReport(tokenStore);
   const exchangeIdentity = {
     tenant: options.domain,
     clientId: options.clientId,
@@ -210,6 +226,9 @@ export function createMcpClient(options: McpClientOptions): McpClient {
         principal: caller.principal,
         verified,
         exchanges,
+        clientCredentialsFlights,
+        connectionFlights,
+        ...(cacheStore !== undefined && { cacheStore }),
         exchangeIdentity,
       });
     },

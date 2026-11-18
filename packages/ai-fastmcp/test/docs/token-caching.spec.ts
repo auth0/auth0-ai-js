@@ -6,7 +6,7 @@ import { createFastMcpAuth } from "../../src/index.js";
 import { DOMAIN, createRig } from "../integration/harness.js";
 import { scopeMode } from "../support/index.js";
 import { bearer, fakeRequest } from "../support/stubs.js";
-import { documented, loadSnippet } from "./guides.js";
+import { documented, guideText, loadSnippet } from "./guides.js";
 import { withEnv } from "./server.js";
 
 /** Pins every claim of docs/TokenCaching.md. */
@@ -52,7 +52,7 @@ describe("TokenCaching.md: turning the cache on", () => {
     await exchange(auth, token);
     await exchange(auth, token);
     expect(count()).toBe(2);
-    documented("TokenCaching.md", "Caching is optional and off by default: without a `tokenStore`, every call performs a new exchange and nothing is kept.");
+    documented("TokenCaching.md", "Caching is optional and off by default: without a `tokenStore`, every call performs a new request and nothing is kept.");
   });
 
   it("returns the stored token and makes no request to the tenant on a repeat call, with the store passed inline", async () => {
@@ -104,16 +104,27 @@ describe("TokenCaching.md: turning the cache on", () => {
 });
 
 describe("TokenCaching.md: what is cached", () => {
-  it("caches On Behalf Of results and not client credentials tokens", async () => {
+  it("caches On Behalf Of results and says the same of the other two token kinds", async () => {
     const auth = adapter({ tokenStore: new MemoryIndexedTokenStore() });
     const session = await sessionFor(auth, await tokenFor());
-    await session.mcpClient.getClientCredentialsToken({ audience: API, scope: "api:read" });
-    await session.mcpClient.getClientCredentialsToken({ audience: API, scope: "api:read" });
-    expect(rig().tenant.auth0.state.clientCredentialsCount).toBe(2);
     await session.mcpClient.getTokenOnBehalfOf({ audience: API, scope: "api:read" });
     await session.mcpClient.getTokenOnBehalfOf({ audience: API, scope: "api:read" });
     expect(count()).toBe(1);
-    documented("TokenCaching.md", "**On Behalf Of results** go into the store. Client credentials tokens do not");
+    await session.mcpClient.getClientCredentialsToken({ audience: API, scope: "api:read" });
+    await session.mcpClient.getClientCredentialsToken({ audience: API, scope: "api:read" });
+    expect(rig().tenant.auth0.state.clientCredentialsCount).toBe(1);
+    // The Token Vault request counts are asserted in the ai-mcp request-scoped cache suite.
+    documented("TokenCaching.md", "**All three kinds** go into the store: On Behalf Of results, client credentials tokens and Token Vault connection tokens.");
+    documented("TokenCaching.md", "stay usable until 30 seconds before the provider's expiry, even if the user disconnects the connection in the meantime.");
+    documented("TokenCaching.md", "`scopeMatching` applies to On Behalf Of only.");
+  });
+
+  it("no longer says client credentials tokens are never cached", () => {
+    const text = guideText("TokenCaching.md");
+    expect(text).not.toMatch(/Client credentials tokens do not/);
+    const tools = guideText("Tools.md");
+    expect(tools).not.toContain("Calls to `getTokenOnBehalfOf` can be cached");
+    expect(tools).toContain("With a `tokenStore`, all three token methods are cached");
   });
 
   it("keeps callers apart: one caller never receives a token exchanged for another", async () => {

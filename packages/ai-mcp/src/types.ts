@@ -116,19 +116,18 @@ export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessToken
  * including the Authorization header, as `ctx.http.req`; tool code must not log or
  * forward it.
  *
- * Every method rejects a token that is already expired or expires within 5 seconds, so tool
- * code never receives one it cannot use. Only `getTokenOnBehalfOf` can be cached, through the
- * `tokenStore` option. `getClientCredentialsToken` and `getTokenForConnection` go to the
- * tenant on every call and their results are not cached by this package, so a tool that calls
- * either in a loop makes one token request per call: keep the result in the tool for as long
- * as it is valid if that matters.
+ * Every method rejects a token that is already expired or expires within 30 seconds, so tool
+ * code never receives one it cannot use. With a `tokenStore`, the core client caches the results of all three token
+ * methods. Without a store, each call goes to the tenant, so a tool that calls one in a loop
+ * makes one token request per call: keep the result in the tool for as long as it is valid
+ * if that matters.
  */
 export interface RequestScopedMcpClient {
   /** Exchanges the caller's token for a token to a downstream API. */
   getTokenOnBehalfOf(options: OnBehalfOfOptions): Promise<OnBehalfOfTokenResult>;
-  /** Obtains a token for this server using its own client credentials. Not cached. */
+  /** Obtains a token for this server using its own client credentials. Cached when a `tokenStore` is set. */
   getClientCredentialsToken(options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult>;
-  /** Obtains a token for a third-party service linked to the caller through a connection. Not cached. */
+  /** Obtains a token for a third-party service linked to the caller through a connection. Cached per caller when a `tokenStore` is set. */
   getTokenForConnection(options: TokenForConnectionOptions): Promise<ConnectionTokenResult>;
   /** Returns the identity of the caller this client is bound to. */
   getPrincipal(): Principal;
@@ -209,8 +208,20 @@ export interface McpClientOptions {
    */
   requestTimeoutMs?: number;
   /**
+   * The identity this client reports to Auth0 in the `Auth0-Client` header of its token,
+   * discovery and JWKS requests: the package name and version, and the version of the core
+   * library (added by the core library). The header carries no tenant, token or user data.
+   * It is on by default. Leave this unset unless you need to opt out with
+   * `{ enabled: false }`, which sends no header, or to report your own `{ name, version }`.
+   * Combining it with `apiClient` makes `createMcpClient` throw `InvalidConfigurationError`:
+   * set it on the client you pass in.
+   * @defaultValue `{ name: '@auth0/ai-mcp', version: <installed version> }` (`@auth0/ai-fastmcp`
+   * for clients that package creates)
+   */
+  telemetry?: ApiClientOptions['telemetry'];
+  /**
    * A pre-built core client, used as is. Combining it with `clientId`, `clientSecret`,
-   * `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop` or `requestTimeoutMs` makes
+   * `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop`, `requestTimeoutMs` or `telemetry` makes
    * `createMcpClient` throw `InvalidConfigurationError`, so no setting is silently
    * ignored: configure those on the client you pass in. `tokenStore` is still honoured
    * because it is supplied per call. The client is not exposed on the returned

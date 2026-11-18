@@ -1,6 +1,7 @@
 import { InvalidConfigurationError, createMcpClient, resolveMcpClientOptions } from "@auth0/ai-mcp";
 import type { McpClient, McpClientOptions, McpHandlerClientConfig } from "@auth0/ai-mcp";
 import type { SessionBindingOptions } from "./binding.js";
+import { PACKAGE_NAME, VERSION } from "./version.js";
 
 /** Options of {@link createFastMcpAuth} other than the client configuration. */
 export interface FastMcpAuthBaseOptions {
@@ -91,6 +92,7 @@ const CLIENT_OPTION_NAMES = [
   "dpop",
   "requestTimeoutMs",
   "requireClientId",
+  "telemetry",
   "apiClient",
 ] as const satisfies ReadonlyArray<keyof McpClientOptions>;
 
@@ -126,6 +128,10 @@ export function resolveClient(options: FastMcpAuthOptions): {
   }
   const explicit: Record<string, unknown> = {};
   for (const name of inline) explicit[name] = bag[name];
+  // A caller's own `telemetry` wins, and a pre-built `apiClient` takes no telemetry at all.
+  if (explicit["telemetry"] === undefined && explicit["apiClient"] === undefined) {
+    explicit["telemetry"] = { name: PACKAGE_NAME, version: VERSION };
+  }
   return {
     client: createMcpClient(resolveMcpClientOptions(explicit as Partial<McpClientOptions>)),
     rest: rest as FastMcpAuthBaseOptions,

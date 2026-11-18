@@ -1,6 +1,6 @@
 # Token caching
 
-Caching of On Behalf Of tokens is optional and off by default. Without a `tokenStore`, every call to `getTokenOnBehalfOf` performs a fresh exchange and nothing persists anywhere.
+Caching of exchanged tokens is optional and off by default. Without a `tokenStore`, every call to `getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection` performs a fresh request to Auth0 and nothing persists anywhere.
 
 To enable it, pass a token store to `createMcpClient`:
 
@@ -17,7 +17,7 @@ export const client = createMcpClient({
 });
 ```
 
-The package caches only On Behalf Of tokens. It requests client credentials tokens and Token Vault tokens every time.
+With a store, the core client (`@auth0/auth0-api-js`) caches all three kinds of token: On Behalf Of tokens, client credentials tokens and Token Vault connection tokens. This package keeps no cache of its own. Without a store, none of them is cached.
 
 ## The store interface
 
@@ -40,7 +40,7 @@ For several instances that must share tokens, implement the interface on top of 
 
 ## Cache keys
 
-The package, not the store, builds the keys. A key combines:
+The core client, not the store, builds the keys. The keys of the three kinds start with different prefixes, so a kind never reads the entries of another. This section describes the On Behalf Of key; the client credentials and Token Vault keys follow it. An On Behalf Of key combines:
 
 - the tenant, client and audience that perform the exchange,
 - the subject token's issuer, client, subject and organization,
@@ -54,9 +54,25 @@ Because the subject is part of the key, one caller's token is never returned for
 
 **Revocation window.** A cached delegated token stays usable until its own expiry, whatever happens to the session or to the inbound token at the authorization server. With a `sid`, later access tokens of the same session can use it too. Without one, only calls with the same inbound token can. This is inherent to caching delegated tokens.
 
+### Client credentials keys
+
+A client credentials token has no caller. Its key combines the tenant, the client that requests it, the audience and the scope set you requested (the audience and scope of the call, not the granted scopes). A call without `scope` has its own entry. A cached token is reused only when it covers what you asked for, so a narrowed grant is never served as if it were the full one. Calls to `getClientCredentialsToken` always match scopes exactly, whatever `scopeMatching` says, and need no indexed store.
+
+### Token Vault keys
+
+A Token Vault token belongs to one caller, so its key is stricter. It combines the tenant, the client, the audience, the caller's issuer, client, subject and organization, the connection, the `loginHint` and the session of the access token. The session is the `sid` claim, else the `jti` claim, else a SHA-256 digest of the access token, the same order as for On Behalf Of. The `sub` claim is required: an access token without one is exchanged on every call and nothing is stored. The same rule applies when a claim is present but is not a string.
+
+The key is built from verified claims only. A call made with an access token that is expired, or whose claims do not match the token, fails and never reads the store. A cached provider token is stored until 30 seconds before the provider's own expiry.
+
+**Revocation window.** A cached provider token stays usable until that time even if the user disconnects the connection in Token Vault or the session ends, and only while the caller still presents a valid access token. A shorter provider token lifetime shortens the window. If your downstream provider needs a faster cut-off, do not set a `tokenStore`.
+
+## Concurrent calls
+
+With a `tokenStore`, identical calls that overlap in time share one request to Auth0, per `McpClient`: the same On Behalf Of exchange, the same client credentials grant (the same audience and scope set), or the same Token Vault request of one caller (the same session, connection and `loginHint`). Each caller gets its own copy of the result. A failure reaches every waiter and is not remembered. Without a `tokenStore` calls are never shared. A client you build around your own `apiClient` shares only On Behalf Of exchanges, because the client id that keys the other two is not known to this package; the core client still caches them in the store.
+
 ## Scope matching
 
-`scopeMatching` controls when a cached token counts as a hit. Both modes compare the scopes the exchange was **granted**, never the scopes a previous call requested.
+`scopeMatching` controls when a cached On Behalf Of token counts as a hit. It does not apply to client credentials or Token Vault tokens. Both modes compare the scopes the exchange was **granted**, never the scopes a previous call requested.
 
 - `'strict'` (default): reuse a token only when its granted scopes are exactly the requested set.
 - `'non_strict'`: also reuse a token whose granted scopes cover the requested set, preferring the smallest such token. Several tokens then coexist per caller, so the store has to be searched rather than looked up. A request for no scopes never reuses a cached token in this mode.
@@ -88,7 +104,7 @@ The index is a hint kept next to the data, not an authority. The package conside
 ## What a hit looks like
 
 - Both modes cache a token under the scopes Auth0 granted it, including a token whose grant came back narrower than the request. The caller that asked for more still gets `DownscopedTokenError`. See [On Behalf Of](./OnBehalfOf.md#narrowed-grants).
-- A token within five seconds of its expiry counts as a miss.
+- A token within 30 seconds of its expiry counts as a miss, and a freshly issued token that expires within 30 seconds is not stored. This holds for all three kinds.
 - Store failures never fail a tool call. A read that throws counts as a miss, and the package ignores a write that throws, so the freshly exchanged token is still returned. A store outage costs extra exchanges. The encrypted store reports such failures once, as described below.
 - The package never deletes entries. Your store must expire them, using each value's `expiresAt`. For an index, expire the whole index key and push its expiry out to the latest member's `expiresAt` on every add.
 
