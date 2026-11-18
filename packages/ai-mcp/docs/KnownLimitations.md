@@ -57,7 +57,7 @@ When the discovery document or the key set of your tenant cannot be fetched (the
 
 - `MemoryIndexedTokenStore` lives in one process. Workers do not share it, and it is empty after a restart.
 - A cached Token Vault token stays usable until 30 seconds before the provider's expiry, even if the user disconnects the connection or the session ends. See [Token caching](./TokenCaching.md#token-vault-keys).
-- The core client stores an On Behalf Of result before this package checks its expiry. If the authorization server returns a token that is expired or expires within five seconds, the call fails (this check is this package's own), and that entry can stay in the token store. The cache treats such entries as misses, so it is never served.
+- If the authorization server returns a token that is expired or expires within 30 seconds, the call fails. This check is this package's own and uses the same 30 second margin as the core client's cache, which does not store such a token and never serves a stored one inside the margin. A tenant that issues tokens with a lifetime of 30 seconds or less therefore cannot use the three token methods.
 - The handler cannot serve an Auth0 API whose identifier is not the public URL of the server. See [resource and audience](./Handler.md#resource-and-audience).
 - The exchange request to Auth0 carries no DPoP proof. See [DPoP](./TokenVerification.md#dpop).
 - The handler routes nothing but the metadata document. Mount it only on the path that serves MCP.

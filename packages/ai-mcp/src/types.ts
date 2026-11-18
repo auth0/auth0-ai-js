@@ -116,7 +116,7 @@ export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessToken
  * including the Authorization header, as `ctx.http.req`; tool code must not log or
  * forward it.
  *
- * Every method rejects a token that is already expired or expires within 5 seconds, so tool
+ * Every method rejects a token that is already expired or expires within 30 seconds, so tool
  * code never receives one it cannot use. With a `tokenStore`, the core client caches the results of all three token
  * methods. Without a store, each call goes to the tenant, so a tool that calls one in a loop
  * makes one token request per call: keep the result in the tool for as long as it is valid

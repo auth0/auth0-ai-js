@@ -66,6 +66,10 @@ The key is built from verified claims only. A call made with an access token tha
 
 **Revocation window.** A cached provider token stays usable until that time even if the user disconnects the connection in Token Vault or the session ends, and only while the caller still presents a valid access token. A shorter provider token lifetime shortens the window. If your downstream provider needs a faster cut-off, do not set a `tokenStore`.
 
+## Concurrent calls
+
+With a `tokenStore`, identical calls that overlap in time share one request to Auth0, per `McpClient`: the same On Behalf Of exchange, the same client credentials grant (the same audience and scope set), or the same Token Vault request of one caller (the same session, connection and `loginHint`). Each caller gets its own copy of the result. A failure reaches every waiter and is not remembered. Without a `tokenStore` calls are never shared. A client you build around your own `apiClient` shares only On Behalf Of exchanges, because the client id that keys the other two is not known to this package; the core client still caches them in the store.
+
 ## Scope matching
 
 `scopeMatching` controls when a cached On Behalf Of token counts as a hit. It does not apply to client credentials or Token Vault tokens. Both modes compare the scopes the exchange was **granted**, never the scopes a previous call requested.
