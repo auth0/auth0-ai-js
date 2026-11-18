@@ -56,7 +56,7 @@ Passing `client` together with an inline client option throws `InvalidConfigurat
 
 ### Other client options
 
-Inline options accept everything `createMcpClient` accepts: `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId` and `apiClient`. The `@auth0/ai-mcp` guides describe them. For example, `organizationPolicy: "required"` makes the adapter answer 401 to a token without an `org_id` claim. See [Token caching](./TokenCaching.md) for `tokenStore`.
+Inline options accept everything `createMcpClient` accepts: `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId`, `telemetry` and `apiClient`. The `@auth0/ai-mcp` guides describe them. For example, `organizationPolicy: "required"` makes the adapter answer 401 to a token without an `org_id` claim. See [Token caching](./TokenCaching.md) for `tokenStore`.
 
 By default a token with neither an `azp` nor a `client_id` claim is accepted, and `principal.clientId` is `null`. Auth0 access tokens carry `azp`, and some machine callers have no client identity at all. Set `requireClientId: true` to answer 401 to a token without one.
 
@@ -169,13 +169,17 @@ export const auth = createFastMcpAuth({
 
 `sessionBinding` configures the protection for stateful servers. See [Stateless and stateful servers](./StatelessAndStateful.md).
 
+## Telemetry
+
+A client that `createFastMcpAuth` builds reports itself to Auth0 in an `Auth0-Client` header on its token, discovery and JWKS requests: the package name (`@auth0/ai-fastmcp`), the package version and the version of the core library. The header carries no tenant, token or user data. Pass `telemetry: { enabled: false }` to send none. A client you pass as `client` or `apiClient` is used as is, and sends what it was configured to send.
+
 ## All options
 
 | Option | Meaning |
 | --- | --- |
 | `client` | A client from `createMcpClient`. Cannot be combined with the inline client options. |
 | `domain`, `audience`, `clientId`, `clientSecret` | Inline client settings. Read from the environment when left out. |
-| `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId`, `apiClient` | Other client options, as in `createMcpClient`. |
+| `tokenStore`, `scopeMatching`, `organizationPolicy`, `organizationId`, `requestTimeoutMs`, `requireClientId`, `telemetry`, `apiClient` | Other client options, as in `createMcpClient`. |
 | `resource` | Public URL of the server. Defaults to the audience and must equal it. |
 | `endpoint` | Path of the MCP route. Defaults to the path of the audience, else `/mcp`. Exposed as `auth.endpoint`. |
 | `authorizationServers` | Issuers published in the metadata document. |
