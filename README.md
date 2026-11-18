@@ -21,6 +21,8 @@ a person or organization. Common use cases include:
   that the agent is only incorporating information that the user has access to.
 - **Async user confirmation**: Allow agents to operate autonomously in the
   background while requiring human approval when needed.
+- **Secure MCP servers**: Protect a Model Context Protocol server with Auth0 and
+  call downstream APIs on behalf of the signed-in user.
 
 ## Packages
 
@@ -45,6 +47,12 @@ a person or organization. Common use cases include:
 - [`@auth0/ai-components`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-components) -
   A library of React components to help integrate `@auth0/ai` with a UI.
 
+- [`@auth0/ai-mcp`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-mcp) -
+  Secure [Model Context Protocol](https://modelcontextprotocol.io/) servers with Auth0: verify access tokens, enforce scopes and exchange the caller's token for downstream APIs. Beta.
+
+- [`@auth0/ai-fastmcp`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-fastmcp) -
+  The [FastMCP](https://github.com/punkpeye/fastmcp) adapter of `@auth0/ai-mcp`. Beta.
+
 ## Running examples
 
 ## Prepare the workspace
@@ -68,6 +76,8 @@ a person or organization. Common use cases include:
 - [**Async User Confirmation**](./examples/async-authorization/README.md)
 - [**Authorization for RAG**](./examples/authorization-for-rag/README.md)
 - [**Authorization for Tools**](./examples/authorization-for-tools/README.md)
+- [**MCP server (MCP SDK)**](./examples/ai-mcp-server/README.md)
+- [**MCP server (FastMCP)**](./examples/ai-fastmcp-server/README.md)
 
 ## Feedback
 
