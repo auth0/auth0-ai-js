@@ -4,12 +4,14 @@
 
 FastMCP stays the server. This package only fills two of its options.
 
+This package is in Beta. Its API can change before the first stable release.
+
 [Quickstart](#quickstart) | [Documentation](#documentation) | [Example](#example) | [Feedback](#feedback)
 
 ## Install
 
 ```bash
-npm install @auth0/ai-fastmcp @auth0/ai-mcp fastmcp
+npm install @auth0/ai-fastmcp@beta @auth0/ai-mcp@beta fastmcp
 ```
 
 `@auth0/ai-mcp` and `fastmcp` are peer dependencies, so your app and this package share one copy of each. The test suite passes against FastMCP 4.22.0, the oldest release supported, and 4.23.8, the newest tested, and against a sample of the releases in between.
@@ -61,10 +63,11 @@ Do not set FastMCP's own `auth` option as well: FastMCP documents it as a provid
 | [Security notes](./docs/Security.md) | What the adapter enforces, what stays your job, and the limits. |
 | [Troubleshooting](./docs/Troubleshooting.md) | The messages you may see, with causes and fixes. |
 | [Compatibility](./docs/Compatibility.md) | The tested FastMCP versions and protocol revisions. |
+| [Examples](./EXAMPLES.md) | Recipes for common setups: a full server, per-tool scopes, hidden tools, caching and DPoP. |
 
 ## Example
 
-[`examples/ai-fastmcp-server`](../../examples/ai-fastmcp-server) is a runnable server with three tools: one that needs no scope, one that exchanges the caller's token for a read token to a downstream API, and one that needs a scope of its own and exchanges for a write token. Its tests run it against a mocked tenant.
+[`examples/ai-fastmcp-server`](../../examples/ai-fastmcp-server) is a runnable server with three tools: one that needs no scope, one that exchanges the caller's token for a read token to a downstream API, and one that needs a scope of its own and exchanges for a write token. Its tests run it against a mocked tenant. For short recipes, see [Examples](./EXAMPLES.md).
 
 ## How it works
 

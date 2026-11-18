@@ -17,7 +17,7 @@ auth0 apis create --name "Orders MCP" --identifier "http://localhost:3000/mcp" -
 ## 1. Install
 
 ```bash
-npm install @auth0/ai-fastmcp @auth0/ai-mcp fastmcp zod
+npm install @auth0/ai-fastmcp@beta @auth0/ai-mcp@beta fastmcp zod
 ```
 
 `@auth0/ai-mcp` and `fastmcp` are peer dependencies. The oldest FastMCP release supported is 4.22.0, see [Compatibility](./Compatibility.md).
