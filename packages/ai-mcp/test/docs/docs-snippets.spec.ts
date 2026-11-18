@@ -248,8 +248,8 @@ describe("documentation targets the MCP SDK v2", () => {
 
   it("the install line names the v2 server package", () => {
     const readme = readFileSync(path.join(packageDir, "README.md"), "utf8");
-    expect(readme).toContain("npm install @auth0/ai-mcp @modelcontextprotocol/server");
-    expect(readme).not.toContain("npm install @auth0/ai-mcp @modelcontextprotocol/sdk");
+    expect(readme).toContain("npm install @auth0/ai-mcp@beta @modelcontextprotocol/server");
+    expect(readme).not.toContain("npm install @auth0/ai-mcp@beta @modelcontextprotocol/sdk");
   });
 
   it("keeps the v1 recipe as plain text so it is never compiled", () => {

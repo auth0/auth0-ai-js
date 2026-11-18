@@ -43,6 +43,9 @@ const expectedValues = [
   "createEncryptedTokenStore",
   "AuthError",
   "InvalidConfigurationError",
+  "MissingOrganizationError",
+  "OrganizationNotAllowedError",
+  "VerifyAccessTokenError",
 ];
 
 const mcpSdkValues = [
