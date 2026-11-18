@@ -117,18 +117,17 @@ export type ConnectionTokenResult = Awaited<ReturnType<ApiClient['getAccessToken
  * forward it.
  *
  * Every method rejects a token that is already expired or expires within 5 seconds, so tool
- * code never receives one it cannot use. Only `getTokenOnBehalfOf` can be cached, through the
- * `tokenStore` option. `getClientCredentialsToken` and `getTokenForConnection` go to the
- * tenant on every call and their results are not cached by this package, so a tool that calls
- * either in a loop makes one token request per call: keep the result in the tool for as long
- * as it is valid if that matters.
+ * code never receives one it cannot use. With a `tokenStore`, the core client caches the results of all three token
+ * methods. Without a store, each call goes to the tenant, so a tool that calls one in a loop
+ * makes one token request per call: keep the result in the tool for as long as it is valid
+ * if that matters.
  */
 export interface RequestScopedMcpClient {
   /** Exchanges the caller's token for a token to a downstream API. */
   getTokenOnBehalfOf(options: OnBehalfOfOptions): Promise<OnBehalfOfTokenResult>;
-  /** Obtains a token for this server using its own client credentials. Not cached. */
+  /** Obtains a token for this server using its own client credentials. Cached when a `tokenStore` is set. */
   getClientCredentialsToken(options: ClientCredentialsOptions): Promise<ClientCredentialsTokenResult>;
-  /** Obtains a token for a third-party service linked to the caller through a connection. Not cached. */
+  /** Obtains a token for a third-party service linked to the caller through a connection. Cached per caller when a `tokenStore` is set. */
   getTokenForConnection(options: TokenForConnectionOptions): Promise<ConnectionTokenResult>;
   /** Returns the identity of the caller this client is bound to. */
   getPrincipal(): Principal;

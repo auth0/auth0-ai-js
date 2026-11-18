@@ -64,7 +64,7 @@ Use `grantedScopes`, not `scope`, to decide what a token covers. The token respo
 
 The same rule applies to client credentials grants.
 
-The request-scoped client also rejects a result whose `expiresAt` is within five seconds of the current time or earlier, or is not a finite number. The five seconds are the same margin the cache uses, so a token this package returns is never one the cache would refuse a moment later. This applies to `getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection`. The rejection is the generic `The token operation failed.` error, and no token data is attached to it, so a tool never receives a token that is already dead. The package writes one `console.warn` line that names the operation and says the token was expired or came without an expiry, so an operator can tell why a call failed. The line holds fixed text only, never a token or a claim. A cached on behalf of entry that has expired is a miss, so the next call performs a new exchange.
+The request-scoped client also rejects a result whose `expiresAt` is within five seconds of the current time or earlier, or is not a finite number. This applies to `getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection`. The rejection is the generic `The token operation failed.` error, and no token data is attached to it, so a tool never receives a token that is already dead. The package writes one `console.warn` line that names the operation and says the token was expired or came without an expiry, so an operator can tell why a call failed. The line holds fixed text only, never a token or a claim. A cached on behalf of entry that has expired is a miss, so the next call performs a new exchange.
 
 ## Narrowed grants
 
@@ -142,4 +142,4 @@ The result is the core `TokenSet` (`accessToken`, `expiresAt`, `scope`, `tokenTy
 
 When you leave out `scope` on a client credentials call, Auth0 issues the scopes of the client grant and the package checks nothing against them: read `grantedScopes` if the tool depends on a scope. When you pass it, the call fails unless every requested scope was granted.
 
-This package does not cache client credentials tokens.
+With a `tokenStore`, the core client caches client credentials tokens. Without one, every call requests a new token. See [Token caching](./TokenCaching.md#client-credentials-keys).

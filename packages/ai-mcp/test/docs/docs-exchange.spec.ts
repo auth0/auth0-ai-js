@@ -282,3 +282,35 @@ describe("an outage of the tenant (KnownLimitations.md)", () => {
     expect(guide("KnownLimitations.md")).toContain("A tenant outage answers 401");
   });
 });
+
+describe("which tokens the core client caches (TokenCaching.md and the guides that mention it)", () => {
+  const readme = () => readFileSync(new URL("../../README.md", import.meta.url), "utf8");
+
+  it("says all three token kinds are cached with a store and none without one", () => {
+    const text = guide("TokenCaching.md");
+    expect(text).toContain("`getTokenOnBehalfOf`, `getClientCredentialsToken` and `getTokenForConnection` performs a fresh request to Auth0");
+    expect(text).toContain("the core client (`@auth0/auth0-api-js`) caches all three kinds of token");
+    expect(text).toContain("This package keeps no cache of its own.");
+  });
+
+  it("documents the Token Vault key, the sub requirement and the revocation window", () => {
+    const text = guide("TokenCaching.md");
+    expect(text).toContain("### Token Vault keys");
+    expect(text).toContain("The session is the `sid` claim, else the `jti` claim, else a SHA-256 digest of the access token");
+    expect(text).toContain("The `sub` claim is required");
+    expect(text).toContain("until 30 seconds before the provider's own expiry");
+    expect(text).toContain("**Revocation window.**");
+    expect(text).toContain("A token within 30 seconds of its expiry counts as a miss");
+  });
+
+  it("no longer says client credentials or connection tokens are not cached", () => {
+    for (const name of ["TokenCaching.md", "OnBehalfOf.md", "TokenVault.md", "KnownLimitations.md"]) {
+      const text = guide(name);
+      expect(text).not.toContain("not cached by this package");
+      expect(text).not.toContain("does not cache client credentials");
+      expect(text).not.toContain("does not cache connection tokens");
+      expect(text).not.toContain("caches only On Behalf Of");
+    }
+    expect(readme()).toContain("optional cache in front of every token request");
+  });
+});

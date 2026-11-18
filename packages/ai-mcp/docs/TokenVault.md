@@ -53,7 +53,7 @@ For the tenant setup, follow the Auth0 guides:
 
 ## Caching
 
-This package does not cache connection tokens. Each call performs an exchange, so cache the result in your tool if the provider rate-limits you.
+With a `tokenStore`, the core client caches connection tokens for the caller, the connection and the `loginHint` until 30 seconds before the provider's token expires. Without a store, each call performs an exchange. A cached token can outlive the user's consent in Token Vault. See [Token caching](./TokenCaching.md#token-vault-keys) for the key and the revocation window.
 
 ## Errors
 

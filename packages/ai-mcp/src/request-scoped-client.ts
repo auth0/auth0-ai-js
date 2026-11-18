@@ -17,7 +17,7 @@ import type {
 export interface RequestScopedClientInit {
   /** The core client that performs the token operations. */
   readonly apiClient: ApiClient;
-  /** Cache for exchanged tokens, or `undefined` to exchange on every call. */
+  /** Cache for exchanged tokens, used by the core client, or `undefined` to request on every call. */
   readonly tokenStore: TokenStore | undefined;
   /** The caller's identity. */
   readonly principal: Principal;

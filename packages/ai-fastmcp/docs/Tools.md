@@ -158,6 +158,6 @@ The request-scoped client has four methods:
 | `getClientCredentialsToken({ audience, scope? })` | A token for the server itself, with no caller. |
 | `getTokenForConnection({ connection })` | A token for a third-party service through Token Vault. |
 
-The `@auth0/ai-mcp` guides explain each of them. Calls to `getTokenOnBehalfOf` can be cached, see [Token caching](./TokenCaching.md).
+The `@auth0/ai-mcp` guides explain each of them. With a `tokenStore`, all three token methods are cached, see [Token caching](./TokenCaching.md).
 
 `@auth0/ai-mcp` sanitizes errors from these calls before your code sees them, and the wrapper maps whatever escapes to a fixed text. See [Errors and status codes](./Errors.md#errors-inside-tools).

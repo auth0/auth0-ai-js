@@ -2,7 +2,7 @@
 
 `@auth0/ai-mcp` secures [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers with Auth0. It is built on [`@auth0/auth0-api-js`](https://github.com/auth0/auth0-auth-js/tree/main/packages/auth0-api-js).
 
-An MCP server is a resource server. This package ships no MCP framework of its own. It verifies the access token on every request, hands the verified caller to your tool code, and exchanges the caller's token for tokens to downstream APIs, with an optional cache in front of the exchange. A small adapter connects all of this to the official MCP TypeScript SDK.
+An MCP server is a resource server. This package ships no MCP framework of its own. It verifies the access token on every request, hands the verified caller to your tool code, and exchanges the caller's token for tokens to downstream APIs, with an optional cache in front of every token request. A small adapter connects all of this to the official MCP TypeScript SDK.
 
 [Quickstart](#quickstart) | [Documentation](#documentation) | [Getting started](#getting-started) | [Feedback](#feedback)
 
@@ -64,8 +64,8 @@ The rest of this page explains the pieces.
 2. **Gate.** The gate checks scopes that every request must carry and answers a missing one with HTTP 403 `insufficient_scope`. A tool checks the scopes that only it needs and answers a missing one with a tool result that has `isError: true`.
 3. **Context.** On a valid token the handler builds a `Principal` from the verified claims and binds it, together with a request-scoped client, to the request through `AsyncLocalStorage`. Tool code reads the caller from there, so tool signatures stay clean.
 4. **On Behalf Of.** A tool calls `getTokenOnBehalfOf({ audience, scope })` to exchange the caller's token for a token to a downstream API. A token store enables caching. See [Token caching](./docs/TokenCaching.md).
-5. **Token Vault.** A tool calls `getTokenForConnection({ connection })` to get a federated provider token, such as a Google access token, through Auth0 Token Vault. See [Token Vault](./docs/TokenVault.md).
-6. **Client credentials.** A tool calls `getClientCredentialsToken({ audience, scope })` to act as the server itself. See [On Behalf Of](./docs/OnBehalfOf.md#client-credentials).
+5. **Token Vault.** A tool calls `getTokenForConnection({ connection })` to get a federated provider token, such as a Google access token, through Auth0 Token Vault. A token store caches it per caller. See [Token Vault](./docs/TokenVault.md).
+6. **Client credentials.** A tool calls `getClientCredentialsToken({ audience, scope })` to act as the server itself. A token store caches it. See [On Behalf Of](./docs/OnBehalfOf.md#client-credentials).
 
 ## Getting started
 
@@ -210,7 +210,7 @@ The package writes a few diagnostic lines with `console.warn` (standard error in
 - [Request context](./docs/RequestContext.md): reading the caller inside a tool.
 - [Scope enforcement](./docs/ScopeEnforcement.md): gate-level and tool-level scope checks.
 - [On Behalf Of and client credentials](./docs/OnBehalfOf.md): downstream tokens for the caller and for the server.
-- [Token caching](./docs/TokenCaching.md): token stores, scope matching modes and the encrypted store.
+- [Token caching](./docs/TokenCaching.md): what is cached, token stores, scope matching modes and the encrypted store.
 - [MCP clients and tenant settings](./docs/McpClients.md): what your Auth0 tenant must allow before a real MCP client such as Claude Code can sign in.
 - [Token Vault](./docs/TokenVault.md): federated provider tokens.
 - [Organization policy](./docs/OrganizationPolicy.md): accepting or requiring an organization.
