@@ -1,0 +1,19 @@
+=============================================================
+                        Declared License
+=============================================================
+Apache-2.0
+=============================================================
+                      First Party Licenses
+=============================================================
+
+Copyright 2026 Okta, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+=============================================================
+                         Dependencies
+=============================================================
+
+This software has dependencies that do not require attribution notices in this file as none of them are bundled with this distribution.
+These dependencies are installed separately by package managers. For a complete list of dependencies and their licenses, please refer to the
+package.json file for this package.

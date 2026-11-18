@@ -1,7 +1,6 @@
 {
   "name": "@auth0/ai-fastmcp",
   "version": "0.0.0",
-  "private": true,
   "description": "Auth0 authentication and token delegation for FastMCP servers",
   "repository": {
     "type": "git",
@@ -23,11 +22,13 @@
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "semantic-release": "npx --no semantic-release"
   },
   "files": [
     "dist/**/*.{*js,*js.map,d.ts,d.ts.map}",
-    "dist/**/package.json"
+    "dist/**/package.json",
+    "NOTICE"
   ],
   "exports": {
     "./package.json": "./package.json",
@@ -48,7 +49,7 @@
   },
   "license": "Apache-2.0",
   "peerDependencies": {
-    "@auth0/ai-mcp": "*",
+    "@auth0/ai-mcp": "^1.0.0-beta.1",
     "fastmcp": "^4.22.0"
   },
   "devDependencies": {
@@ -69,6 +70,7 @@
     "zod": "^4.2.0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

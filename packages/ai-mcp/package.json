@@ -1,7 +1,6 @@
 {
   "name": "@auth0/ai-mcp",
   "version": "0.0.0",
-  "private": true,
   "description": "Auth0 token delegation and request authentication for Model Context Protocol servers",
   "repository": {
     "type": "git",
@@ -22,11 +21,13 @@
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:smoke": "vitest run test/smoke"
+    "test:smoke": "vitest run test/smoke",
+    "semantic-release": "npx --no semantic-release"
   },
   "files": [
     "dist/**/*.{*js,*js.map,d.ts,d.ts.map}",
-    "dist/**/package.json"
+    "dist/**/package.json",
+    "NOTICE"
   ],
   "exports": {
     "./package.json": "./package.json",
@@ -86,6 +87,7 @@
     "zod": "^4.2.0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

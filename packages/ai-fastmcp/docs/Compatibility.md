@@ -39,7 +39,7 @@ The tests cover only FastMCP's `httpStream` transport, in both its stateless and
 
 ## @auth0/ai-mcp
 
-`@auth0/ai-mcp` is a peer dependency with the range `*`, so your application and this package share one copy. This package calls `authenticateRequest`, `buildProtectedResourceMetadata`, `buildWwwAuthenticate` and the request context functions of `@auth0/ai-mcp`. Use a release of `@auth0/ai-mcp` that exports them.
+`@auth0/ai-mcp` is a peer dependency with the range `^1.0.0-beta.1`, so your application and this package share one copy. This package calls `authenticateRequest`, `buildProtectedResourceMetadata`, `buildWwwAuthenticate` and the request context functions of `@auth0/ai-mcp`. Use a release of `@auth0/ai-mcp` that exports them.
 
 ## What the tests do not cover
 

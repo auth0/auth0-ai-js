@@ -166,8 +166,8 @@ describe("Compatibility.md: the client, the transports and @auth0/ai-mcp", () =>
     documented(GUIDE, "The tests cover only FastMCP's `httpStream` transport, in both its stateless and stateful modes.");
   });
 
-  it("uses @auth0/ai-mcp as a peer with the range * and calls the functions the guide names", () => {
-    expect(manifest().peerDependencies["@auth0/ai-mcp"]).toBe("*");
+  it("uses @auth0/ai-mcp as a peer with the range ^1.0.0-beta.1 and calls the functions the guide names", () => {
+    expect(manifest().peerDependencies["@auth0/ai-mcp"]).toBe("^1.0.0-beta.1");
     for (const name of [
       "authenticateRequest",
       "buildProtectedResourceMetadata",
@@ -181,7 +181,7 @@ describe("Compatibility.md: the client, the transports and @auth0/ai-mcp", () =>
     }
     documented(
       GUIDE,
-      "`@auth0/ai-mcp` is a peer dependency with the range `*`",
+      "`@auth0/ai-mcp` is a peer dependency with the range `^1.0.0-beta.1`",
       "`authenticateRequest`, `buildProtectedResourceMetadata`, `buildWwwAuthenticate` and the request context functions",
     );
   });
