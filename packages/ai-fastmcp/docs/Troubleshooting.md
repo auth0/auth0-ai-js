@@ -83,7 +83,7 @@ The wrapper replaced an error that it does not show to the client. Look in the s
 
 - A `MissingClientAuthError` means the exchange needs `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` (or `clientId` and `clientSecret`), and the server has none.
 - A `TokenExchangeError` means your tenant refused the exchange or the request failed. Its `code`, `statusCode` and `headers` describe the tenant's answer, and its `cause` holds the original error, whose own `cause` holds the body Auth0 returned (`error` and `error_description`). Check that the application has permission to exchange tokens for that audience, and that the audience is an API of your tenant.
-- A warning that starts with `[auth0-ai-mcp]` and says the token endpoint issued a token that is already expired, expires within 5 seconds or came without a usable expiry means the exchange itself worked, but `@auth0/ai-mcp` refuses a token that is about to die. Raise the token lifetime of the downstream API in your tenant.
+- A warning that starts with `[auth0-ai-mcp]` and says the token endpoint issued a token that is already expired, expires within 30 seconds or came without a usable expiry means the exchange itself worked, but `@auth0/ai-mcp` refuses a token that is about to die. Raise the token lifetime of the downstream API in your tenant.
 - Another error is a bug in your tool or a failure of a service it calls.
 
 ## A UserError does not arrive as you wrote it

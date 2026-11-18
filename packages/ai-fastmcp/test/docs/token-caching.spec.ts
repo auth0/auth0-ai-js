@@ -110,8 +110,10 @@ describe("TokenCaching.md: what is cached", () => {
     await session.mcpClient.getTokenOnBehalfOf({ audience: API, scope: "api:read" });
     await session.mcpClient.getTokenOnBehalfOf({ audience: API, scope: "api:read" });
     expect(count()).toBe(1);
-    // The client credentials and Token Vault request counts are asserted in the ai-mcp
-    // request-scoped cache suite, which runs against the core client that does the caching.
+    await session.mcpClient.getClientCredentialsToken({ audience: API, scope: "api:read" });
+    await session.mcpClient.getClientCredentialsToken({ audience: API, scope: "api:read" });
+    expect(rig().tenant.auth0.state.clientCredentialsCount).toBe(1);
+    // The Token Vault request counts are asserted in the ai-mcp request-scoped cache suite.
     documented("TokenCaching.md", "**All three kinds** go into the store: On Behalf Of results, client credentials tokens and Token Vault connection tokens.");
     documented("TokenCaching.md", "stay usable until 30 seconds before the provider's expiry, even if the user disconnects the connection in the meantime.");
     documented("TokenCaching.md", "`scopeMatching` applies to On Behalf Of only.");
