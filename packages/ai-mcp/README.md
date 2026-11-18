@@ -4,6 +4,8 @@
 
 An MCP server is a resource server. This package ships no MCP framework of its own. It verifies the access token on every request, hands the verified caller to your tool code, and exchanges the caller's token for tokens to downstream APIs, with an optional cache in front of the exchange. A small adapter connects all of this to the official MCP TypeScript SDK.
 
+This package is in Beta. Its API can change before the first stable release. Using FastMCP? See [`@auth0/ai-fastmcp`](../ai-fastmcp), the adapter built on this package.
+
 [Quickstart](#quickstart) | [Documentation](#documentation) | [Getting started](#getting-started) | [Feedback](#feedback)
 
 ## Quickstart
@@ -72,7 +74,7 @@ The rest of this page explains the pieces.
 ### 1. Install
 
 ```bash
-npm install @auth0/ai-mcp @modelcontextprotocol/server
+npm install @auth0/ai-mcp@beta @modelcontextprotocol/server
 ```
 
 `@auth0/auth0-api-js` is a regular dependency, so npm installs it with the package. Your application does not need to depend on it directly, because the token store types and the `AuthError` and `InvalidConfigurationError` classes are re-exported from `@auth0/ai-mcp`. Import the two classes from `@auth0/ai-mcp` for `instanceof` checks, so they match the classes the package throws even when your application resolves more than one copy of the core package.
