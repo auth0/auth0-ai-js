@@ -18,6 +18,7 @@
     "build:esm": "tsc --project ./tsconfig.build.json --outDir ./dist/esm",
     "build:cjs": "tsc --project ./tsconfig.build.json --module nodenext --moduleResolution nodenext --outDir ./dist/cjs",
     "build:markers": "node ./scripts/write-module-markers.mjs",
+    "prepack": "node ./scripts/stamp-version.mjs",
     "clean": "rm -rf dist",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
