@@ -1,0 +1,4 @@
+{
+  "extends": ["../../tools/semantic-release/.releaserc.json", "semantic-release-monorepo"],
+  "branches": ["release/ai-mcp-stable", { "name": "main", "prerelease": "beta" }]
+}
