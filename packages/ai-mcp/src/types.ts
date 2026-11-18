@@ -208,8 +208,20 @@ export interface McpClientOptions {
    */
   requestTimeoutMs?: number;
   /**
+   * The identity this client reports to Auth0 in the `Auth0-Client` header of its token,
+   * discovery and JWKS requests: the package name and version, and the version of the core
+   * library (added by the core library). The header carries no tenant, token or user data.
+   * It is on by default. Leave this unset unless you need to opt out with
+   * `{ enabled: false }`, which sends no header, or to report your own `{ name, version }`.
+   * Combining it with `apiClient` makes `createMcpClient` throw `InvalidConfigurationError`:
+   * set it on the client you pass in.
+   * @defaultValue `{ name: '@auth0/ai-mcp', version: <installed version> }` (`@auth0/ai-fastmcp`
+   * for clients that package creates)
+   */
+  telemetry?: ApiClientOptions['telemetry'];
+  /**
    * A pre-built core client, used as is. Combining it with `clientId`, `clientSecret`,
-   * `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop` or `requestTimeoutMs` makes
+   * `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop`, `requestTimeoutMs` or `telemetry` makes
    * `createMcpClient` throw `InvalidConfigurationError`, so no setting is silently
    * ignored: configure those on the client you pass in. `tokenStore` is still honoured
    * because it is supplied per call. The client is not exposed on the returned

@@ -66,7 +66,7 @@ A request-scoped client method sanitizes the errors it throws: it replaces the m
 `InvalidConfigurationError` (re-exported from `@auth0/ai-mcp`) is thrown at construction time when:
 
 - `scopeMatching` is `'non_strict'` and `tokenStore` is missing or not an indexed store,
-- you pass `apiClient` together with `clientId`, `clientSecret`, `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop` or `requestTimeoutMs`,
+- you pass `apiClient` together with `clientId`, `clientSecret`, `scopeMatching`, `organizationPolicy`, `organizationId`, `dpop`, `requestTimeoutMs` or `telemetry`,
 - `requestTimeoutMs` is not a finite number greater than 0 and at most 2147483647,
 - `organizationId` is set while `organizationPolicy` is not `'required'`,
 - `createEncryptedTokenStore` receives a `secret` shorter than 32 characters,

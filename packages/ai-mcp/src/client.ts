@@ -11,6 +11,7 @@ import { buildPrincipal } from './principal.js';
 import { createRequestScopedClient } from './request-scoped-client.js';
 import { SingleFlight } from './single-flight.js';
 import { DEFAULT_REQUEST_TIMEOUT_MS, assertValidTimeout, createTimeoutFetch } from './timeout-fetch.js';
+import { PACKAGE_NAME, VERSION } from './version.js';
 import type { McpClientOptions, Principal, RequestScopedMcpClient } from './types.js';
 
 /**
@@ -109,6 +110,7 @@ const CORE_CLIENT_OPTIONS = [
   'organizationId',
   'dpop',
   'requestTimeoutMs',
+  'telemetry',
 ] as const;
 
 /**
@@ -160,6 +162,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       ...(options.organizationPolicy !== undefined && { organizationPolicy: options.organizationPolicy }),
       ...(options.organizationId !== undefined && { organizationId: options.organizationId }),
       ...(options.dpop !== undefined && { dpop: options.dpop }),
+      telemetry: options.telemetry ?? { name: PACKAGE_NAME, version: VERSION },
       customFetch: createTimeoutFetch(timeoutMs),
     });
 

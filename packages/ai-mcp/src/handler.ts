@@ -122,6 +122,7 @@ const CLIENT_OPTION_NAMES = [
   "organizationId",
   "dpop",
   "requestTimeoutMs",
+  "telemetry",
   "apiClient",
 ] as const satisfies ReadonlyArray<keyof McpClientOptions>;
 
