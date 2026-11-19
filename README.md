@@ -28,7 +28,7 @@ a person or organization. Common use cases include:
   Base abstractions for authentication and authorization in AI applications.
 
 - [`@auth0/ai-genkit`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-genkit) -
-  Integration with [Genkit](https://firebase.google.com/docs/genkit) framework.
+  Integration with [Genkit](https://genkit.dev/docs/integrations/auth0/) framework.
 
 - [`@auth0/ai-llamaindex`](https://github.com/auth0/auth0-ai-js/tree/main/packages/ai-llamaindex) -
   Integration with [LlamaIndex.TS](https://ts.llamaindex.ai/) framework.
