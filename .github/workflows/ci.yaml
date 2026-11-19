@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Dependencies
         id: npm-ci
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Validate Commits Messages
         if: github.event_name == 'pull_request'
